@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>PWA Icon Generator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+
+        canvas {
+            border: 1px solid #ccc;
+            margin: 10px;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background: #6366f1;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            margin: 5px;
+        }
+
+        .icons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .icon-container {
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>PWA Icons Generator</h1>
+    <p>Right-click on each canvas and "Save image as..." to save the icons.</p>
+
+    <div class="icons">
+        <div class="icon-container">
+            <h3>192x192</h3>
+            <canvas id="icon192" width="192" height="192"></canvas>
+            <br>
+            <button onclick="downloadIcon('icon192', 'icon-192x192.png')">Download 192x192</button>
+        </div>
+
+        <div class="icon-container">
+            <h3>512x512</h3>
+            <canvas id="icon512" width="512" height="512"></canvas>
+            <br>
+            <button onclick="downloadIcon('icon512', 'icon-512x512.png')">Download 512x512</button>
+        </div>
+    </div>
+
+    <script>
+        function drawIcon(canvasId, size) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+
+            // Background with rounded corners
+            ctx.fillStyle = '#6366f1';
+            const radius = size * 0.2;
+            ctx.beginPath();
+            ctx.roundRect(0, 0, size, size, radius);
+            ctx.fill();
+
+            // Letter D
+            ctx.fillStyle = '#ffffff';
+            ctx.font = `bold ${size * 0.45}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('D', size / 2, size / 2 + size * 0.02);
+        }
+
+        function downloadIcon(canvasId, filename) {
+            const canvas = document.getElementById(canvasId);
+            const link = document.createElement('a');
+            link.download = filename;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+
+        // Draw icons on load
+        drawIcon('icon192', 192);
+        drawIcon('icon512', 512);
+    </script>
+</body>
+
+</html>

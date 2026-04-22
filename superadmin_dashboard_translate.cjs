@@ -1,0 +1,35 @@
+const fs = require('fs');
+const dePath = './frontend/src/locales/de.json';
+const deData = JSON.parse(fs.readFileSync(dePath, 'utf8'));
+
+deData.dashboard_title = "Super Admin Dashboard";
+deData.dashboard_subtitle = "Willkommen im Super-Admin-Bereich. Hier finden Sie alle Systemübersichten.";
+deData.loading_failed = "Laden fehlgeschlagen";
+deData.retry = "Wiederholen";
+deData.total_companies = "Unternehmen gesamt";
+deData.active_companies = "Aktive Unternehmen";
+deData.total_packages = "Pakete gesamt";
+deData.total_clients = "Kunden gesamt";
+deData.total_projects = "Projekte gesamt";
+deData.total_revenue = "Gesamtumsatz";
+deData.total_invoices = "Rechnungen gesamt";
+deData.companies_growth = "Unternehmenswachstum";
+deData.view_all = "Alle anzeigen";
+deData.revenue_overview = "Umsatzübersicht";
+deData.view_billing = "Abrechnung anzeigen";
+deData.this_month = "Diesen Monat";
+deData.last_month = "Letzten Monat";
+deData.package_distribution = "Paketverteilung";
+deData.manage = "Verwalten";
+deData.recent_companies = "Neueste Unternehmen";
+deData.no_company = "Kein Unternehmen gefunden";
+deData.quick_actions = "Schnellaktionen";
+deData.add_company = "Unternehmen hinzufügen";
+deData.manage_packages = "Pakete verwalten";
+deData.manage_users = "Benutzer verwalten";
+deData.refresh = "Aktualisieren";
+deData.company_name = "Firmenname";
+deData.registered_date = "Registrierungsdatum";
+
+fs.writeFileSync(dePath, JSON.stringify(deData, null, 2));
+console.log("Super Admin Dashboard missing translations added.");
