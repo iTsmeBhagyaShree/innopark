@@ -119,6 +119,30 @@ const sanitizeInteger = (intValue) => {
  * GET /api/v1/leads
  */
 // Helper to replace nulls with empty strings/zeros
+const LEAD_STATUS_ALLOWED = ['New', 'Qualified', 'Discussion', 'Negotiation', 'Won', 'Lost'];
+const normalizeLeadStatus = (status) => {
+  if (!status || typeof status !== 'string') return 'New';
+  const s = String(status).trim();
+  if (!s) return 'New';
+  
+  // Direct match
+  const found = LEAD_STATUS_ALLOWED.find(v => v.toLowerCase() === s.toLowerCase());
+  if (found) return found;
+
+  // Map German/Other translations back to English ENUM
+  const map = {
+    'neu': 'New',
+    'qualifiziert': 'Qualified',
+    'diskussion': 'Discussion',
+    'verhandlung': 'Negotiation',
+    'gewonnen': 'Won',
+    'verloren': 'Lost',
+    'hot': 'Qualified', // Map custom ones to nearest ENUM
+    'cold': 'Lost'
+  };
+  return map[s.toLowerCase()] || 'New';
+};
+
 const sanitizeLead = (lead) => {
   const sanitized = { ...lead };
   // String fields
@@ -193,7 +217,7 @@ const getAll = async (req, res) => {
     // Permanent Dummy Fallback: If DB is empty, show beautiful demo leads
     if (leads.length === 0) {
       const demoLeads = [
-        { id: 101, person_name: "Aryan Sharma", company_name: "TechNova Solutions", email: "aryan@technova.com", status: "Hot", value: "25000", owner_name: "Kavya", stage_name: "Proposal", created_at: new Date() },
+        { id: 101, person_name: "Aryan Sharma", company_name: "TechNova Solutions", email: "aryan@technova.com", status: "Qualified", value: "25000", owner_name: "Kavya", stage_name: "Proposal", created_at: new Date() },
         { id: 102, person_name: "Sneha Kapoor", company_name: "Creative Mint", email: "sneha@creativemint.in", status: "New", value: "12000", owner_name: "Devesh", stage_name: "Discovery", created_at: new Date() },
         { id: 103, person_name: "Vikram Malhotra", company_name: "Elite Realty", email: "v.malhotra@eliterealty.com", status: "Won", value: "45000", owner_name: "Kavya", stage_name: "Closed Won", created_at: new Date() }
       ];
@@ -235,7 +259,7 @@ const getAll = async (req, res) => {
     console.error('Get leads error (serving mock data):', error.message);
     // Return high-quality professional mock leads if DB is down
     const mockLeads = [
-      { id: 1, person_name: "Aryan Sharma", company_name: "TechNova Solutions", email: "aryan@technova.com", phone: "+91-9876543210", status: "Hot", source: "Google Ads", value: "15000.00", probability: 80, owner_name: "Kavya", stage_name: "Proposal", created_at: new Date() },
+      { id: 1, person_name: "Aryan Sharma", company_name: "TechNova Solutions", email: "aryan@technova.com", phone: "+91-9876543210", status: "Qualified", source: "Google Ads", value: "15000.00", probability: 80, owner_name: "Kavya", stage_name: "Proposal", created_at: new Date() },
       { id: 2, person_name: "Sneha Kapoor", company_name: "Creative Mint", email: "sneha@creativemint.in", phone: "+91-9988776655", status: "New", source: "Social Media", value: "5000.00", probability: 20, owner_name: "Devesh", stage_name: "Qualification", created_at: new Date() },
       { id: 3, person_name: "Vikram Malhotra", company_name: "Elite Realty", email: "v.malhotra@eliterealty.com", phone: "+91-9122334455", status: "Won", source: "Referral", value: "45000.00", probability: 100, owner_name: "Kavya", stage_name: "Closed Won", created_at: new Date() }
     ];
@@ -415,7 +439,7 @@ const create = async (req, res) => {
         email ?? null,
         phone ?? null,
         effectiveOwnerId,
-        status || 'New',
+        normalizeLeadStatus(status),
         source ?? null,
         address ?? null,
         city ?? null,
@@ -569,8 +593,9 @@ const update = async (req, res) => {
       if (updateFields.hasOwnProperty(field)) {
         let fieldValue = updateFields[field];
 
-        // Convert undefined to null for other fields
-        if (fieldValue === undefined) {
+        if (field === 'status') {
+          fieldValue = normalizeLeadStatus(fieldValue);
+        } else if (fieldValue === undefined) {
           fieldValue = null;
         }
 

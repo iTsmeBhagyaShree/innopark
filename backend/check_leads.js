@@ -1,15 +1,23 @@
 const mysql = require('mysql2/promise');
+require('dotenv').config();
 
-async function checkCols() {
-  const config = { host: '127.0.0.1', user: 'root', password: '', database: 'innopark_db', port: 3307 };
+async function checkLeadsSchema() {
+  const pool = mysql.createPool({
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASS,
+    database: process.env.DB_NAME,
+    port: process.env.DB_PORT || 3306
+  });
+
   try {
-    const connection = await mysql.createConnection(config);
-    const [rows] = await connection.execute('DESC leads');
-    console.table(rows);
-    await connection.end();
-  } catch (e) {
-    console.log(`Failed: ${e.message}`);
+    const [rows] = await pool.execute("DESCRIBE leads 'status'");
+    console.log(JSON.stringify(rows, null, 2));
+  } catch (error) {
+    console.error('Error:', error);
+  } finally {
+    await pool.end();
   }
 }
 
-checkCols();
+checkLeadsSchema();
