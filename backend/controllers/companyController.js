@@ -255,6 +255,7 @@ const create = async (req, res) => {
       address,
       notes,
       logo,
+      currency = 'USD',
       timezone = 'UTC',
       lead_id,
       custom_fields = {}
@@ -313,6 +314,8 @@ const update = async (req, res) => {
       address,
       notes,
       logo,
+      currency,
+      timezone,
       package_id,
       custom_fields
     } = req.body;
