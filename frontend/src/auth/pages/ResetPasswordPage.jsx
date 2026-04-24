@@ -1,3 +1,4 @@
+import { useLanguage } from '../../context/LanguageContext';
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import Button from '../../components/ui/Button'
@@ -5,6 +6,7 @@ import Input from '../../components/ui/Input'
 import Card from '../../components/ui/Card'
 
 const ResetPasswordPage = () => {
+  const { t } = useLanguage();
   const [formData, setFormData] = useState({
     password: '',
     confirmPassword: '',
@@ -69,7 +71,7 @@ const ResetPasswordPage = () => {
             </p>
           </div>
           <Link to="/login">
-            <Button variant="primary">Go to Login</Button>
+            <Button variant="primary">{t('auto.f_go_to_login_9cb623d0')}</Button>
           </Link>
         </div>
       </Card>
@@ -99,23 +101,23 @@ const ResetPasswordPage = () => {
         )}
 
         <Input
-          label="New Password"
+          label={t('auto.f_new_password_ae3bb2a1')}
           name="password"
           type="password"
           value={formData.password}
           onChange={handleChange}
-          placeholder="At least 6 characters"
+          placeholder={t('auto.f_at_least_6_character_f732d771')}
           required
           autoComplete="new-password"
         />
 
         <Input
-          label="Confirm New Password"
+          label={t('auto.f_confirm_new_password_294ec22d')}
           name="confirmPassword"
           type="password"
           value={formData.confirmPassword}
           onChange={handleChange}
-          placeholder="Confirm your password"
+          placeholder={t('auto.f_confirm_your_passwor_65f13145')}
           required
           autoComplete="new-password"
         />

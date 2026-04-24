@@ -18,7 +18,7 @@ const getAll = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
@@ -62,7 +62,7 @@ const getAll = async (req, res) => {
     console.error('Get payments error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch payments'
+      error: req.t ? req.t('api_msg_df7335e2') : "Failed to fetch payments"
     });
   }
 };
@@ -92,7 +92,7 @@ const getById = async (req, res) => {
     if (payments.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Payment not found'
+        error: req.t ? req.t('api_msg_58ad1e2f') : "Payment not found"
       });
     }
 
@@ -104,7 +104,7 @@ const getById = async (req, res) => {
     console.error('Get payment by ID error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch payment'
+      error: req.t ? req.t('api_msg_41bcd582') : "Failed to fetch payment"
     });
   }
 };
@@ -125,7 +125,7 @@ const create = async (req, res) => {
     if (!invoice_id) {
       return res.status(400).json({
         success: false,
-        error: 'invoice_id is required for recording a payment'
+        error: req.t ? req.t('api_msg_2c6861a5') : "invoice_id is required for recording a payment"
       });
     }
 
@@ -189,7 +189,7 @@ const create = async (req, res) => {
     res.status(201).json({
       success: true,
       data: { id: result.insertId },
-      message: 'Payment recorded successfully'
+      message: req.t ? req.t('api_msg_ccd2eea8') : "Payment recorded successfully"
     });
   } catch (error) {
     console.error('Create payment error:', error);
@@ -197,7 +197,7 @@ const create = async (req, res) => {
     console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
-      error: 'Failed to record payment',
+      error: req.t ? req.t('api_msg_e09fda02') : "Failed to record payment",
       details: error.message
     });
   }
@@ -214,7 +214,7 @@ const createBulk = async (req, res) => {
     if (!payments || !Array.isArray(payments) || payments.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'payments array is required'
+        error: req.t ? req.t('api_msg_f2f3791e') : "payments array is required"
       });
     }
 
@@ -280,7 +280,7 @@ const createBulk = async (req, res) => {
     console.error('Create bulk payments error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to record bulk payments'
+      error: req.t ? req.t('api_msg_3c2f43e3') : "Failed to record bulk payments"
     });
   }
 };
@@ -304,7 +304,7 @@ const update = async (req, res) => {
     if (payments.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Payment not found'
+        error: req.t ? req.t('api_msg_58ad1e2f') : "Payment not found"
       });
     }
 
@@ -353,13 +353,13 @@ const update = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Payment updated successfully'
+      message: req.t ? req.t('api_msg_009009c5') : "Payment updated successfully"
     });
   } catch (error) {
     console.error('Update payment error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to update payment'
+      error: req.t ? req.t('api_msg_1d85636a') : "Failed to update payment"
     });
   }
 };
@@ -382,7 +382,7 @@ const deletePayment = async (req, res) => {
     if (payments.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Payment not found'
+        error: req.t ? req.t('api_msg_58ad1e2f') : "Payment not found"
       });
     }
 
@@ -407,13 +407,13 @@ const deletePayment = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Payment deleted successfully'
+      message: req.t ? req.t('api_msg_ba71dede') : "Payment deleted successfully"
     });
   } catch (error) {
     console.error('Delete payment error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete payment'
+      error: req.t ? req.t('api_msg_4cfcb830') : "Failed to delete payment"
     });
   }
 };

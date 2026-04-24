@@ -26,7 +26,7 @@ const getAll = async (req, res) => {
       data: users
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Failed to fetch users' });
+    res.status(500).json({ success: false, error: req.t ? req.t('api_msg_361fdbd8') : "Failed to fetch users" });
   }
 };
 
@@ -38,7 +38,7 @@ const create = async (req, res) => {
     if (!name || !email || !password || !role) {
       return res.status(400).json({
         success: false,
-        error: 'name, email, password, and role are required'
+        error: req.t ? req.t('api_msg_ac80ff80') : "name, email, password, and role are required"
       });
     }
 
@@ -51,7 +51,7 @@ const create = async (req, res) => {
     if (existingUsers.length > 0) {
       return res.status(400).json({
         success: false,
-        error: 'User with this email already exists'
+        error: req.t ? req.t('api_msg_26c4a934') : "User with this email already exists"
       });
     }
 
@@ -72,11 +72,11 @@ const create = async (req, res) => {
     res.status(201).json({ 
       success: true, 
       data: users[0],
-      message: 'User created successfully'
+      message: req.t ? req.t('api_msg_30fae028') : "User created successfully"
     });
   } catch (error) {
     console.error('Create user error:', error);
-    res.status(500).json({ success: false, error: 'Failed to create user' });
+    res.status(500).json({ success: false, error: req.t ? req.t('api_msg_8538c89b') : "Failed to create user" });
   }
 };
 
@@ -97,7 +97,7 @@ const resetPassword = async (req, res) => {
     if (users.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'User not found'
+        error: req.t ? req.t('api_msg_b846d114') : "User not found"
       });
     }
 
@@ -116,13 +116,13 @@ const resetPassword = async (req, res) => {
       data: {
         newPassword: newPassword
       },
-      message: 'Password reset successfully'
+      message: req.t ? req.t('api_msg_b086e394') : "Password reset successfully"
     });
   } catch (error) {
     console.error('Reset password error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to reset password'
+      error: req.t ? req.t('api_msg_d7d46abd') : "Failed to reset password"
     });
   }
 };

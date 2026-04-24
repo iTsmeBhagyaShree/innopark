@@ -8,7 +8,7 @@ const getAll = async (req, res) => {
     if (!filterCompanyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
     
@@ -51,7 +51,7 @@ const getAll = async (req, res) => {
     });
     res.status(500).json({ 
       success: false, 
-      error: 'Failed to fetch departments',
+      error: req.t ? req.t('api_msg_4524fe05') : "Failed to fetch departments",
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
@@ -66,14 +66,14 @@ const create = async (req, res) => {
     console.log('req.companyId:', req.companyId);
     
     if (!name || !name.trim()) {
-      return res.status(400).json({ success: false, error: 'Department name is required' });
+      return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_c2529329') : "Department name is required" });
     }
     
     // Use company_id from request body, fallback to req.companyId if not provided
     const finalCompanyId = company_id || req.companyId;
     
     if (!finalCompanyId) {
-      return res.status(400).json({ success: false, error: 'Company is required' });
+      return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_21b48d8a') : "Company is required" });
     }
     
     console.log('Final company_id to use:', finalCompanyId);
@@ -100,7 +100,7 @@ const create = async (req, res) => {
     res.status(201).json({ 
       success: true, 
       data: newDepartment[0],
-      message: 'Department created successfully'
+      message: req.t ? req.t('api_msg_0bbd319c') : "Department created successfully"
     });
   } catch (error) {
     console.error('Error creating department:', error);
@@ -112,7 +112,7 @@ const create = async (req, res) => {
     });
     res.status(500).json({ 
       success: false, 
-      error: 'Failed to create department',
+      error: req.t ? req.t('api_msg_acffe608') : "Failed to create department",
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
@@ -126,7 +126,7 @@ const getById = async (req, res) => {
     const companyId = req.query.company_id || req.body.company_id || req.companyId;
     
     if (!companyId) {
-      return res.status(400).json({ success: false, error: 'company_id is required' });
+      return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required" });
     }
 
     const [departments] = await pool.execute(
@@ -139,7 +139,7 @@ const getById = async (req, res) => {
     );
     
     if (departments.length === 0) {
-      return res.status(404).json({ success: false, error: 'Department not found' });
+      return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_baacae70') : "Department not found" });
     }
     
     res.json({ success: true, data: departments[0] });
@@ -147,7 +147,7 @@ const getById = async (req, res) => {
     console.error('Error fetching department:', error);
     res.status(500).json({ 
       success: false, 
-      error: 'Failed to fetch department',
+      error: req.t ? req.t('api_msg_13345364') : "Failed to fetch department",
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
@@ -164,14 +164,14 @@ const update = async (req, res) => {
     console.log('Query params:', req.query);
     
     if (!name) {
-      return res.status(400).json({ success: false, error: 'Department name is required' });
+      return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_c2529329') : "Department name is required" });
     }
     
     // Get company_id from multiple sources
     const finalCompanyId = req.query.company_id || req.body.company_id || req.companyId;
     
     if (!finalCompanyId) {
-      return res.status(400).json({ success: false, error: 'company_id is required' });
+      return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required" });
     }
     
     console.log('Final company_id to use:', finalCompanyId);
@@ -198,7 +198,7 @@ const update = async (req, res) => {
     console.log('Update result:', { affectedRows: result.affectedRows, changedRows: result.changedRows });
     
     if (result.affectedRows === 0) {
-      return res.status(404).json({ success: false, error: 'Department not found or no changes made' });
+      return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_4a9dd4b7') : "Department not found or no changes made" });
     }
     
     // Fetch updated department
@@ -214,7 +214,7 @@ const update = async (req, res) => {
     res.json({ 
       success: true, 
       data: updatedDept[0],
-      message: 'Department updated successfully' 
+      message: req.t ? req.t('api_msg_94c33719') : "Department updated successfully" 
     });
   } catch (error) {
     console.error('Error updating department:', error);
@@ -238,7 +238,7 @@ const deleteDept = async (req, res) => {
     const companyId = req.query.company_id || req.body.company_id || req.companyId;
     
     if (!companyId) {
-      return res.status(400).json({ success: false, error: 'company_id is required' });
+      return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required" });
     }
     
     console.log('Deleting department:', id, 'for company:', companyId);
@@ -251,10 +251,10 @@ const deleteDept = async (req, res) => {
     console.log('Delete result:', { affectedRows: result.affectedRows });
     
     if (result.affectedRows === 0) {
-      return res.status(404).json({ success: false, error: 'Department not found or already deleted' });
+      return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_c28f49c2') : "Department not found or already deleted" });
     }
     
-    res.json({ success: true, message: 'Department deleted successfully' });
+    res.json({ success: true, message: req.t ? req.t('api_msg_06c7feac') : "Department deleted successfully" });
   } catch (error) {
     console.error('Error deleting department:', error);
     res.status(500).json({ 

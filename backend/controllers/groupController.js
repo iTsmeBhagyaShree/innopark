@@ -17,7 +17,7 @@ const getAvailableUsers = async (req, res) => {
     if (!userId || !companyId || !userRole) {
       return res.status(400).json({
         success: false,
-        error: 'user_id, company_id, and user_role are required'
+        error: req.t ? req.t('api_msg_c5b31152') : "user_id, company_id, and user_role are required"
       });
     }
 
@@ -51,7 +51,7 @@ const getAvailableUsers = async (req, res) => {
       return res.json({
         success: true,
         data: [],
-        message: 'Only admins can create groups'
+        message: req.t ? req.t('api_msg_b008cf11') : "Only admins can create groups"
       });
     }
 
@@ -80,7 +80,7 @@ const getAll = async (req, res) => {
     if (!userId || !companyId) {
       return res.status(400).json({
         success: false,
-        error: 'user_id and company_id are required'
+        error: req.t ? req.t('api_msg_a2192a92') : "user_id and company_id are required"
       });
     }
 
@@ -150,7 +150,7 @@ const getById = async (req, res) => {
     if (!userId || !companyId) {
       return res.status(400).json({
         success: false,
-        error: 'user_id and company_id are required'
+        error: req.t ? req.t('api_msg_a2192a92') : "user_id and company_id are required"
       });
     }
 
@@ -164,7 +164,7 @@ const getById = async (req, res) => {
     if (memberships.length === 0) {
       return res.status(403).json({
         success: false,
-        error: 'You are not a member of this group'
+        error: req.t ? req.t('api_msg_c83c4327') : "You are not a member of this group"
       });
     }
 
@@ -182,7 +182,7 @@ const getById = async (req, res) => {
     if (groups.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Group not found'
+        error: req.t ? req.t('api_msg_ac49f293') : "Group not found"
       });
     }
 
@@ -225,21 +225,21 @@ const create = async (req, res) => {
     if (!userId || !companyId) {
       return res.status(400).json({
         success: false,
-        error: 'user_id and company_id are required'
+        error: req.t ? req.t('api_msg_a2192a92') : "user_id and company_id are required"
       });
     }
 
     if (!name || !name.trim()) {
       return res.status(400).json({
         success: false,
-        error: 'Group name is required'
+        error: req.t ? req.t('api_msg_e049be18') : "Group name is required"
       });
     }
 
     if (!member_ids || !Array.isArray(member_ids) || member_ids.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'At least one member is required'
+        error: req.t ? req.t('api_msg_f6e84901') : "At least one member is required"
       });
     }
 
@@ -256,7 +256,7 @@ const create = async (req, res) => {
     if (members.length !== member_ids.length) {
       return res.status(400).json({
         success: false,
-        error: 'Some members do not belong to your company'
+        error: req.t ? req.t('api_msg_f1be3d4b') : "Some members do not belong to your company"
       });
     }
 
@@ -313,7 +313,7 @@ const create = async (req, res) => {
         ...createdGroups[0],
         members: membersList
       },
-      message: 'Group created successfully'
+      message: req.t ? req.t('api_msg_6835df39') : "Group created successfully"
     });
   } catch (error) {
     console.error('Create group error:', error);
@@ -338,7 +338,7 @@ const update = async (req, res) => {
     if (!userId || !companyId) {
       return res.status(400).json({
         success: false,
-        error: 'user_id and company_id are required'
+        error: req.t ? req.t('api_msg_a2192a92') : "user_id and company_id are required"
       });
     }
 
@@ -352,7 +352,7 @@ const update = async (req, res) => {
     if (groups.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Group not found'
+        error: req.t ? req.t('api_msg_ac49f293') : "Group not found"
       });
     }
 
@@ -360,7 +360,7 @@ const update = async (req, res) => {
     if (groups[0].created_by !== parseInt(userId)) {
       return res.status(403).json({
         success: false,
-        error: 'Only group creator can update the group'
+        error: req.t ? req.t('api_msg_b150d180') : "Only group creator can update the group"
       });
     }
 
@@ -380,7 +380,7 @@ const update = async (req, res) => {
     if (updates.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'No fields to update'
+        error: req.t ? req.t('api_msg_003199ed') : "No fields to update"
       });
     }
 
@@ -394,7 +394,7 @@ const update = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Group updated successfully'
+      message: req.t ? req.t('api_msg_e3c7f474') : "Group updated successfully"
     });
   } catch (error) {
     console.error('Update group error:', error);
@@ -419,14 +419,14 @@ const addMembers = async (req, res) => {
     if (!userId || !companyId) {
       return res.status(400).json({
         success: false,
-        error: 'user_id and company_id are required'
+        error: req.t ? req.t('api_msg_a2192a92') : "user_id and company_id are required"
       });
     }
 
     if (!member_ids || !Array.isArray(member_ids) || member_ids.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'At least one member is required'
+        error: req.t ? req.t('api_msg_f6e84901') : "At least one member is required"
       });
     }
 
@@ -440,7 +440,7 @@ const addMembers = async (req, res) => {
     if (groups.length === 0) {
       return res.status(403).json({
         success: false,
-        error: 'Only group creator can add members'
+        error: req.t ? req.t('api_msg_b8a1e24a') : "Only group creator can add members"
       });
     }
 
@@ -457,7 +457,7 @@ const addMembers = async (req, res) => {
     if (members.length !== member_ids.length) {
       return res.status(400).json({
         success: false,
-        error: 'Some members do not belong to your company'
+        error: req.t ? req.t('api_msg_f1be3d4b') : "Some members do not belong to your company"
       });
     }
 
@@ -506,7 +506,7 @@ const removeMember = async (req, res) => {
     if (!userId || !companyId) {
       return res.status(400).json({
         success: false,
-        error: 'user_id and company_id are required'
+        error: req.t ? req.t('api_msg_a2192a92') : "user_id and company_id are required"
       });
     }
 
@@ -520,7 +520,7 @@ const removeMember = async (req, res) => {
     if (groups.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Group not found'
+        error: req.t ? req.t('api_msg_ac49f293') : "Group not found"
       });
     }
 
@@ -530,7 +530,7 @@ const removeMember = async (req, res) => {
     if (!isCreator && !isRemovingSelf) {
       return res.status(403).json({
         success: false,
-        error: 'Only group creator can remove members'
+        error: req.t ? req.t('api_msg_1bcc05e6') : "Only group creator can remove members"
       });
     }
 
@@ -538,7 +538,7 @@ const removeMember = async (req, res) => {
     if (groups[0].created_by === parseInt(memberId)) {
       return res.status(400).json({
         success: false,
-        error: 'Cannot remove group creator'
+        error: req.t ? req.t('api_msg_c6c2b831') : "Cannot remove group creator"
       });
     }
 
@@ -551,7 +551,7 @@ const removeMember = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Member removed successfully'
+      message: req.t ? req.t('api_msg_9d0c654c') : "Member removed successfully"
     });
   } catch (error) {
     console.error('Remove member error:', error);
@@ -575,7 +575,7 @@ const deleteGroup = async (req, res) => {
     if (!userId || !companyId) {
       return res.status(400).json({
         success: false,
-        error: 'user_id and company_id are required'
+        error: req.t ? req.t('api_msg_a2192a92') : "user_id and company_id are required"
       });
     }
 
@@ -589,7 +589,7 @@ const deleteGroup = async (req, res) => {
     if (groups.length === 0) {
       return res.status(403).json({
         success: false,
-        error: 'Only group creator can delete the group'
+        error: req.t ? req.t('api_msg_b06c3333') : "Only group creator can delete the group"
       });
     }
 
@@ -601,7 +601,7 @@ const deleteGroup = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Group deleted successfully'
+      message: req.t ? req.t('api_msg_1636f811') : "Group deleted successfully"
     });
   } catch (error) {
     console.error('Delete group error:', error);

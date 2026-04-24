@@ -18,7 +18,7 @@ const getAll = async (req, res) => {
     console.log('[DEBUG] getAll - userId:', userId, 'conversationWith:', conversationWith);
 
     if (!userId) {
-      return res.status(400).json({ success: false, error: 'user_id is required' });
+      return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_99a26527') : "user_id is required" });
     }
 
     if (conversationWith) {
@@ -124,7 +124,7 @@ const getById = async (req, res) => {
     if (messages.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Message not found'
+        error: req.t ? req.t('api_msg_1a5bbe00') : "Message not found"
       });
     }
 
@@ -144,7 +144,7 @@ const getById = async (req, res) => {
     console.error('Get message error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch message'
+      error: req.t ? req.t('api_msg_5dd62898') : "Failed to fetch message"
     });
   }
 };
@@ -164,14 +164,14 @@ const create = async (req, res) => {
     if (!userId || !companyId) {
       return res.status(400).json({
         success: false,
-        error: 'user_id and company_id are required'
+        error: req.t ? req.t('api_msg_a2192a92') : "user_id and company_id are required"
       });
     }
 
     if (!message || !message.trim()) {
       return res.status(400).json({
         success: false,
-        error: 'message is required'
+        error: req.t ? req.t('api_msg_0217879b') : "message is required"
       });
     }
 
@@ -187,7 +187,7 @@ const create = async (req, res) => {
       if (memberships.length === 0) {
         return res.status(403).json({
           success: false,
-          error: 'You are not a member of this group'
+          error: req.t ? req.t('api_msg_c83c4327') : "You are not a member of this group"
         });
       }
 
@@ -201,7 +201,7 @@ const create = async (req, res) => {
       if (groups.length === 0) {
         return res.status(404).json({
           success: false,
-          error: 'Group not found'
+          error: req.t ? req.t('api_msg_ac49f293') : "Group not found"
         });
       }
 
@@ -240,7 +240,7 @@ const create = async (req, res) => {
       return res.status(201).json({
         success: true,
         data: { id: result.insertId },
-        message: 'Group message sent successfully'
+        message: req.t ? req.t('api_msg_cac9f4b9') : "Group message sent successfully"
       });
     }
 
@@ -248,7 +248,7 @@ const create = async (req, res) => {
     if (!to_user_id) {
       return res.status(400).json({
         success: false,
-        error: 'to_user_id or group_id is required'
+        error: req.t ? req.t('api_msg_ee13f802') : "to_user_id or group_id is required"
       });
     }
 
@@ -261,7 +261,7 @@ const create = async (req, res) => {
     if (recipients.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Recipient not found or does not belong to your company'
+        error: req.t ? req.t('api_msg_0a697366') : "Recipient not found or does not belong to your company"
       });
     }
 
@@ -276,7 +276,7 @@ const create = async (req, res) => {
     res.status(201).json({
       success: true,
       data: { id: result.insertId },
-      message: 'Message sent successfully'
+      message: req.t ? req.t('api_msg_408d0d84') : "Message sent successfully"
     });
   } catch (error) {
     console.error('Send message error:', error);
@@ -316,7 +316,7 @@ const update = async (req, res) => {
     if (updates.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'No fields to update'
+        error: req.t ? req.t('api_msg_003199ed') : "No fields to update"
       });
     }
 
@@ -332,19 +332,19 @@ const update = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Message not found'
+        error: req.t ? req.t('api_msg_1a5bbe00') : "Message not found"
       });
     }
 
     res.json({
       success: true,
-      message: 'Message updated successfully'
+      message: req.t ? req.t('api_msg_1c7afb5d') : "Message updated successfully"
     });
   } catch (error) {
     console.error('Update message error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to update message'
+      error: req.t ? req.t('api_msg_aa64d5e6') : "Failed to update message"
     });
   }
 };
@@ -368,19 +368,19 @@ const deleteMessage = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Message not found'
+        error: req.t ? req.t('api_msg_1a5bbe00') : "Message not found"
       });
     }
 
     res.json({
       success: true,
-      message: 'Message deleted successfully'
+      message: req.t ? req.t('api_msg_0ec36b56') : "Message deleted successfully"
     });
   } catch (error) {
     console.error('Delete message error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete message'
+      error: req.t ? req.t('api_msg_279b9101') : "Failed to delete message"
     });
   }
 };
@@ -398,7 +398,7 @@ const getAvailableUsers = async (req, res) => {
     if (!userId || !companyId || !userRole) {
       return res.status(400).json({
         success: false,
-        error: 'user_id, company_id, and user_role are required'
+        error: req.t ? req.t('api_msg_c5b31152') : "user_id, company_id, and user_role are required"
       });
     }
 
@@ -410,7 +410,7 @@ const getAvailableUsers = async (req, res) => {
       return res.json({
         success: true,
         data: [],
-        message: 'SuperAdmin cannot use messaging system'
+        message: req.t ? req.t('api_msg_acc08fa5') : "SuperAdmin cannot use messaging system"
       });
     }
     
@@ -480,7 +480,7 @@ const getAvailableUsers = async (req, res) => {
     console.error('Get available users error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch available users'
+      error: req.t ? req.t('api_msg_a5da88c6') : "Failed to fetch available users"
     });
   }
 };

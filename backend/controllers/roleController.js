@@ -29,7 +29,7 @@ const updateRolePermissions = async (req, res) => {
         const { permissions } = req.body; // array
 
         if (!Array.isArray(permissions)) {
-            return res.status(400).json({ success: false, error: "Permissions must be an array" });
+            return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_9cad370a') : "Permissions must be an array" });
         }
 
         for (const p of permissions) {
@@ -54,7 +54,7 @@ const updateRolePermissions = async (req, res) => {
             }
         }
 
-        res.json({ success: true, message: 'Permissions updated' });
+        res.json({ success: true, message: req.t ? req.t('api_msg_824e0736') : "Permissions updated" });
     } catch (error) {
         console.error(error);
         res.status(500).json({ success: false, error: error.message });
@@ -81,7 +81,7 @@ const deleteRole = async (req, res) => {
     try {
         const { id } = req.params;
         await pool.execute('UPDATE roles SET is_deleted = 1 WHERE id = ?', [id]);
-        res.json({ success: true, message: 'Role deleted' });
+        res.json({ success: true, message: req.t ? req.t('api_msg_e6422380') : "Role deleted" });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }

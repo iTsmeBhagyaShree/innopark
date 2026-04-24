@@ -98,7 +98,7 @@ const getById = async (req, res) => {
     if (templates.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Project template not found'
+        error: req.t ? req.t('api_msg_73dc375c') : "Project template not found"
       });
     }
 
@@ -129,7 +129,7 @@ const create = async (req, res) => {
     if (!name) {
       return res.status(400).json({
         success: false,
-        error: 'Project name is required'
+        error: req.t ? req.t('api_msg_df66def6') : "Project name is required"
       });
     }
 
@@ -155,7 +155,7 @@ const create = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Project template created successfully',
+      message: req.t ? req.t('api_msg_c405deed') : "Project template created successfully",
       data: newTemplate[0]
     });
   } catch (error) {
@@ -190,7 +190,7 @@ const update = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Project template not found'
+        error: req.t ? req.t('api_msg_73dc375c') : "Project template not found"
       });
     }
 
@@ -216,7 +216,7 @@ const update = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Project template updated successfully',
+      message: req.t ? req.t('api_msg_8bce983d') : "Project template updated successfully",
       data: updatedTemplate[0]
     });
   } catch (error) {
@@ -243,7 +243,7 @@ const remove = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Project template not found'
+        error: req.t ? req.t('api_msg_73dc375c') : "Project template not found"
       });
     }
 
@@ -255,7 +255,7 @@ const remove = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Project template deleted successfully'
+      message: req.t ? req.t('api_msg_e0a4047f') : "Project template deleted successfully"
     });
   } catch (error) {
     console.error('Delete project template error:', error);

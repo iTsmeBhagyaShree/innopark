@@ -297,10 +297,10 @@ const saveTodo = async (req, res) => {
       [user_id, title, description || '']
     );
 
-    res.json({ success: true, message: 'Todo saved successfully' });
+    res.json({ success: true, message: req.t ? req.t('api_msg_25693412') : "Todo saved successfully" });
   } catch (error) {
     console.error('Save todo error:', error);
-    res.status(500).json({ success: false, error: 'Failed to save todo' });
+    res.status(500).json({ success: false, error: req.t ? req.t('api_msg_5a55c0f9') : "Failed to save todo" });
   }
 };
 
@@ -318,10 +318,10 @@ const updateTodo = async (req, res) => {
       [is_completed ? 1 : 0, id]
     );
 
-    res.json({ success: true, message: 'Todo updated successfully' });
+    res.json({ success: true, message: req.t ? req.t('api_msg_32c93c98') : "Todo updated successfully" });
   } catch (error) {
     console.error('Update todo error:', error);
-    res.status(500).json({ success: false, error: 'Failed to update todo' });
+    res.status(500).json({ success: false, error: req.t ? req.t('api_msg_26f9cb59') : "Failed to update todo" });
   }
 };
 
@@ -335,10 +335,10 @@ const deleteTodo = async (req, res) => {
 
     await pool.execute(`UPDATE user_todos SET is_deleted = 1 WHERE id = ?`, [id]);
 
-    res.json({ success: true, message: 'Todo deleted successfully' });
+    res.json({ success: true, message: req.t ? req.t('api_msg_d93355ed') : "Todo deleted successfully" });
   } catch (error) {
     console.error('Delete todo error:', error);
-    res.status(500).json({ success: false, error: 'Failed to delete todo' });
+    res.status(500).json({ success: false, error: req.t ? req.t('api_msg_6044a1be') : "Failed to delete todo" });
   }
 };
 
@@ -358,10 +358,10 @@ const saveStickyNote = async (req, res) => {
       [user_id, content, content]
     );
 
-    res.json({ success: true, message: 'Sticky note saved successfully' });
+    res.json({ success: true, message: req.t ? req.t('api_msg_9b109bcb') : "Sticky note saved successfully" });
   } catch (error) {
     console.error('Save sticky note error:', error);
-    res.status(500).json({ success: false, error: 'Failed to save sticky note' });
+    res.status(500).json({ success: false, error: req.t ? req.t('api_msg_d087f4c4') : "Failed to save sticky note" });
   }
 };
 

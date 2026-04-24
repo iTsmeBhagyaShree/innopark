@@ -8,6 +8,7 @@ import Input from '../../../components/ui/Input'
 import Button from '../../../components/ui/Button'
 import Card from '../../../components/ui/Card'
 import { contactsAPI, companiesAPI, employeesAPI } from '../../../api'
+import CustomFieldsSection from '../../../components/ui/CustomFieldsSection'
 import { useAuth } from '../../../context/AuthContext'
 import { useLanguage } from '../../../context/LanguageContext'
 import {
@@ -61,6 +62,7 @@ const Contacts = () => {
         status: 'Active',
         tags: '',
         notes: '',
+        custom_fields: {},
     })
 
     useEffect(() => {
@@ -119,6 +121,7 @@ const Contacts = () => {
             status: 'Active',
             tags: '',
             notes: '',
+            custom_fields: {},
         })
         setIsAddModalOpen(true)
     }
@@ -136,6 +139,7 @@ const Contacts = () => {
             status: contact.status || 'Active',
             tags: Array.isArray(contact.tags) ? contact.tags.join(', ') : (contact.tags || ''),
             notes: contact.notes || '',
+            custom_fields: contact.custom_fields && typeof contact.custom_fields === 'object' ? { ...contact.custom_fields } : {},
         })
         setIsEditModalOpen(true)
     }
@@ -150,6 +154,7 @@ const Contacts = () => {
             const payload = {
                 ...formData,
                 company_id: companyId,
+                custom_fields: formData.custom_fields && typeof formData.custom_fields === 'object' ? formData.custom_fields : {},
                 // Ensure tags are handled as array or string as per backend
                 tags: typeof formData.tags === 'string' ? formData.tags.split(',').map(t => t.trim()).filter(t => t) : formData.tags
             }
@@ -241,10 +246,18 @@ const Contacts = () => {
         {
             key: 'status',
             label: t('contacts.columns.status'),
-            render: (value) => (
-                <Badge variant={value === 'Active' ? 'success' : 'default'} className="text-xs">
-                    {value === 'Active' ? t('contacts.status_active') : value === 'Inactive' ? t('contacts.status_inactive') : value || t('contacts.status_active')}
-                </Badge>
+            render: (value, row) => (
+                <div className="flex flex-col gap-1">
+                    <Badge variant={value === 'Active' ? 'success' : 'default'} className="text-xs w-fit">
+                        {value === 'Active' ? t('common.active') : value === 'Inactive' ? t('common.inactive') : value || t('common.active')}
+                    </Badge>
+                    {row.activities_count > 0 && (
+                        <div className="flex items-center gap-1 text-xs text-gray-500">
+                            <IoCalendarOutline size={12} className="text-primary-accent" />
+                            <span>{row.activities_count} {row.activities_count === 1 ? 'Aktivität' : 'Aktivitäten'}</span>
+                        </div>
+                    )}
+                </div>
             ),
         },
     ]
@@ -419,6 +432,18 @@ const Contacts = () => {
                             placeholder={t('common.tags_placeholder')}
                         />
                     </div>
+
+                    <CustomFieldsSection
+                        module="Contacts"
+                        companyId={companyId}
+                        values={formData.custom_fields || {}}
+                        onChange={(name, value) =>
+                            setFormData((prev) => ({
+                                ...prev,
+                                custom_fields: { ...(prev.custom_fields || {}), [name]: value },
+                            }))
+                        }
+                    />
 
                     <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
                         <Button variant="outline" onClick={() => { setIsAddModalOpen(false); setIsEditModalOpen(false); }}>

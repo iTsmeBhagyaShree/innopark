@@ -33,15 +33,12 @@ import {
   IoDesktop,
   IoPhonePortrait,
   IoLockClosed,
-  IoPeople,
   IoCart,
   IoBuild,
-  IoCube,
   IoHome,
   IoShieldCheckmark,
   IoCloudUpload,
   IoServer,
-  IoTime,
   IoLanguage,
   IoCodeWorking,
   IoCalendar,
@@ -59,10 +56,6 @@ import {
   IoImageOutline,
   IoSave
 } from 'react-icons/io5'
-import AttendanceSettings from './hrm/AttendanceSettings'
-import LeaveSettings from './hrm/LeaveSettings'
-import AttendanceSettingsPage from './AttendanceSettings.jsx'
-
 const Settings = () => {
   const navigate = useNavigate()
   const { theme, updateTheme, resetTheme } = useTheme()
@@ -89,8 +82,7 @@ const Settings = () => {
     'app-settings': true,
     'access-permission': false,
     'sales-prospects': false,
-    'setup': false,
-    'plugins': false
+    'setup': false
   })
 
   // Handle auto-navigation for sections that have dedicated pages
@@ -174,6 +166,7 @@ const Settings = () => {
     module_contracts: true,
     module_employees: true,
     module_attendance: true,
+    module_hrm: true,
     module_time_tracking: true,
     module_events: true,
     module_departments: true,
@@ -307,6 +300,7 @@ const Settings = () => {
           module_contracts: settingsObj.module_contracts !== 'false' && settingsObj.module_contracts !== false,
           module_employees: settingsObj.module_employees !== 'false' && settingsObj.module_employees !== false,
           module_attendance: settingsObj.module_attendance !== 'false' && settingsObj.module_attendance !== false,
+          module_hrm: settingsObj.module_hrm !== 'false' && settingsObj.module_hrm !== false,
           module_time_tracking: settingsObj.module_time_tracking !== 'false' && settingsObj.module_time_tracking !== false,
           module_events: settingsObj.module_events !== 'false' && settingsObj.module_events !== false,
           module_departments: settingsObj.module_departments !== 'false' && settingsObj.module_departments !== false,
@@ -536,15 +530,6 @@ const Settings = () => {
       ]
     },
     {
-      id: 'hrm',
-      label: t('dashboard.hr_settings'),
-      icon: IoPeople,
-      children: [
-        { id: 'hrm-attendance', label: t('sidebar.attendance'), icon: IoTime },
-        { id: 'hrm-leaves', label: t('sidebar.leaves'), icon: IoCalendar },
-      ]
-    },
-    {
       id: 'access-permission',
       label: t('sidebar.access_permission'),
       icon: IoLockClosed,
@@ -554,27 +539,11 @@ const Settings = () => {
     },
 
     {
-      id: 'sales-prospects',
-      label: t('sidebar.sales_prospects'),
-      icon: IoCart,
-      children: [
-        { id: 'sales-prospects', label: t('sidebar.pipeline_settings'), icon: IoCart },
-      ]
-    },
-    {
       id: 'setup',
       label: t('sidebar.setup'),
       icon: IoBuild,
       children: [
         { id: 'setup', label: t('sidebar.setup'), icon: IoBuild },
-      ]
-    },
-    {
-      id: 'plugins',
-      label: t('sidebar.plugins'),
-      icon: IoCube,
-      children: [
-        { id: 'plugins', label: t('sidebar.plugins'), icon: IoCube },
       ]
     }
   ]
@@ -619,12 +588,6 @@ const Settings = () => {
         return <SalesProspectsSettings settings={settings} handleChange={handleChange} />
       case 'setup':
         return <SetupSettings settings={settings} handleChange={handleChange} />
-      case 'plugins':
-        return <PluginsSettings settings={settings} handleChange={handleChange} />
-      case 'hrm-attendance':
-        return <AttendanceSettingsPage />
-      case 'hrm-leaves':
-        return <LeaveSettings />
       default:
         return (
           <GeneralSettings
@@ -1601,6 +1564,7 @@ const ModulesSettings = ({ settings, handleChange }) => {
     { key: 'module_tickets', label: t('sidebar.tickets') || 'Tickets' },
     { key: 'module_documents', label: t('sidebar.documents') || 'Dokumente' },
     { key: 'module_reports', label: t('sidebar.reports') || 'Berichte' },
+    { key: 'module_hrm', label: t('dashboard.hr_settings') || 'HR-Einstellungen' },
   ]
 
   return (
@@ -2070,42 +2034,6 @@ const SetupSettings = ({ settings, handleChange }) => {
           <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <span className="text-sm text-blue-800">{t('settings.setup.database_active')}</span>
           </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// Plugins Settings Component
-const PluginsSettings = ({ settings, handleChange }) => {
-  const { t } = useLanguage()
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-primary-text mb-2">{t('settings.plugins.title')}</h1>
-        <p className="text-secondary-text text-sm sm:text-base">{t('settings.plugins.description')}</p>
-      </div>
-      <div className="space-y-4">
-        <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-          <p className="text-sm text-secondary-text mb-4">{t('settings.plugins.no_plugins')}</p>
-          <Button variant="outline" className="flex items-center gap-2">
-            <IoAdd size={18} />
-            {t('settings.plugins.install_plugin')}
-          </Button>
-        </div>
-        <div>
-          <label className="flex items-center gap-3 p-4 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
-            <input
-              type="checkbox"
-              checked={settings.auto_update_plugins === true}
-              onChange={(e) => handleChange('auto_update_plugins', e.target.checked)}
-              className="w-5 h-5 text-primary-accent rounded focus:ring-primary-accent"
-            />
-            <div className="flex-1">
-              <span className="text-sm font-medium text-primary-text block">{t('settings.plugins.auto_update_plugins')}</span>
-              <span className="text-xs text-secondary-text">{t('settings.plugins.auto_update_plugins_desc')}</span>
-            </div>
-          </label>
         </div>
       </div>
     </div>

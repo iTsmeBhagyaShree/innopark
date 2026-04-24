@@ -46,7 +46,7 @@ const getAll = async (req, res) => {
     console.error('Get items error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch items'
+      error: req.t ? req.t('api_msg_5924b3d1') : "Failed to fetch items"
     });
   }
 };
@@ -71,7 +71,7 @@ const getById = async (req, res) => {
     if (items.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Item not found'
+        error: req.t ? req.t('api_msg_857f49a8') : "Item not found"
       });
     }
 
@@ -83,7 +83,7 @@ const getById = async (req, res) => {
     console.error('Get item error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch item'
+      error: req.t ? req.t('api_msg_36454fc1') : "Failed to fetch item"
     });
   }
 };
@@ -109,7 +109,7 @@ const create = async (req, res) => {
     if (!title || !category || !unit_type || !rate) {
       return res.status(400).json({
         success: false,
-        error: 'Title, category, unit_type, and rate are required'
+        error: req.t ? req.t('api_msg_c9edbeb6') : "Title, category, unit_type, and rate are required"
       });
     }
 
@@ -150,7 +150,7 @@ const create = async (req, res) => {
     res.status(201).json({
       success: true,
       data: items[0],
-      message: 'Item created successfully'
+      message: req.t ? req.t('api_msg_e46394d3') : "Item created successfully"
     });
   } catch (error) {
     console.error('Create item error:', error);
@@ -188,7 +188,7 @@ const update = async (req, res) => {
     if (items.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Item not found'
+        error: req.t ? req.t('api_msg_857f49a8') : "Item not found"
       });
     }
 
@@ -260,7 +260,7 @@ const update = async (req, res) => {
     res.json({
       success: true,
       data: updatedItems[0],
-      message: 'Item updated successfully'
+      message: req.t ? req.t('api_msg_a12ebc97') : "Item updated successfully"
     });
   } catch (error) {
     console.error('Update item error:', error);
@@ -289,7 +289,7 @@ const deleteItem = async (req, res) => {
     if (items.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Item not found'
+        error: req.t ? req.t('api_msg_857f49a8') : "Item not found"
       });
     }
 
@@ -311,13 +311,13 @@ const deleteItem = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Item deleted successfully'
+      message: req.t ? req.t('api_msg_a8ee2d15') : "Item deleted successfully"
     });
   } catch (error) {
     console.error('Delete item error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete item'
+      error: req.t ? req.t('api_msg_04957503') : "Failed to delete item"
     });
   }
 };

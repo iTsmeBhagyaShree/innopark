@@ -38,7 +38,7 @@ const getAll = async (req, res) => {
     if (!filterCompanyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
@@ -120,7 +120,7 @@ const getSummary = async (req, res) => {
     if (!filterCompanyId || !month || !year) {
       return res.status(400).json({
         success: false,
-        error: 'company_id, month, and year are required'
+        error: req.t ? req.t('api_msg_ac504bf5') : "company_id, month, and year are required"
       });
     }
 
@@ -198,7 +198,7 @@ const getSummary = async (req, res) => {
     console.error('Get attendance summary error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch attendance summary'
+      error: req.t ? req.t('api_msg_d2d0639d') : "Failed to fetch attendance summary"
     });
   }
 };
@@ -227,7 +227,7 @@ const markAttendance = async (req, res) => {
     if (!finalCompanyId || !employee_id || !date || !status) {
       return res.status(400).json({
         success: false,
-        error: 'company_id, employee_id, date, and status are required'
+        error: req.t ? req.t('api_msg_be79d693') : "company_id, employee_id, date, and status are required"
       });
     }
 
@@ -240,7 +240,7 @@ const markAttendance = async (req, res) => {
     if (empCheck.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Employee not found'
+        error: req.t ? req.t('api_msg_ff92a48d') : "Employee not found"
       });
     }
 
@@ -265,7 +265,7 @@ const markAttendance = async (req, res) => {
 
       res.json({
         success: true,
-        message: 'Attendance updated successfully',
+        message: req.t ? req.t('api_msg_40b5db4d') : "Attendance updated successfully",
         data: { id: existing[0].id }
       });
     } else {
@@ -283,7 +283,7 @@ const markAttendance = async (req, res) => {
 
       res.status(201).json({
         success: true,
-        message: 'Attendance marked successfully',
+        message: req.t ? req.t('api_msg_220eddca') : "Attendance marked successfully",
         data: { id: result.insertId }
       });
     }
@@ -292,12 +292,12 @@ const markAttendance = async (req, res) => {
     if (error.code === 'ER_DUP_ENTRY') {
       return res.status(400).json({
         success: false,
-        error: 'Attendance already exists for this date'
+        error: req.t ? req.t('api_msg_becd7aeb') : "Attendance already exists for this date"
       });
     }
     res.status(500).json({
       success: false,
-      error: 'Failed to mark attendance',
+      error: req.t ? req.t('api_msg_17ee20af') : "Failed to mark attendance",
       details: error.message
     });
   }
@@ -316,7 +316,7 @@ const bulkMarkAttendance = async (req, res) => {
     if (!finalCompanyId || !records || !Array.isArray(records)) {
       return res.status(400).json({
         success: false,
-        error: 'company_id and records array are required'
+        error: req.t ? req.t('api_msg_f04cfa03') : "company_id and records array are required"
       });
     }
 
@@ -375,7 +375,7 @@ const bulkMarkAttendance = async (req, res) => {
     console.error('Bulk mark attendance error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to bulk mark attendance'
+      error: req.t ? req.t('api_msg_cb89ebbe') : "Failed to bulk mark attendance"
     });
   }
 };
@@ -406,7 +406,7 @@ const getById = async (req, res) => {
     if (records.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Attendance record not found'
+        error: req.t ? req.t('api_msg_ac9e62cd') : "Attendance record not found"
       });
     }
 
@@ -418,7 +418,7 @@ const getById = async (req, res) => {
     console.error('Get attendance by ID error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch attendance record'
+      error: req.t ? req.t('api_msg_021f18de') : "Failed to fetch attendance record"
     });
   }
 };
@@ -439,19 +439,19 @@ const deleteAttendance = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Attendance record not found'
+        error: req.t ? req.t('api_msg_ac9e62cd') : "Attendance record not found"
       });
     }
 
     res.json({
       success: true,
-      message: 'Attendance record deleted successfully'
+      message: req.t ? req.t('api_msg_bea5ba5c') : "Attendance record deleted successfully"
     });
   } catch (error) {
     console.error('Delete attendance error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete attendance record'
+      error: req.t ? req.t('api_msg_cbf22062') : "Failed to delete attendance record"
     });
   }
 };
@@ -468,7 +468,7 @@ const getEmployeeAttendance = async (req, res) => {
     if (!month || !year) {
       return res.status(400).json({
         success: false,
-        error: 'month and year are required'
+        error: req.t ? req.t('api_msg_2b232d24') : "month and year are required"
       });
     }
 
@@ -518,7 +518,7 @@ const getEmployeeAttendance = async (req, res) => {
     console.error('Get employee attendance error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch employee attendance'
+      error: req.t ? req.t('api_msg_8f7d26f2') : "Failed to fetch employee attendance"
     });
   }
 };
@@ -537,7 +537,7 @@ const checkIn = async (req, res) => {
     if (!companyId || !userId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id and user_id are required'
+        error: req.t ? req.t('api_msg_6d05d6f9') : "company_id and user_id are required"
       });
     }
 
@@ -553,7 +553,7 @@ const checkIn = async (req, res) => {
     if (attendanceSettings && !attendanceSettings.allow_employee_self_clock_in_out && !attendanceSettings.allow_self_clock_in) {
       return res.status(403).json({
         success: false,
-        error: 'Self clock-in is not allowed. Please contact your administrator.'
+        error: req.t ? req.t('api_msg_7a174816') : "Self clock-in is not allowed. Please contact your administrator."
       });
     }
 
@@ -562,7 +562,7 @@ const checkIn = async (req, res) => {
       if (!location || !location.latitude || !location.longitude) {
         return res.status(400).json({
           success: false,
-          error: 'Location is required for clock-in. Please enable location services.'
+          error: req.t ? req.t('api_msg_adb1080c') : "Location is required for clock-in. Please enable location services."
         });
       }
 
@@ -594,7 +594,7 @@ const checkIn = async (req, res) => {
       if (allowedIPs.length > 0 && !allowedIPs.includes(ipAddress)) {
         return res.status(403).json({
           success: false,
-          error: 'Your IP address is not allowed for clock-in. Please contact your administrator.'
+          error: req.t ? req.t('api_msg_12dd360a') : "Your IP address is not allowed for clock-in. Please contact your administrator."
         });
       }
     }
@@ -612,7 +612,7 @@ const checkIn = async (req, res) => {
     if (existing.length > 0 && existing[0].check_in) {
       return res.json({
         success: true,
-        message: 'Already clocked in today',
+        message: req.t ? req.t('api_msg_1a4b1c1c') : "Already clocked in today",
         data: {
           id: existing[0].id,
           check_in: existing[0].check_in,
@@ -662,7 +662,7 @@ const checkIn = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Clocked in successfully',
+      message: req.t ? req.t('api_msg_9dd65de2') : "Clocked in successfully",
       data: {
         id: attendanceId,
         check_in: currentTime,
@@ -674,7 +674,7 @@ const checkIn = async (req, res) => {
     console.error('Check in error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to clock in',
+      error: req.t ? req.t('api_msg_ea7326ef') : "Failed to clock in",
       details: error.message
     });
   }
@@ -692,7 +692,7 @@ const checkOut = async (req, res) => {
     if (!companyId || !userId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id and user_id are required'
+        error: req.t ? req.t('api_msg_6d05d6f9') : "company_id and user_id are required"
       });
     }
 
@@ -709,21 +709,21 @@ const checkOut = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'No clock in record found for today. Please clock in first.'
+        error: req.t ? req.t('api_msg_a0bbc02b') : "No clock in record found for today. Please clock in first."
       });
     }
 
     if (!existing[0].check_in) {
       return res.status(400).json({
         success: false,
-        error: 'You must clock in before clocking out'
+        error: req.t ? req.t('api_msg_7d00a70a') : "You must clock in before clocking out"
       });
     }
 
     if (existing[0].check_out) {
       return res.json({
         success: true,
-        message: 'Already clocked out today',
+        message: req.t ? req.t('api_msg_eafa5f1f') : "Already clocked out today",
         data: {
           id: existing[0].id,
           check_in: existing[0].check_in,
@@ -741,7 +741,7 @@ const checkOut = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Clocked out successfully',
+      message: req.t ? req.t('api_msg_bcc8153f') : "Clocked out successfully",
       data: {
         id: existing[0].id,
         check_in: existing[0].check_in,
@@ -753,7 +753,7 @@ const checkOut = async (req, res) => {
     console.error('Check out error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to clock out',
+      error: req.t ? req.t('api_msg_2c0d37e5') : "Failed to clock out",
       details: error.message
     });
   }
@@ -771,7 +771,7 @@ const getTodayStatus = async (req, res) => {
     if (!companyId || !userId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id and user_id are required'
+        error: req.t ? req.t('api_msg_6d05d6f9') : "company_id and user_id are required"
       });
     }
 
@@ -810,7 +810,7 @@ const getTodayStatus = async (req, res) => {
     console.error('Get today status error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch today status'
+      error: req.t ? req.t('api_msg_0c38ec36') : "Failed to fetch today status"
     });
   }
 };
@@ -828,7 +828,7 @@ const getMonthlyCalendar = async (req, res) => {
     if (!companyId || !userId || !month || !year) {
       return res.status(400).json({
         success: false,
-        error: 'company_id, user_id, month, and year are required'
+        error: req.t ? req.t('api_msg_1fac62e9') : "company_id, user_id, month, and year are required"
       });
     }
 
@@ -863,7 +863,7 @@ const getMonthlyCalendar = async (req, res) => {
     console.error('Get monthly calendar error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch monthly calendar'
+      error: req.t ? req.t('api_msg_7f875f40') : "Failed to fetch monthly calendar"
     });
   }
 };
@@ -881,7 +881,7 @@ const getAttendancePercentage = async (req, res) => {
     if (!companyId || !userId || !month || !year) {
       return res.status(400).json({
         success: false,
-        error: 'company_id, user_id, month, and year are required'
+        error: req.t ? req.t('api_msg_1fac62e9') : "company_id, user_id, month, and year are required"
       });
     }
 
@@ -909,7 +909,7 @@ const getAttendancePercentage = async (req, res) => {
     console.error('Get attendance percentage error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch attendance percentage'
+      error: req.t ? req.t('api_msg_1857ea16') : "Failed to fetch attendance percentage"
     });
   }
 };

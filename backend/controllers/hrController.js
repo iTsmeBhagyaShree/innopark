@@ -18,7 +18,7 @@ const createShift = async (req, res) => {
              VALUES (?, ?, ?, ?, ?, ?, ?)`,
             [req.companyId || 1, shift_name, start_time, end_time, late_mark_duration || 0, clock_in_buffer || 0, option_color || '#000000']
         );
-        res.json({ success: true, message: 'Shift created successfully' });
+        res.json({ success: true, message: req.t ? req.t('api_msg_30e4844d') : "Shift created successfully" });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -27,7 +27,7 @@ const createShift = async (req, res) => {
 const deleteShift = async (req, res) => {
     try {
         await pool.execute('UPDATE shifts SET is_deleted = 1 WHERE id = ?', [req.params.id]);
-        res.json({ success: true, message: 'Shift deleted successfully' });
+        res.json({ success: true, message: req.t ? req.t('api_msg_14cb29dd') : "Shift deleted successfully" });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -51,7 +51,7 @@ const createLeaveType = async (req, res) => {
              VALUES (?, ?, ?, ?, ?)`,
             [req.companyId || 1, type_name, color, no_of_leaves || 0, is_paid ? 1 : 0]
         );
-        res.json({ success: true, message: 'Leave Type created successfully' });
+        res.json({ success: true, message: req.t ? req.t('api_msg_ad3541da') : "Leave Type created successfully" });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -60,7 +60,7 @@ const createLeaveType = async (req, res) => {
 const deleteLeaveType = async (req, res) => {
     try {
         await pool.execute('UPDATE leave_types SET is_deleted = 1 WHERE id = ?', [req.params.id]);
-        res.json({ success: true, message: 'Leave Type deleted successfully' });
+        res.json({ success: true, message: req.t ? req.t('api_msg_0d9773c8') : "Leave Type deleted successfully" });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -94,7 +94,7 @@ const updateAttendanceSettings = async (req, res) => {
                 [employee_shift_rotation ? 1 : 0, attendance_regularization ? 1 : 0, radius_check ? 1 : 0, radius_meters || 100, ip_restriction ? 1 : 0, ip_address || '', existing[0].id]
             );
         }
-        res.json({ success: true, message: 'Attendance settings updated' });
+        res.json({ success: true, message: req.t ? req.t('api_msg_ea7a5754') : "Attendance settings updated" });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }

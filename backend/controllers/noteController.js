@@ -84,7 +84,7 @@ const getAll = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
@@ -147,7 +147,7 @@ const getAll = async (req, res) => {
     console.error('Get notes error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch notes'
+      error: req.t ? req.t('api_msg_a21b190c') : "Failed to fetch notes"
     });
   }
 };
@@ -164,7 +164,7 @@ const getById = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
@@ -179,7 +179,7 @@ const getById = async (req, res) => {
     if (notes.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Note not found'
+        error: req.t ? req.t('api_msg_0dbdf748') : "Note not found"
       });
     }
 
@@ -191,7 +191,7 @@ const getById = async (req, res) => {
     console.error('Get note error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch note'
+      error: req.t ? req.t('api_msg_d9a04d3a') : "Failed to fetch note"
     });
   }
 };
@@ -248,13 +248,13 @@ const create = async (req, res) => {
     res.status(201).json({
       success: true,
       data: newNote[0],
-      message: 'Note created successfully'
+      message: req.t ? req.t('api_msg_2c419690') : "Note created successfully"
     });
   } catch (error) {
     console.error('Create note error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to create note'
+      error: req.t ? req.t('api_msg_9e68d912') : "Failed to create note"
     });
   }
 };
@@ -272,7 +272,7 @@ const update = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
@@ -285,7 +285,7 @@ const update = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Note not found'
+        error: req.t ? req.t('api_msg_0dbdf748') : "Note not found"
       });
     }
 
@@ -304,7 +304,7 @@ const update = async (req, res) => {
     if (updates.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'No fields to update'
+        error: req.t ? req.t('api_msg_003199ed') : "No fields to update"
       });
     }
 
@@ -324,13 +324,13 @@ const update = async (req, res) => {
     res.json({
       success: true,
       data: updatedNote[0],
-      message: 'Note updated successfully'
+      message: req.t ? req.t('api_msg_af5dc54d') : "Note updated successfully"
     });
   } catch (error) {
     console.error('Update note error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to update note'
+      error: req.t ? req.t('api_msg_189cea6d') : "Failed to update note"
     });
   }
 };
@@ -347,7 +347,7 @@ const deleteNote = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
@@ -360,7 +360,7 @@ const deleteNote = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Note not found'
+        error: req.t ? req.t('api_msg_0dbdf748') : "Note not found"
       });
     }
 
@@ -371,13 +371,13 @@ const deleteNote = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Note deleted successfully'
+      message: req.t ? req.t('api_msg_781ae0b6') : "Note deleted successfully"
     });
   } catch (error) {
     console.error('Delete note error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete note'
+      error: req.t ? req.t('api_msg_910daeb1') : "Failed to delete note"
     });
   }
 };

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useLanguage } from '../../../context/LanguageContext'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import AddButton from '../../../components/ui/AddButton'
@@ -69,6 +69,156 @@ import {
 import BarChart from '../../../components/charts/BarChart'
 import DonutChart from '../../../components/charts/DonutChart'
 
+/** Stage title for Kanban column header (i18n) */
+const leadStageDisplayName = (stage, t) => {
+  const n = (stage.name || '').toLowerCase()
+  if (['new lead', 'new', 'neu'].includes(n)) return t('leads.stages.new')
+  if (['contacted', 'kontaktiert'].includes(n)) return t('leads.stages.contacted')
+  if (['qualified', 'qualifiziert'].includes(n)) return t('leads.stages.qualified')
+  if (['converted', 'konvertiert'].includes(n)) return t('leads.stages.converted')
+  if (['proposal', 'angebot'].includes(n)) return t('leads.stages.proposal')
+  if (['negotiation', 'verhandlung'].includes(n)) return t('leads.stages.negotiation')
+  if (['in progress', 'in bearbeitung'].includes(n)) return t('leads.stages.in_progress')
+  if (['won', 'gewonnen'].includes(n)) return t('leads.stages.won')
+  if (['lost', 'verloren'].includes(n)) return t('leads.stages.lost')
+  return stage.name
+}
+
+/**
+ * Leads in a column: exact stage_id match, or unplaced/orphan in first column only
+ */
+const getColumnLeadsForStage = (stage, allStages, boardLeads) =>
+  boardLeads.filter((l) => {
+    if (l.stage_id != null && l.stage_id !== '' && String(l.stage_id) === String(stage.id)) return true
+    const inPipeline = (sid) => allStages.some((s) => String(s.id) === String(sid))
+    if (l.stage_id == null || l.stage_id === '' || !inPipeline(l.stage_id)) {
+      return String(stage.id) === String(allStages[0]?.id)
+    }
+    return false
+  })
+
+/** Synthetic stage id when pipeline has no stages — drag/drop disabled */
+const LEAD_KANBAN_FALLBACK_STAGE_ID = '__lead_kanban_fallback__'
+
+/**
+ * Kanban column — same drag/drop + layout pattern as `Deals.jsx` (KanbanColumn)
+ */
+const LeadKanbanColumn = ({
+  stage,
+  stages: allStages,
+  columnLeads,
+  t,
+  isDragOver,
+  onDragOverCol,
+  onDropCol,
+  onDragStart,
+  onDragEnd,
+  onOpenLead,
+  getTimeAgo,
+  fmtShort: fmt,
+  cardsDraggable = true,
+}) => {
+  const color = stage.color || '#6366f1'
+  const totalValue = columnLeads.reduce((s, l) => s + parseFloat(l.value || 0), 0)
+  return (
+    <div
+      className={`flex-shrink-0 w-[300px] flex flex-col rounded-2xl border transition-all duration-200 min-h-0 ${
+        isDragOver ? 'border-primary-accent/50 bg-primary-accent/5 shadow-lg shadow-primary-accent/10' : 'border-gray-200/70 bg-gray-50/80'
+      }`}
+      onDragOver={onDragOverCol}
+      onDrop={onDropCol}
+    >
+      <div className="p-3 pb-2 shrink-0">
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-3 h-3 rounded-full ring-2 ring-white shadow-sm shrink-0" style={{ backgroundColor: color }} />
+            <h3 className="font-black text-gray-800 text-xs uppercase tracking-wider truncate" title={stage.name}>
+              {leadStageDisplayName(stage, t)}
+            </h3>
+            <span className="shrink-0 bg-white px-2 py-0.5 rounded-full text-[10px] font-black text-gray-500 border border-gray-200 shadow-sm">
+              {columnLeads.length}
+            </span>
+          </div>
+        </div>
+        {columnLeads.length > 0 && (
+          <div className="text-[11px] font-bold text-gray-400 pl-5">{fmt(totalValue)}</div>
+        )}
+        <div className="mt-2 h-0.5 rounded-full bg-gray-200 overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all duration-500"
+            style={{ backgroundColor: color, width: `${Math.min(100, columnLeads.length * 10 || 4)}%` }}
+          />
+        </div>
+      </div>
+      <div className="flex-1 min-h-[120px] max-h-[calc(100vh-280px)] overflow-y-auto overflow-x-hidden px-3 pb-3 space-y-2.5 custom-scrollbar">
+        {columnLeads.map((lead) => (
+          <div
+            key={lead.id}
+            draggable={cardsDraggable}
+            onDragStart={cardsDraggable ? (e) => onDragStart(e, lead) : undefined}
+            onDragEnd={onDragEnd}
+            className={`bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md hover:border-primary-accent/40 transition-all group select-none ${
+              cardsDraggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
+            }`}
+          >
+            <div className="h-1 rounded-t-xl" style={{ backgroundColor: color }} />
+            <div className="p-4">
+              <div className="flex items-start justify-between mb-3">
+                <h4
+                  className="font-bold text-sm text-gray-900 group-hover:text-primary-accent transition-colors flex-1 pr-2 leading-tight line-clamp-2 cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onOpenLead(lead)
+                  }}
+                >
+                  {lead.personName || lead.companyName}
+                </h4>
+                <button
+                  type="button"
+                  className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <IoEllipsisHorizontal size={18} />
+                </button>
+              </div>
+              {lead.companyName && (
+                <div className="flex items-center gap-2 text-xs text-secondary-text mb-2">
+                  <IoBusiness size={14} className="text-gray-400 shrink-0" />
+                  <span className="truncate">{lead.companyName}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between pt-3 mt-auto border-t border-gray-50">
+                <span className="font-bold text-sm text-gray-900">
+                  {fmt(parseFloat(lead.value) || 0)}
+                </span>
+                <div className="flex items-center gap-2">
+                  <div className="px-2 py-0.5 bg-red-50 border border-red-100 rounded-full text-[10px] font-bold text-red-500">
+                    {getTimeAgo(lead.created_at || lead.created || lead.createdDate)}
+                  </div>
+                  <div className="w-6 h-6 rounded-full bg-primary-accent/10 border border-primary-accent/20 flex items-center justify-center text-[10px] font-bold text-primary-accent ring-2 ring-white">
+                    {(lead.employeeAvatar || (lead.employee?.[0] || 'U')).toUpperCase().slice(0, 1)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+        {columnLeads.length === 0 && (
+          <div
+            className={`h-28 border-2 border-dashed rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all ${
+              isDragOver ? 'border-primary-accent/40 bg-primary-accent/5' : 'border-gray-200 opacity-50'
+            }`}
+          >
+            <IoBriefcase size={20} className="text-gray-300" />
+            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-center px-2">
+              {cardsDraggable ? t('deals.kanban.drop_here') : t('leads.kanban.no_stages_list')}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 const Leads = () => {
   const { t } = useLanguage()
@@ -99,6 +249,7 @@ const Leads = () => {
       fetchCustomFields()
     } else {
       console.warn('Leads Component - Invalid or missing companyId:', companyId)
+      setStagesLoading(false)
     }
   }, [companyId, user])
 
@@ -116,28 +267,50 @@ const Leads = () => {
     }
   }
 
+  const fetchStages = async (pipelineId) => {
+    if (pipelineId == null || pipelineId === '') {
+      setStages([])
+      setStagesLoading(false)
+      return
+    }
+    setStagesLoading(true)
+    try {
+      const res = await leadPipelinesAPI.getStages(pipelineId)
+      if (res.data.success) {
+        setStages(res.data.data || [])
+      } else {
+        setStages([])
+      }
+    } catch (err) {
+      console.error('Error fetching stages:', err)
+      setStages([])
+    } finally {
+      setStagesLoading(false)
+    }
+  }
+
   const fetchPipelines = async () => {
+    if (!companyId || companyId <= 0) {
+      setStagesLoading(false)
+      return
+    }
+    setStagesLoading(true)
     try {
       const res = await leadPipelinesAPI.getAllPipelines({ company_id: companyId })
       if (res.data.success && res.data.data.length > 0) {
         setPipelines(res.data.data)
         const defaultP = res.data.data.find(p => p.is_default) || res.data.data[0]
         setCurrentPipeline(defaultP)
-        fetchStages(defaultP.id)
+        await fetchStages(defaultP.id)
+      } else {
+        setPipelines([])
+        setCurrentPipeline(null)
+        setStages([])
       }
     } catch (err) {
       console.error('Error fetching pipelines:', err)
-    }
-  }
-
-  const fetchStages = async (pipelineId) => {
-    try {
-      const res = await leadPipelinesAPI.getStages(pipelineId)
-      if (res.data.success) {
-        setStages(res.data.data || [])
-      }
-    } catch (err) {
-      console.error('Error fetching stages:', err)
+    } finally {
+      setStagesLoading(false)
     }
   }
 
@@ -164,6 +337,7 @@ const Leads = () => {
   const [selectedLeads, setSelectedLeads] = useState([])
   const [pipelines, setPipelines] = useState([])
   const [stages, setStages] = useState([])
+  const [stagesLoading, setStagesLoading] = useState(true)
   const [currentPipeline, setCurrentPipeline] = useState(null)
   const [leads, setLeads] = useState([])
   const [companies, setCompanies] = useState([])
@@ -239,6 +413,8 @@ const Leads = () => {
   const [filterStatus, setFilterStatus] = useState('')
   const [filterSource, setFilterSource] = useState('')
   const [filterDate, setFilterDate] = useState('')
+  const [filterDateFrom, setFilterDateFrom] = useState('')
+  const [filterDateTo, setFilterDateTo] = useState('')
   const [isTargetDropdownOpen, setIsTargetDropdownOpen] = useState(false)
 
   // RiceCRM-style Bulk Update Modal & Notification Modal States
@@ -288,6 +464,8 @@ const Leads = () => {
     services: [],                // Services array (for backward compatibility)
     leadType: 'Organization',    // Lead type
     custom_fields: {},           // Custom fields
+    pipeline_id: '',             // Modal: selected pipeline (defaults from view)
+    stage_id: '',                // Auto: first stage of selected pipeline (no separate field in UI)
   })
 
   const [calendarView, setCalendarView] = useState('month') // 'month', 'week', 'day', 'list'
@@ -552,6 +730,16 @@ const Leads = () => {
     if (filterDate) {
       filtered = filtered.filter(lead => lead.createdDate === filterDate)
     }
+    if (filterDateFrom) {
+      const fromDate = new Date(filterDateFrom)
+      filtered = filtered.filter(lead => new Date(lead.createdDate) >= fromDate)
+    }
+    if (filterDateTo) {
+      const toDate = new Date(filterDateTo)
+      // Set to end of day
+      toDate.setHours(23, 59, 59, 999)
+      filtered = filtered.filter(lead => new Date(lead.createdDate) <= toDate)
+    }
 
     // Apply Main Quick Filter Tabs
     if (activeFilter === 'my') {
@@ -572,6 +760,34 @@ const Leads = () => {
 
   const filteredLeads = getFilteredLeads()
 
+  const defaultPipelineId = useMemo(() => {
+    const p = pipelines.find((x) => x.is_default) || pipelines[0]
+    return p?.id
+  }, [pipelines])
+
+  const leadMatchesCurrentPipeline = useCallback(
+    (l) => {
+      if (currentPipeline?.id == null) return false
+      const cur = String(currentPipeline.id)
+      if (l.pipeline_id != null && l.pipeline_id !== '') {
+        return String(l.pipeline_id) === cur
+      }
+      if (defaultPipelineId == null) return false
+      return String(defaultPipelineId) === cur
+    },
+    [currentPipeline, defaultPipelineId]
+  )
+
+  const kanbanBoardLeads = useMemo(
+    () => filteredLeads.filter(leadMatchesCurrentPipeline),
+    [filteredLeads, leadMatchesCurrentPipeline]
+  )
+
+  const pipelineScopeTotals = useMemo(() => {
+    const v = kanbanBoardLeads.reduce((s, d) => s + parseFloat(d.value || 0), 0)
+    return { count: kanbanBoardLeads.length, value: v }
+  }, [kanbanBoardLeads])
+
   const getLeadsByStatus = (status) => {
     return filteredLeads.filter(lead => lead.status === status)
   }
@@ -581,52 +797,44 @@ const Leads = () => {
     return { count: filteredLeads.length, value: total }
   }, [filteredLeads])
 
-  // Drag and Drop Handlers for Kanban
+  // Kanban drag & drop — same flow as `Deals.jsx` (avoids type mismatch + no body overflow lock)
   const handleDragStart = (e, lead) => {
     setDraggedLead(lead)
     e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData('text/html', e.target.outerHTML)
-    e.target.style.opacity = '0.5'
-    // Prevent page scroll during drag
-    document.body.style.overflow = 'hidden'
   }
 
   const handleDragEnd = (e) => {
     e.target.style.opacity = '1'
     setDraggedLead(null)
-    // Restore page scroll
-    document.body.style.overflow = 'auto'
+    setDragOverStageId(null)
   }
 
   const handleDragOver = (e, stageId) => {
     e.preventDefault()
-    e.stopPropagation()
     e.dataTransfer.dropEffect = 'move'
-    if (stageId) setDragOverStageId(stageId)
-  }
-
-  const handleDragLeave = () => {
-    setDragOverStageId(null)
+    if (stageId != null) setDragOverStageId(stageId)
   }
 
   const handleDrop = async (e, stageId) => {
     e.preventDefault()
     e.stopPropagation()
     setDragOverStageId(null)
-    // Restore page scroll
-    document.body.style.overflow = 'auto'
-
-    if (draggedLead && draggedLead.stage_id !== stageId) {
-      try {
-        await leadsAPI.updateStage(draggedLead.id, { stage_id: stageId, pipeline_id: currentPipeline?.id })
-        await fetchLeads()
-        if (activeTab === 'overview') {
-          await fetchOverview()
-        }
-      } catch (error) {
-        console.error('Error updating lead status:', error)
-        alert(t('leads.kanban.load_error'))
-      }
+    if (String(stageId) === LEAD_KANBAN_FALLBACK_STAGE_ID) return
+    if (!draggedLead || String(draggedLead.stage_id) === String(stageId)) return
+    const pid = currentPipeline?.id
+    // Optimistic UI (like Deals)
+    setLeads((prev) =>
+      prev.map((l) =>
+        l.id === draggedLead.id ? { ...l, stage_id: stageId, pipeline_id: pid != null ? pid : l.pipeline_id } : l
+      )
+    )
+    try {
+      await leadsAPI.updateStage(draggedLead.id, { stage_id: stageId, pipeline_id: pid })
+      if (activeTab === 'overview') await fetchOverview()
+    } catch (error) {
+      console.error('Error updating lead stage:', error)
+      await fetchLeads()
+      alert(t('leads.kanban.load_error'))
     }
   }
 
@@ -1150,6 +1358,8 @@ const Leads = () => {
       probability: '',
       callThisWeek: false,
       services: [], // Added services field
+      pipeline_id: currentPipeline?.id != null ? String(currentPipeline.id) : '',
+      stage_id: stages[0]?.id != null ? String(stages[0].id) : '',
     })
     setIsAddModalOpen(true)
   }
@@ -1401,6 +1611,32 @@ const Leads = () => {
     // Removed required validations - allow empty data
 
     try {
+      // Always align with a real pipeline: form → header → first available (avoid backend "default" ≠ header Kanban)
+      let resolvedPipelineId =
+        (formData.pipeline_id && String(formData.pipeline_id)) ||
+        (currentPipeline?.id != null ? String(currentPipeline.id) : '') ||
+        (pipelines[0]?.id != null ? String(pipelines[0].id) : '')
+
+      let resolvedStageId = formData.stage_id != null && formData.stage_id !== '' ? String(formData.stage_id) : ''
+
+      if (resolvedPipelineId) {
+        try {
+          const st = await leadPipelinesAPI.getStages(resolvedPipelineId)
+          const list = st.data?.success ? (st.data.data || []) : []
+          if (list.length) {
+            const valid = resolvedStageId && list.some((s) => String(s.id) === String(resolvedStageId))
+            if (!resolvedStageId || !valid) {
+              resolvedStageId = String(list[0].id)
+            }
+          }
+        } catch (e) {
+          console.error('resolve lead stage:', e)
+          if (!resolvedStageId && stages.length > 0 && String(resolvedPipelineId) === String(currentPipeline?.id)) {
+            resolvedStageId = String(stages[0].id)
+          }
+        }
+      }
+
       const leadData = {
         lead_type: formData.leadType,
         company_name: formData.leadType === 'Organization' ? (formData.companyName || null) : null,
@@ -1421,8 +1657,8 @@ const Leads = () => {
         call_this_week: formData.callThisWeek || false,
         labels: formData.label ? [formData.label] : [],
         services: formData.services || [],
-        pipeline_id: currentPipeline?.id,
-        stage_id: formData.stage_id || (stages.length > 0 ? stages[0].id : null),
+        pipeline_id: resolvedPipelineId ? parseInt(resolvedPipelineId, 10) : null,
+        stage_id: resolvedStageId ? parseInt(resolvedStageId, 10) : null,
         custom_fields: formData.custom_fields || {}
       }
 
@@ -1472,6 +1708,8 @@ const Leads = () => {
         label: '',
         services: [], // Added services field
         custom_fields: {},
+        pipeline_id: '',
+        stage_id: '',
       })
     } catch (error) {
       console.error('Error saving lead:', error)
@@ -1828,8 +2066,8 @@ const Leads = () => {
                     className="bg-transparent text-sm font-bold text-gray-700 focus:outline-none cursor-pointer"
                     value={currentPipeline?.id || ''}
                     onChange={e => {
-                      const pid = parseInt(e.target.value)
-                      const p = pipelines.find(p => p.id === pid)
+                      const v = e.target.value
+                      const p = pipelines.find((x) => String(x.id) === String(v))
                       if (p) {
                         setCurrentPipeline(p)
                         fetchStages(p.id)
@@ -1885,9 +2123,17 @@ const Leads = () => {
 
           {/* Stats bar */}
           <div className="flex items-center gap-4 text-xs text-gray-400">
-            <span>{filteredLeads.length} {t('leads.columns.lead') || 'Leads'}</span>
+            <span>
+              {(viewMode === 'kanban' && currentPipeline ? pipelineScopeTotals.count : filteredLeads.length)}{' '}
+              {t('leads.columns.lead') || 'Leads'}
+            </span>
             <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-            <span className="font-bold">{t('dashboard.total') || 'Total'}: <span className="text-primary-accent">{fmtShort(leadsTotals.value)}</span></span>
+            <span className="font-bold">
+              {t('dashboard.total') || 'Total'}:{' '}
+              <span className="text-primary-accent">
+                {fmtShort((viewMode === 'kanban' && currentPipeline ? pipelineScopeTotals.value : leadsTotals.value))}
+              </span>
+            </span>
             {(filterOwner || filterStatus || filterSource || filterDate) && (
               <>
                 <span className="w-1 h-1 bg-gray-300 rounded-full" />
@@ -1961,161 +2207,87 @@ const Leads = () => {
           )}
 
 
-          {/* Kanban View */}
+          {/* Kanban View — same UX as Deals (fallback column when no stages) */}
           {(activeTab === 'kanban' || viewMode === 'kanban') && (
-            <div
-              className="w-full pb-4"
-              onDragOver={(e) => {
-                // Prevent page scroll during drag
-                e.preventDefault()
-              }}
-            >
-              {/* Horizontal scroll container for Kanban columns */}
+            <div className="w-full pb-4" onDragOver={(e) => e.preventDefault()}>
               <div
-                className="flex gap-4 overflow-x-auto overflow-y-hidden pb-4 -mx-3 sm:mx-0 px-3 sm:px-0 custom-scrollbar items-start"
-                onDragOver={(e) => {
-                  e.preventDefault()
-                }}
-                style={{ minHeight: 'calc(100vh - 350px)' }}
+                className="flex gap-4 h-full min-h-[320px] overflow-x-auto overflow-y-hidden pb-4 -mx-3 sm:mx-0 px-3 sm:px-0 custom-scrollbar items-stretch"
+                onDragOver={(e) => e.preventDefault()}
               >
-                {stages.map((stage) => {
-                  const columnLeads = filteredLeads.filter(l =>
-                    String(l.stage_id) === String(stage.id) &&
-                    String(l.pipeline_id) === String(currentPipeline?.id)
-                  )
-                  return (
-                    <div
-                      key={stage.id}
-                      className="flex-shrink-0 w-80 bg-gray-50/50 rounded-xl flex flex-col max-h-full border border-gray-100 shadow-sm"
-                      style={{ minHeight: '500px' }}
-                      onDragOver={(e) => handleDragOver(e, stage.id)}
-                      onDragLeave={handleDragLeave}
-                      onDrop={(e) => handleDrop(e, stage.id)}
-                    >
-                      {/* Column Header */}
-                      <div className="p-3 pb-2">
-                        <div className="flex items-center justify-between mb-1">
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full ring-2 ring-white shadow-sm" style={{ backgroundColor: stage.color || '#6366f1' }} />
-                            <h3 className="font-black text-gray-800 text-xs uppercase tracking-wider">
-                              {['new lead', 'new', 'neu'].includes((stage.name||'').toLowerCase()) ? t('leads.stages.new') : 
-                               ['contacted', 'kontaktiert'].includes((stage.name||'').toLowerCase()) ? t('leads.stages.contacted') : 
-                               ['qualified', 'qualifiziert'].includes((stage.name||'').toLowerCase()) ? t('leads.stages.qualified') : 
-                               ['converted', 'konvertiert'].includes((stage.name||'').toLowerCase()) ? t('leads.stages.converted') : 
-                               ['proposal', 'angebot'].includes((stage.name||'').toLowerCase()) ? t('leads.stages.proposal') :
-                               ['negotiation', 'verhandlung'].includes((stage.name||'').toLowerCase()) ? t('leads.stages.negotiation') :
-                               ['in progress', 'in bearbeitung'].includes((stage.name||'').toLowerCase()) ? t('leads.stages.in_progress') : 
-                               ['won', 'gewonnen'].includes((stage.name||'').toLowerCase()) ? t('leads.stages.won') : 
-                               ['lost', 'verloren'].includes((stage.name||'').toLowerCase()) ? t('leads.stages.lost') : 
-                               stage.name}
-                            </h3>
-                          </div>
-                          <div className="px-2 py-0.5 bg-white border border-gray-100 rounded-full text-[10px] font-black text-gray-400">{columnLeads.length}</div>
-                        </div>
-                        <div className="h-0.5 w-full bg-gray-200/50 rounded-full overflow-hidden">
-                          <div className="h-full" style={{ width: '100%', backgroundColor: stage.color || '#6366f1' }} />
-                        </div>
-                      </div>
-
-                      {/* Cards Container */}
-                      <div
-                        className="flex-1 overflow-y-auto overflow-x-hidden p-3 pt-1 space-y-3 custom-scrollbar"
-                        style={{
-                          maxHeight: 'calc(100vh - 450px)',
-                          minHeight: '300px'
+                {stagesLoading ? (
+                  <div className="w-full min-h-[400px] flex flex-col items-center justify-center gap-3 rounded-2xl border border-gray-100 bg-white/60">
+                    <div className="h-8 w-8 rounded-full border-2 border-primary-accent border-t-transparent animate-spin" />
+                    <p className="text-sm font-medium text-gray-500">{t('common.loading')}</p>
+                  </div>
+                ) : stages.length === 0 && currentPipeline?.id && kanbanBoardLeads.length > 0 ? (
+                  <div className="w-full flex flex-col gap-3">
+                    <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 max-w-2xl">
+                      {t('leads.kanban.no_stages_running')}
+                    </p>
+                    <div className="flex gap-4">
+                      <LeadKanbanColumn
+                        stage={{
+                          id: LEAD_KANBAN_FALLBACK_STAGE_ID,
+                          name: t('leads.kanban.fallback_title'),
+                          color: '#6366f1',
                         }}
-                        onDragOver={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                        }}
-                      >
-                        {columnLeads.map((lead) => (
-                          <div
-                            key={lead.id}
-                            draggable
-                            onDragStart={(e) => handleDragStart(e, lead)}
-                            onDragEnd={handleDragEnd}
-                            onDragOver={(e) => {
-                              e.preventDefault()
-                              e.stopPropagation()
-                            }}
-                            className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing select-none group relative overflow-hidden flex flex-col"
-                            style={{
-                              borderTop: `4px solid ${stage.color || '#6366f1'}`,
-                              minHeight: '130px'
-                            }}
-                            onClick={() => handleView(lead)}
-                          >
-                            <div className="p-4 flex flex-col h-full">
-                              {/* Header: Lead Name and Menu */}
-                              <div className="flex items-start justify-between mb-3">
-                                <h4 className="font-bold text-sm sm:text-base text-gray-900 group-hover:text-primary-accent transition-colors flex-1 pr-2 leading-tight truncate" title={lead.personName || lead.companyName}>
-                                  {lead.personName || lead.companyName}
-                                </h4>
-                                <button
-                                  className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-all opacity-0 group-hover:opacity-100"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    // Toggle menu or show actions
-                                  }}
-                                >
-                                  <IoEllipsisHorizontal size={18} />
-                                </button>
-                              </div>
-
-                              {/* Content: Company Name */}
-                              <div className="flex-1">
-                                {lead.companyName && (
-                                  <div className="flex items-center gap-2 text-xs text-secondary-text mb-3">
-                                    <IoBusiness size={14} className="text-gray-400" />
-                                    <span className="truncate">{lead.companyName}</span>
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* Footer: Amount, Time Ago, Avatar */}
-                              <div className="flex items-center justify-between pt-3 mt-auto border-t border-gray-50">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-bold text-sm sm:text-base text-gray-900">
-                                    {lead.value ? `$${parseFloat(lead.value).toLocaleString()}` : '€0'}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <div className="px-2 py-0.5 bg-red-50 border border-red-100 rounded-full text-[10px] font-bold text-red-500">
-                                    {getTimeAgo(lead.created_at || lead.created)}
-                                  </div>
-                                  <div className="w-6 h-6 rounded-full bg-primary-accent/10 border border-primary-accent/20 flex items-center justify-center text-[10px] font-bold text-primary-accent ring-2 ring-white">
-                                    {(lead.employeeAvatar || (lead.employee?.[0] || 'U')).toUpperCase().slice(0, 1)}
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Probability Badges (Overlay or small chips) */}
-                              {(lead.probability === 50 || lead.probability === 90 || lead.callThisWeek) && (
-                                <div className="flex items-center gap-1 mt-2">
-                                  {lead.probability === 50 && (
-                                    <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-yellow-50 text-yellow-600 border border-yellow-100">50%</span>
-                                  )}
-                                  {lead.probability === 90 && (
-                                    <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-green-50 text-green-600 border border-green-100">90%</span>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                        {columnLeads.length === 0 && !dragOverStageId && (
-                          <div className="text-center py-10 px-4">
-                            <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm border border-gray-50">
-                              <IoList className="text-gray-200" size={24} />
-                            </div>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{t('leads.no_leads') || 'NO LEADS FOUND'}</p>
-                          </div>
-                        )}
-                      </div>
+                        stages={[]}
+                        columnLeads={kanbanBoardLeads}
+                        t={t}
+                        cardsDraggable={false}
+                        isDragOver={false}
+                        onDragOverCol={(e) => e.preventDefault()}
+                        onDropCol={(e) => e.preventDefault()}
+                        onDragStart={handleDragStart}
+                        onDragEnd={handleDragEnd}
+                        onOpenLead={handleView}
+                        getTimeAgo={getTimeAgo}
+                        fmtShort={fmtShort}
+                      />
                     </div>
-                  )
-                })}
+                    <p className="text-xs text-gray-400 pl-1">
+                      <button
+                        type="button"
+                        onClick={() => navigate('/app/admin/settings/pipelines')}
+                        className="text-primary-accent font-medium hover:underline"
+                      >
+                        {t('leads.kanban.manage_pipelines_short')}
+                      </button>
+                    </p>
+                  </div>
+                ) : stages.length === 0 ? (
+                  <div className="flex-1 flex flex-col items-center justify-center gap-2 text-gray-400 min-h-[280px] w-full">
+                    <IoLayers size={40} className="text-gray-200" />
+                    <p className="font-bold text-sm text-center px-4 text-gray-600">{t('leads.kanban.no_stages')}</p>
+                    <p className="text-xs text-gray-500 text-center max-w-md px-4">{t('leads.kanban.no_stages_hint')}</p>
+                    <button
+                      type="button"
+                      onClick={() => navigate('/app/admin/settings/pipelines')}
+                      className="mt-1 text-sm text-primary-accent/90 hover:underline"
+                    >
+                      {t('leads.kanban.manage_pipelines_short')}
+                    </button>
+                  </div>
+                ) : (
+                  stages.map((stage) => (
+                    <LeadKanbanColumn
+                      key={stage.id}
+                      stage={stage}
+                      stages={stages}
+                      columnLeads={getColumnLeadsForStage(stage, stages, kanbanBoardLeads)}
+                      t={t}
+                      cardsDraggable
+                      isDragOver={dragOverStageId === stage.id}
+                      onDragOverCol={(e) => handleDragOver(e, stage.id)}
+                      onDropCol={(e) => handleDrop(e, stage.id)}
+                      onDragStart={handleDragStart}
+                      onDragEnd={handleDragEnd}
+                      onOpenLead={handleView}
+                      getTimeAgo={getTimeAgo}
+                      fmtShort={fmtShort}
+                    />
+                  ))
+                )}
               </div>
             </div>
           )}
@@ -2700,49 +2872,51 @@ const Leads = () => {
               <div className="border-b border-gray-200 pb-4">
                 <h3 className="text-lg font-semibold text-primary-text mb-3">{t('leads.basic_info')}</h3>
                 <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-primary-text mb-2">
-                      {t('leads.lead_type')} <span className="text-danger">*</span>
-                    </label>
-                    <select
-                      value={formData.leadType}
-                      onChange={(e) => {
-                        const newLeadType = e.target.value
-                        setFormData({
-                          ...formData,
-                          leadType: newLeadType,
-                          // Clear fields when switching types
-                          personName: newLeadType === 'Organization' ? '' : formData.personName,
-                          companyName: newLeadType === 'Person' ? '' : formData.companyName
-                        })
-                      }}
-                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
-                    >
-                      <option value="Organization">{t('leads.organization') || 'Organization'}</option>
-                      <option value="Person">{t('leads.person') || 'Person'}</option>
-                    </select>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-primary-text mb-2">
+                        {t('leads.lead_type')} <span className="text-danger">*</span>
+                      </label>
+                      <select
+                        value={formData.leadType}
+                        onChange={(e) => {
+                          const newLeadType = e.target.value
+                          setFormData({
+                            ...formData,
+                            leadType: newLeadType,
+                            // Clear fields when switching types
+                            personName: newLeadType === 'Organization' ? '' : formData.personName,
+                            companyName: newLeadType === 'Person' ? '' : formData.companyName
+                          })
+                        }}
+                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
+                      >
+                        <option value="Organization">{t('leads.organization')}</option>
+                        <option value="Person">{t('leads.person')}</option>
+                      </select>
+                    </div>
+                    {formData.leadType === 'Person' ? (
+                      <Input
+                        label={t('leads.person_name')}
+                        value={formData.personName}
+                        onChange={(e) => setFormData({ ...formData, personName: e.target.value })}
+                        placeholder={t('leads.enter_person_name')}
+                      />
+                    ) : (
+                      <Input
+                        label={t('leads.organization_name')}
+                        value={formData.companyName}
+                        onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
+                        placeholder={t('leads.enter_organization_name')}
+                      />
+                    )}
                   </div>
-                  {formData.leadType === 'Person' ? (
-                    <Input
-                      label={t('leads.person_name') || 'Person Name'}
-                      value={formData.personName}
-                      onChange={(e) => setFormData({ ...formData, personName: e.target.value })}
-                      placeholder={t('leads.enter_person_name') || 'Enter Person Name'}
-                    />
-                  ) : (
-                    <Input
-                      label={t('leads.organization_name')}
-                      value={formData.companyName}
-                      onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                      placeholder={t('leads.enter_organization_name')}
-                    />
-                  )}
                   <Input
                     label={t('common.phone')}
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: formatPhoneNumber(e.target.value) })}
                     placeholder={t('leads.enter_phone')}
-                    helperText={formData.phone && !isValidPhone(formData.phone) ? t('leads.invalid_phone') || 'Ungültiges Format (z.B. +49 123 4567)' : '+49 für Deutschland'}
+                    helperText={formData.phone && !isValidPhone(formData.phone) ? t('leads.invalid_phone') : '+49 für Deutschland'}
                     error={formData.phone && !isValidPhone(formData.phone)}
                   />
 
@@ -2753,7 +2927,7 @@ const Leads = () => {
                         <IoList className="text-primary-accent" />
                         {t('leads.additional_info')}
                       </h4>
-                      <div className="grid grid-cols-1 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {customFields.map((field) => (
                           <div key={field.id}>
                             <label className="block text-sm font-medium text-primary-text mb-2">
@@ -2837,7 +3011,7 @@ const Leads = () => {
                                   onChange={(e) => setFormData({ ...formData, custom_fields: { ...formData.custom_fields, [field.name]: e.target.checked } })}
                                   className="w-5 h-5 rounded border-gray-300 text-primary-accent focus:ring-primary-accent cursor-pointer"
                                 />
-                                <span className="text-sm text-secondary-text">Yes, {field.label}</span>
+                                <span className="text-sm text-secondary-text">{t('common.yes')}, {field.label}</span>
                               </label>
 
                             ) : field.type === 'file' ? (
@@ -2894,7 +3068,7 @@ const Leads = () => {
                                 }
                                 value={formData.custom_fields?.[field.name] || ''}
                                 onChange={(e) => setFormData({ ...formData, custom_fields: { ...formData.custom_fields, [field.name]: e.target.value } })}
-                                placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}`}
+                                placeholder={field.placeholder || `${t('common.add')} ${field.label.toLowerCase()}`}
                                 className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
                               />
                             )}
@@ -2912,18 +3086,18 @@ const Leads = () => {
 
               {/* Ownership Section */}
               <div className="border-b border-gray-200 pb-4">
-                <h3 className="text-lg font-semibold text-primary-text mb-3">{t('leads.ownership') || 'Ownership'}</h3>
+                <h3 className="text-lg font-semibold text-primary-text mb-3">{t('leads.ownership')}</h3>
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-primary-text mb-2">
-                      {t('employees.title') || 'Employees'}
+                      {t('employees.title')}
                     </label>
                     <select
                       value={formData.employee}
                       onChange={(e) => setFormData({ ...formData, employee: e.target.value })}
                       className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
                     >
-                      <option value="">{t('employees.select_employee') || 'Select Employee'}</option>
+                      <option value="">{t('employees.select_employee')}</option>
                       {employees.map(employee => (
                         <option key={employee.user_id || employee.id} value={employee.user_id || employee.id}>
                           {employee.name || employee.email}
@@ -2931,7 +3105,7 @@ const Leads = () => {
                       ))}
                     </select>
                     {employees.length === 0 && (
-                      <p className="text-xs text-secondary-text mt-1">{t('employees.no_employees_found') || 'No employees found for this company'}</p>
+                      <p className="text-xs text-secondary-text mt-1">{t('employees.no_employees_found')}</p>
                     )}
                   </div>
                 </div>
@@ -2954,33 +3128,29 @@ const Leads = () => {
                         {t('deals.kanban.manage_pipelines')}
                       </button>
                     </div>
+                    <p className="text-xs text-secondary-text mb-2">{t('leads.form.pipeline_stage_hint')}</p>
                     <select
-                      value={formData.pipeline_id}
-                      onChange={(e) => {
+                      value={formData.pipeline_id || (currentPipeline?.id != null ? String(currentPipeline.id) : '')}
+                      onChange={async (e) => {
                         const pid = e.target.value
-                        setFormData({ ...formData, pipeline_id: pid })
-                        fetchStages(pid)
+                        if (!pid) {
+                          setFormData((fd) => ({ ...fd, pipeline_id: '', stage_id: '' }))
+                          return
+                        }
+                        try {
+                          const res = await leadPipelinesAPI.getStages(pid)
+                          const list = res.data?.success ? (res.data.data || []) : []
+                          setFormData((fd) => ({ ...fd, pipeline_id: pid, stage_id: list[0]?.id != null ? String(list[0].id) : '' }))
+                        } catch (err) {
+                          console.error(err)
+                          setFormData((fd) => ({ ...fd, pipeline_id: pid }))
+                        }
                       }}
                       className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
                     >
                       <option value="">{t('deals.form.select_pipeline')}</option>
                       {pipelines.map(p => (
                         <option key={p.id} value={p.id}>{['lead pipeline'].includes((p.name||'').replace(/['"]/g, '').toLowerCase().trim()) ? 'Lead-Pipeline' : ['international sales'].includes((p.name||'').replace(/['"]/g, '').toLowerCase().trim()) ? 'Internationaler Vertrieb' : ['sales pipeline'].includes((p.name||'').replace(/['"]/g, '').toLowerCase().trim()) ? 'Vertriebspipeline' : p.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-primary-text mb-2">
-                      {t('deals.form.stage')}
-                    </label>
-                    <select
-                      value={formData.stage_id}
-                      onChange={(e) => setFormData({ ...formData, stage_id: e.target.value })}
-                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
-                    >
-                      <option value="">{t('deals.form.select_stage')}</option>
-                      {stages.map(stage => (
-                        <option key={stage.id} value={stage.id}>{['new lead', 'new', 'neu'].includes((stage.name||'').toLowerCase()) ? 'Neuer Lead' : ['contacted'].includes((stage.name||'').toLowerCase()) ? 'Kontaktiert' : ['qualified'].includes((stage.name||'').toLowerCase()) ? 'Qualifiziert' : ['converted'].includes((stage.name||'').toLowerCase()) ? 'Konvertiert' : ['in progress','in bearbeitung'].includes((stage.name||'').toLowerCase()) ? 'In Bearbeitung' : ['won','gewonnen'].includes((stage.name||'').toLowerCase()) ? 'Gewonnen' : ['lost','verloren'].includes((stage.name||'').toLowerCase()) ? 'Verloren' : stage.name}</option>
                       ))}
                     </select>
                   </div>
@@ -3001,14 +3171,14 @@ const Leads = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-primary-text mb-2">
-                      Label
+                      {t('common.labels')}
                     </label>
                     <select
                       value={formData.label}
                       onChange={(e) => setFormData({ ...formData, label: e.target.value })}
                       className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
                     >
-                      <option value="">{t('leads.select_label') || 'Select Label'}</option>
+                      <option value="">{t('leads.select_label')}</option>
                       {labels.map(labelItem => {
                         const labelName = typeof labelItem === 'object' ? labelItem.name : labelItem
                         return (
@@ -3017,7 +3187,7 @@ const Leads = () => {
                       })}
                     </select>
                     {labels.length === 0 && (
-                      <p className="text-xs text-secondary-text mt-1">{t('leads.no_labels_found') || 'No labels found'}</p>
+                      <p className="text-xs text-secondary-text mt-1">{t('leads.no_labels_found')}</p>
                     )}
                   </div>
                   <div>
@@ -4073,7 +4243,7 @@ const Leads = () => {
                   onChange={(e) => setEventFormData({ ...eventFormData, description: e.target.value })}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input
                   label="Datum *"
                   type="date"

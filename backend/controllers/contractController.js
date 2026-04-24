@@ -80,7 +80,7 @@ const getAll = async (req, res) => {
     if (!filterCompanyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
@@ -122,7 +122,7 @@ const getAll = async (req, res) => {
     });
   } catch (error) {
     console.error('Get contracts error:', error);
-    res.status(500).json({ success: false, error: 'Failed to fetch contracts' });
+    res.status(500).json({ success: false, error: req.t ? req.t('api_msg_32dc0b15') : "Failed to fetch contracts" });
   }
 };
 
@@ -142,7 +142,7 @@ const getById = async (req, res) => {
     if (contracts.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Contract not found'
+        error: req.t ? req.t('api_msg_8e1a48e5') : "Contract not found"
       });
     }
 
@@ -163,7 +163,7 @@ const getById = async (req, res) => {
     console.error('Get contract error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch contract'
+      error: req.t ? req.t('api_msg_934f0aa0') : "Failed to fetch contract"
     });
   }
 };
@@ -298,11 +298,11 @@ const create = async (req, res) => {
     res.status(201).json({
       success: true,
       data: contract,
-      message: 'Contract created successfully'
+      message: req.t ? req.t('api_msg_312d1f9b') : "Contract created successfully"
     });
   } catch (error) {
     console.error('Create contract error:', error);
-    res.status(500).json({ success: false, error: 'Failed to create contract', details: error.message });
+    res.status(500).json({ success: false, error: req.t ? req.t('api_msg_af1c847a') : "Failed to create contract", details: error.message });
   }
 };
 
@@ -336,7 +336,7 @@ const update = async (req, res) => {
     if (contracts.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Contract not found'
+        error: req.t ? req.t('api_msg_8e1a48e5') : "Contract not found"
       });
     }
 
@@ -442,13 +442,13 @@ const update = async (req, res) => {
     res.json({
       success: true,
       data: updatedContract,
-      message: 'Contract updated successfully'
+      message: req.t ? req.t('api_msg_647d0727') : "Contract updated successfully"
     });
   } catch (error) {
     console.error('Update contract error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to update contract'
+      error: req.t ? req.t('api_msg_ce2e34e4') : "Failed to update contract"
     });
   }
 };
@@ -467,7 +467,7 @@ const updateStatus = async (req, res) => {
     if (!status) {
       return res.status(400).json({
         success: false,
-        error: 'status is required'
+        error: req.t ? req.t('api_msg_75cd6d17') : "status is required"
       });
     }
 
@@ -492,7 +492,7 @@ const updateStatus = async (req, res) => {
     if (contracts.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Contract not found'
+        error: req.t ? req.t('api_msg_8e1a48e5') : "Contract not found"
       });
     }
 
@@ -568,7 +568,7 @@ const updateStatus = async (req, res) => {
     if (!updatedContracts || updatedContracts.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Contract not found after update'
+        error: req.t ? req.t('api_msg_d7e11659') : "Contract not found after update"
       });
     }
 
@@ -592,14 +592,14 @@ const updateStatus = async (req, res) => {
     res.json({
       success: true,
       data: updatedContract,
-      message: 'Contract status updated successfully'
+      message: req.t ? req.t('api_msg_60757137') : "Contract status updated successfully"
     });
   } catch (error) {
     console.error('Update contract status error:', error);
     console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
-      error: 'Failed to update contract status',
+      error: req.t ? req.t('api_msg_69f0397b') : "Failed to update contract status",
       details: error.message
     });
   }
@@ -618,19 +618,19 @@ const deleteContract = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Contract not found'
+        error: req.t ? req.t('api_msg_8e1a48e5') : "Contract not found"
       });
     }
 
     res.json({
       success: true,
-      message: 'Contract deleted successfully'
+      message: req.t ? req.t('api_msg_057b04ab') : "Contract deleted successfully"
     });
   } catch (error) {
     console.error('Delete contract error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete contract'
+      error: req.t ? req.t('api_msg_f62aaa46') : "Failed to delete contract"
     });
   }
 };
@@ -659,7 +659,7 @@ const getPDF = async (req, res) => {
     );
 
     if (contracts.length === 0) {
-      return res.status(404).json({ success: false, error: 'Contract not found' });
+      return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_8e1a48e5') : "Contract not found" });
     }
 
     const contract = contracts[0];
@@ -682,11 +682,11 @@ const getPDF = async (req, res) => {
     res.json({
       success: true,
       data: contract,
-      message: 'PDF generation will be implemented with pdfkit or puppeteer'
+      message: req.t ? req.t('api_msg_cb75e169') : "PDF generation will be implemented with pdfkit or puppeteer"
     });
   } catch (error) {
     console.error('Get contract PDF error:', error);
-    res.status(500).json({ success: false, error: 'Failed to generate PDF' });
+    res.status(500).json({ success: false, error: req.t ? req.t('api_msg_53ac43e9') : "Failed to generate PDF" });
   }
 };
 
@@ -717,7 +717,7 @@ const sendEmail = async (req, res) => {
     );
 
     if (contracts.length === 0) {
-      return res.status(404).json({ success: false, error: 'Contract not found' });
+      return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_8e1a48e5') : "Contract not found" });
     }
 
     const contract = contracts[0];
@@ -771,7 +771,7 @@ const sendEmail = async (req, res) => {
     // Send email
     const recipientEmail = to || contract.client_email;
     if (!recipientEmail) {
-      return res.status(400).json({ success: false, error: 'Recipient email is required' });
+      return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_4a2ce470') : "Recipient email is required" });
     }
 
     // Handle CC and BCC from request body
@@ -815,7 +815,7 @@ const sendEmail = async (req, res) => {
 
     res.json({ 
       success: true, 
-      message: 'Contract sent successfully',
+      message: req.t ? req.t('api_msg_b265c66e') : "Contract sent successfully",
       data: { email: recipientEmail, messageId: emailResult.messageId }
     });
   } catch (error) {
@@ -825,7 +825,7 @@ const sendEmail = async (req, res) => {
     console.error('Error stack:', error.stack);
     res.status(500).json({ 
       success: false, 
-      error: 'Failed to send contract email',
+      error: req.t ? req.t('api_msg_8b87299b') : "Failed to send contract email",
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }

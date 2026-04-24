@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useLanguage } from '../../../context/LanguageContext'
 import {
     IoSearch, IoFilter, IoAdd, IoBriefcase, IoBusiness, IoPricetag,
-    IoTrendingUp, IoCheckmarkCircle, IoList, IoGrid, IoPerson,
+    IoCheckmarkCircle, IoList, IoGrid, IoPerson,
     IoTimeOutline, IoEllipsisHorizontal, IoChevronBack, IoChevronForward,
     IoTrashOutline, IoPencil, IoEye, IoClose, IoCashOutline,
     IoCalendarOutline, IoDocumentTextOutline, IoLayers, IoFunnelOutline,
@@ -39,22 +39,21 @@ const EMPTY_FORM = {
 }
 
 // ─── DealFormFields (top-level to avoid remount bug) ─────────────────────────
-const DealFormFields = ({ data, setData, employees, pipelines, stages, onPipelineChange }) => {
+const DealFormFields = ({ data, setData, employees, pipelines, onPipelineChange }) => {
     const { t } = useLanguage()
     return (
         <div className="space-y-5">
-            <div>
-                <label className="block text-xs font-black text-gray-600 uppercase tracking-widest mb-1.5">{t('deals.form.title')} *</label>
-                <div className="relative">
-                    <input required type="text" value={data.title}
-                        onChange={e => setData(p => ({ ...p, title: e.target.value }))}
-                        className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent text-sm transition-all"
-                        placeholder={t('deals.form.placeholder_title')} />
-                    <IoBriefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-xs font-black text-gray-600 uppercase tracking-widest mb-1.5">{t('deals.form.title')} *</label>
+                    <div className="relative">
+                        <input required type="text" value={data.title}
+                            onChange={e => setData(p => ({ ...p, title: e.target.value }))}
+                            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent text-sm transition-all"
+                            placeholder={t('deals.form.placeholder_title')} />
+                        <IoBriefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                    </div>
                 </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
 
                 <div>
                     <label className="block text-xs font-black text-gray-600 uppercase tracking-widest mb-1.5">{t('deals.form.assigned_to')}</label>
@@ -68,33 +67,21 @@ const DealFormFields = ({ data, setData, employees, pipelines, stages, onPipelin
                     </div>
                 </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-                <div>
-                    <label className="block text-xs font-black text-gray-600 uppercase tracking-widest mb-1.5">{t('deals.form.pipeline')} *</label>
-                    <div className="relative">
-                        <select required value={data.pipeline_id}
-                            onChange={e => { const pid = e.target.value; setData(p => ({ ...p, pipeline_id: pid })); onPipelineChange && onPipelineChange(pid) }}
-                            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent text-sm appearance-none transition-all">
-                            <option value="">{t('deals.form.select_pipeline')}</option>
-                            {(pipelines || []).map(p => <option key={p.id} value={p.id}>{['sales pipeline'].includes((p.name||'').toLowerCase()) ? t('deals.pipelines.sales') : p.name}</option>)}
-                        </select>
-                        <IoLayers className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                    </div>
-                </div>
-                <div>
-                    <label className="block text-xs font-black text-gray-600 uppercase tracking-widest mb-1.5">{t('deals.form.stage')} *</label>
-                    <div className="relative">
-                        <select required value={data.stage_id} onChange={e => setData(p => ({ ...p, stage_id: e.target.value }))}
-                            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent text-sm appearance-none transition-all">
-                            <option value="">{t('deals.form.select_stage')}</option>
-                            {(stages || []).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                        </select>
-                        <IoTrendingUp className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                    </div>
+            <div>
+                <label className="block text-xs font-black text-gray-600 uppercase tracking-widest mb-1.5">{t('deals.form.pipeline')} *</label>
+                <p className="text-[11px] text-gray-500 mb-2 font-medium">{t('deals.form.stage_inherited_hint')}</p>
+                <div className="relative">
+                    <select required value={data.pipeline_id}
+                        onChange={e => { const pid = e.target.value; setData(p => ({ ...p, pipeline_id: pid })); onPipelineChange && onPipelineChange(pid) }}
+                        className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent text-sm appearance-none transition-all">
+                        <option value="">{t('deals.form.select_pipeline')}</option>
+                        {(pipelines || []).map(p => <option key={p.id} value={p.id}>{['sales pipeline'].includes((p.name||'').toLowerCase()) ? t('deals.pipelines.sales') : p.name}</option>)}
+                    </select>
+                    <IoLayers className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <label className="block text-xs font-black text-gray-600 uppercase tracking-widest mb-1.5">{t('deals.form.amount')} *</label>
                     <div className="relative">
@@ -128,7 +115,7 @@ const DealFormFields = ({ data, setData, employees, pipelines, stages, onPipelin
 }
 
 // ─── DealCard ────────────────────────────────────────────────────────────────
-const DealCard = ({ deal, onDragStart, onDragEnd, onEdit, onDelete, navigate, user }) => {
+const DealCard = ({ deal, onDragStart, onDragEnd, onEdit, onDelete, navigate, user, draggable = true }) => {
     const { t } = useLanguage()
     const [menuOpen, setMenuOpen] = useState(false)
     const menuRef = useRef(null)
@@ -145,10 +132,12 @@ const DealCard = ({ deal, onDragStart, onDragEnd, onEdit, onDelete, navigate, us
 
     return (
         <div
-            draggable
-            onDragStart={(e) => onDragStart(e, deal)}
+            draggable={draggable}
+            onDragStart={draggable ? (e) => onDragStart(e, deal) : undefined}
             onDragEnd={onDragEnd}
-            className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md hover:border-primary-accent/40 transition-all cursor-grab active:cursor-grabbing group select-none"
+            className={`bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md hover:border-primary-accent/40 transition-all group select-none ${
+                draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
+            }`}
         >
             {/* Color bar */}
             <div className="h-1 rounded-t-xl" style={{ backgroundColor: deal.stage_color || '#6366f1' }} />
@@ -228,7 +217,7 @@ const DealCard = ({ deal, onDragStart, onDragEnd, onEdit, onDelete, navigate, us
 }
 
 // ─── KanbanColumn ─────────────────────────────────────────────────────────────
-const KanbanColumn = ({ stage, deals, onDragStart, onDragEnd, onDragOver, onDrop, onEdit, onDelete, navigate, isDragOver, user }) => {
+const KanbanColumn = ({ stage, deals, onDragStart, onDragEnd, onDragOver, onDrop, onEdit, onDelete, navigate, isDragOver, user, cardsDraggable = true }) => {
     const { t } = useLanguage()
     const totalValue = deals.reduce((s, d) => s + parseFloat(d.total || 0), 0)
 
@@ -262,6 +251,7 @@ const KanbanColumn = ({ stage, deals, onDragStart, onDragEnd, onDragOver, onDrop
                     <DealCard
                         key={deal.id}
                         deal={deal}
+                        draggable={cardsDraggable}
                         onDragStart={onDragStart}
                         onDragEnd={onDragEnd}
                         onEdit={onEdit}
@@ -273,7 +263,9 @@ const KanbanColumn = ({ stage, deals, onDragStart, onDragEnd, onDragOver, onDrop
                 {deals.length === 0 && (
                     <div className={`h-28 border-2 border-dashed rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all ${isDragOver ? 'border-primary-accent/40 bg-primary-accent/5' : 'border-gray-200 opacity-40'}`}>
                         <IoBriefcase size={20} className="text-gray-300" />
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{t('deals.kanban.drop_here')}</span>
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                            {cardsDraggable ? t('deals.kanban.drop_here') : t('deals.kanban.no_stages_list')}
+                        </span>
                     </div>
                 )}
             </div>
@@ -362,9 +354,15 @@ const Deals = () => {
         try {
             const res = await dealPipelinesAPI.getStages(pipelineId)
             if (res.data.success) {
-                setStages(res.data.data || [])
-                if (res.data.data.length > 0) {
-                    setFormData(prev => ({ ...prev, stage_id: String(res.data.data[0].id) }))
+                const list = res.data.data || []
+                setStages(list)
+                if (list.length > 0) {
+                    const first = String(list[0].id)
+                    if (isEditModalOpen) {
+                        setEditData(prev => ({ ...prev, stage_id: first, pipeline_id: String(pipelineId) }))
+                    } else {
+                        setFormData(prev => ({ ...prev, stage_id: first, pipeline_id: String(pipelineId) }))
+                    }
                 }
             }
         } catch (err) { console.error('fetchStages:', err) }
@@ -399,18 +397,43 @@ const Deals = () => {
         )
     }, [deals, searchQuery])
 
-    const getDealsByStage = (stageId) =>
-        filteredDeals.filter(d =>
-            String(d.stage_id) === String(stageId) &&
-            String(d.pipeline_id) === String(activePipelineId)
-        )
+    /** Deals belonging to the selected pipeline (incl. legacy rows without pipeline_id on the default pipeline only) */
+    const dealsInActivePipeline = useMemo(() => {
+        if (!activePipelineId) return []
+        const def = pipelines.find((p) => p.is_default) || pipelines[0]
+        return filteredDeals.filter((d) => {
+            if (d.pipeline_id == null || d.pipeline_id === '') {
+                return def && String(def.id) === String(activePipelineId)
+            }
+            return String(d.pipeline_id) === String(activePipelineId)
+        })
+    }, [filteredDeals, activePipelineId, pipelines])
 
-    // ── kanban totals ──────────────────────────────────────────────────────────
-    const kanbanTotals = useMemo(() => {
-        const total = filteredDeals.filter(d => String(d.pipeline_id) === String(activePipelineId))
-            .reduce((s, d) => s + parseFloat(d.total || 0), 0)
-        return { count: filteredDeals.length, value: total }
-    }, [filteredDeals, activePipelineId])
+    const getDealsByStage = useCallback(
+        (stageId) =>
+            filteredDeals.filter((d) => {
+                if (!activePipelineId) return false
+                const def = pipelines.find((p) => p.is_default) || pipelines[0]
+                const inPipeline =
+                    String(d.pipeline_id) === String(activePipelineId) ||
+                    ((d.pipeline_id == null || d.pipeline_id === '') && def && String(def.id) === String(activePipelineId))
+                if (!inPipeline) return false
+                if (d.stage_id != null && d.stage_id !== '' && String(d.stage_id) === String(stageId)) return true
+                const inSet = (sid) => stages.some((s) => String(s.id) === String(sid))
+                if (d.stage_id == null || d.stage_id === '' || !inSet(d.stage_id)) {
+                    return String(stageId) === String(stages[0]?.id)
+                }
+                return false
+            }),
+        [filteredDeals, activePipelineId, pipelines, stages]
+    )
+
+    // List = all search-filtered deals; Kanban = selected pipeline
+    const headerSummary = useMemo(() => {
+        const list = viewMode === 'list' ? filteredDeals : dealsInActivePipeline
+        const value = list.reduce((s, d) => s + parseFloat(d.total || 0), 0)
+        return { count: list.length, value }
+    }, [viewMode, filteredDeals, dealsInActivePipeline])
 
     // ── drag & drop ────────────────────────────────────────────────────────────
     const handleDragStart = (e, deal) => {
@@ -439,11 +462,23 @@ const Deals = () => {
         e.preventDefault()
         try {
             setSubmitting(true)
-            const res = await dealsAPI.create({ ...formData, company_id: companyId })
+            const pipelineId = formData.pipeline_id || activePipelineId
+            const stageId = formData.stage_id || (stages[0] && String(stages[0].id)) || undefined
+            const res = await dealsAPI.create({
+                ...formData,
+                company_id: companyId,
+                pipeline_id: pipelineId,
+                stage_id: stageId,
+            })
             if (res.data.success) {
                 setIsAddModalOpen(false)
-                setFormData({ ...EMPTY_FORM, company_id: companyId, pipeline_id: activePipelineId, stage_id: stages[0]?.id || '' })
-                fetchDeals()
+                setFormData({
+                    ...EMPTY_FORM,
+                    company_id: companyId,
+                    pipeline_id: String(activePipelineId || pipelineId || ''),
+                    stage_id: stages[0]?.id != null ? String(stages[0].id) : '',
+                })
+                await fetchDeals()
             }
         } catch (err) { console.error('Create deal error:', err); alert(t('messages.createError')) }
         finally { setSubmitting(false) }
@@ -521,14 +556,25 @@ const Deals = () => {
                     {/* Right controls */}
                     <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 w-full lg:w-auto">
                         {/* Pipeline selector */}
-                        {viewMode === 'kanban' && pipelines.length > 0 && (
+                        {pipelines.length > 0 && (
                             <div className="relative w-full sm:w-auto">
                                 <IoLayers size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                                <select className="appearance-none bg-gray-50 border border-gray-200 rounded-xl w-full sm:w-auto py-2 pr-8 focus:outline-none cursor-pointer text-sm font-bold text-gray-700 w-full sm:w-auto transition-all"
+                                <select
+                                    className="appearance-none bg-gray-50 border border-gray-200 rounded-xl w-full sm:w-auto py-2 pr-8 focus:outline-none cursor-pointer text-sm font-bold text-gray-700 w-full sm:w-auto transition-all"
                                     style={{ paddingLeft: '2.25rem' }}
                                     value={activePipelineId}
-                                    onChange={e => { setActivePipelineId(e.target.value); fetchStages(e.target.value); setFormData(p => ({ ...p, pipeline_id: e.target.value })) }}>
-                                    {pipelines.map(p => <option key={p.id} value={p.id}>{['sales pipeline'].includes((p.name||'').toLowerCase()) ? t('deals.pipelines.sales') : p.name}</option>)}
+                                    onChange={(e) => {
+                                        const v = e.target.value
+                                        setActivePipelineId(v)
+                                        fetchStages(v)
+                                        setFormData((p) => ({ ...p, pipeline_id: v }))
+                                    }}
+                                >
+                                    {pipelines.map((p) => (
+                                        <option key={p.id} value={p.id}>
+                                            {['sales pipeline'].includes((p.name || '').toLowerCase()) ? t('deals.pipelines.sales') : p.name}
+                                        </option>
+                                    ))}
                                 </select>
                                 <IoChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} />
                             </div>
@@ -568,15 +614,15 @@ const Deals = () => {
                     <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 animate-in slide-in-from-top-2 duration-200">
                         <div className="flex flex-wrap items-end gap-4">
                             <div className="flex-1 min-w-[160px]">
-                                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">{t('auto.auto_8b3bda8c') || 'Zugewiesen an'}</label>
+                                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">{t('common.assigned_to')}</label>
                                 <select value={filterAssignedTo} onChange={e => setFilterAssignedTo(e.target.value)}
                                     className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent">
-                                    <option value="">{t('auto.auto_2722ef4e') || 'Alle Benutzer'}</option>
+                                    <option value="">{t('common.all_users')}</option>
                                     {employees.map(e => <option key={e.id} value={e.user_id}>{e.name}</option>)}
                                 </select>
                             </div>
                             <div className="flex-1 min-w-[140px]">
-                                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">{t('auto.auto_0f51bb78') || 'Datum von'}</label>
+                                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">{t('common.date_from')}</label>
                                 <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)}
                                     className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent" />
                             </div>
@@ -598,7 +644,7 @@ const Deals = () => {
                             {activeFiltersCount > 0 && (
                                 <button onClick={clearFilters}
                                     className="flex items-center gap-1.5 px-3 py-2 text-sm font-bold text-red-500 hover:bg-red-50 rounded-xl border border-red-200 transition-all">
-                                    <IoClose size={14} /> Löschen
+                                    <IoClose size={14} /> {t('common.clear')}
                                 </button>
                             )}
                         </div>
@@ -607,9 +653,9 @@ const Deals = () => {
 
                 {/* Stats bar */}
                 <div className="flex items-center gap-4 text-xs text-gray-500">
-                    <span className="font-bold"><span className="text-gray-900">{kanbanTotals.count}</span> {t('deals.items')}</span>
+                    <span className="font-bold"><span className="text-gray-900">{headerSummary.count}</span> {t('deals.items')}</span>
                     <span className="w-1 h-1 bg-gray-300 rounded-full" />
-                    <span className="font-bold">{t('deals.summary.total')}: <span className="text-primary-accent">{fmtShort(kanbanTotals.value)}</span></span>
+                    <span className="font-bold">{t('deals.summary.total')}: <span className="text-primary-accent">{fmtShort(headerSummary.value)}</span></span>
                     {activeFiltersCount > 0 && <><span className="w-1 h-1 bg-gray-300 rounded-full" /><span className="text-amber-600 font-bold">{activeFiltersCount} {t('deals.summary.active_filters')}</span></>}
                 </div>
             </div>
@@ -625,15 +671,54 @@ const Deals = () => {
                     </div>
                 ) : viewMode === 'kanban' ? (
                     /* ── KANBAN ── */
-                    <div className="flex gap-4 h-full overflow-x-auto pb-4 custom-scrollbar scrollbar-hide">
-                        {stages.length === 0 ? (
-                            <div className="flex-1 flex flex-col items-center justify-center gap-3 text-gray-400">
-                                <IoLayers size={48} className="text-gray-200" />
-                                <p className="font-bold text-sm">{t('deals.kanban.no_stages')}</p>
-                                <button onClick={() => navigate('/app/admin/settings/pipelines')} className="text-primary-accent text-sm font-bold hover:underline">{t('deals.kanban.manage_pipelines')}</button>
+                    <div className="flex gap-4 h-full min-h-[320px] overflow-x-auto pb-4 custom-scrollbar scrollbar-hide">
+                        {stages.length === 0 && activePipelineId && dealsInActivePipeline.length > 0 ? (
+                            <div className="flex flex-col gap-2 w-full">
+                                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 max-w-2xl">
+                                    {t('deals.kanban.no_stages_running')}
+                                </p>
+                                <div className="flex gap-4">
+                                    <KanbanColumn
+                                        key="deals-fallback"
+                                        stage={{ id: '_fallback', name: t('deals.kanban.fallback_title'), color: '#6366f1' }}
+                                        deals={dealsInActivePipeline}
+                                        cardsDraggable={false}
+                                        onDragStart={handleDragStart}
+                                        onDragEnd={handleDragEnd}
+                                        onDragOver={(e) => e.preventDefault()}
+                                        onDrop={(e) => e.preventDefault()}
+                                        onEdit={handleEdit}
+                                        onDelete={handleDelete}
+                                        navigate={navigate}
+                                        isDragOver={false}
+                                        user={user}
+                                    />
+                                </div>
+                                <p className="text-xs text-gray-400 pl-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => navigate('/app/admin/settings/pipelines')}
+                                        className="text-primary-accent font-medium hover:underline"
+                                    >
+                                        {t('deals.kanban.manage_pipelines_short')}
+                                    </button>
+                                </p>
+                            </div>
+                        ) : stages.length === 0 ? (
+                            <div className="flex-1 flex flex-col items-center justify-center gap-2 text-gray-400 min-h-[280px]">
+                                <IoLayers size={40} className="text-gray-200" />
+                                <p className="font-bold text-sm text-center px-4">{t('deals.kanban.no_stages')}</p>
+                                <p className="text-xs text-gray-500 text-center max-w-md px-4">{t('deals.kanban.no_stages_hint')}</p>
+                                <button
+                                    type="button"
+                                    onClick={() => navigate('/app/admin/settings/pipelines')}
+                                    className="mt-1 text-sm text-primary-accent/90 hover:underline"
+                                >
+                                    {t('deals.kanban.manage_pipelines_short')}
+                                </button>
                             </div>
                         ) : (
-                            stages.map(stage => (
+                            stages.map((stage) => (
                                 <KanbanColumn
                                     key={stage.id}
                                     stage={stage}
@@ -734,7 +819,7 @@ const Deals = () => {
                     <DealFormFields
                         data={formData} setData={setFormData}
                         employees={employees}
-                        pipelines={pipelines} stages={stages}
+                        pipelines={pipelines}
                         onPipelineChange={(pid) => fetchStages(pid)}
                     />
                     <CustomFieldsSection module="Deals" companyId={companyId}
@@ -755,7 +840,7 @@ const Deals = () => {
                     <DealFormFields
                         data={editData} setData={setEditData}
                         employees={employees}
-                        pipelines={pipelines} stages={stages}
+                        pipelines={pipelines}
                         onPipelineChange={(pid) => fetchStages(pid)}
                     />
                     <CustomFieldsSection module="Deals" companyId={companyId}

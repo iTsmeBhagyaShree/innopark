@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   tasksAPI,
   usersAPI,
@@ -35,10 +35,32 @@ import {
   IoRocket
 } from 'react-icons/io5';
 
+const resolveCompanyId = (u) => {
+  const cands = [u?.company_id, u?.companyId];
+  for (const c of cands) {
+    if (c == null || c === '') continue;
+    const n = parseInt(String(c).trim(), 10);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  const ls = localStorage.getItem('companyId') || localStorage.getItem('company_id');
+  if (ls) {
+    const n = parseInt(ls, 10);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return null;
+};
+
 const TaskDashboard = () => {
   const { user } = useAuth();
   const { t, language } = useLanguage();
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPERADMIN';
+  const companyId = useMemo(() => resolveCompanyId(user), [user]);
+
+  useEffect(() => {
+    if (user?.company_id && !localStorage.getItem('companyId')) {
+      localStorage.setItem('companyId', String(user.company_id));
+    }
+  }, [user?.company_id]);
 
   // Core State
   const [tasks, setTasks] = useState([]);
@@ -78,29 +100,42 @@ const TaskDashboard = () => {
   const [entityLoading, setEntityLoading] = useState(false);
 
   const fetchTasks = useCallback(async () => {
+    if (!companyId) {
+      setTasks([]);
+      setTotalTasks(0);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const params = {
         ...filters,
         page,
         limit,
-        company_id: user?.company_id || 1
+        company_id: companyId,
       };
       const res = await tasksAPI.getAll(params);
-      if (res.data.success) {
-        setTasks(res.data.data);
-        setTotalTasks(res.data.pagination?.total || res.data.data.length);
+      const list = res.data?.data;
+      if (res.data && res.data.success) {
+        setTasks(Array.isArray(list) ? list : []);
+        setTotalTasks(
+          res.data.pagination?.total ?? (Array.isArray(list) ? list.length : 0)
+        );
+      } else {
+        setTasks([]);
+        setTotalTasks(0);
       }
     } catch (err) {
       console.error('Error fetching tasks:', err);
     } finally {
       setLoading(false);
     }
-  }, [filters, page, user?.company_id]);
+  }, [filters, page, companyId, limit]);
 
   const fetchSupportingData = async () => {
+    if (!companyId) return;
     try {
-      const uRes = await usersAPI.getAll({ company_id: user?.company_id || 1 });
+      const uRes = await usersAPI.getAll({ company_id: companyId });
       if (uRes.data.success) setUsers(uRes.data.data);
     } catch (err) {
       console.error('Error fetching supporting data:', err);
@@ -112,10 +147,14 @@ const TaskDashboard = () => {
       setEntities([]);
       return;
     }
+    if (!companyId) {
+      setEntities([]);
+      return;
+    }
     setEntityLoading(true);
     try {
       let res;
-      const params = { company_id: user?.company_id || 1 };
+      const params = { company_id: companyId };
       switch (type) {
         case 'lead': res = await leadsAPI.getAll(params); break;
         case 'deal': res = await dealsAPI.getAll(params); break;
@@ -144,8 +183,8 @@ const TaskDashboard = () => {
   }, [fetchTasks]);
 
   useEffect(() => {
-    fetchSupportingData();
-  }, []);
+    if (companyId) fetchSupportingData();
+  }, [companyId]);
 
   useEffect(() => {
     if (formData.related_to_type) {
@@ -170,8 +209,12 @@ const TaskDashboard = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!companyId) {
+      alert(t('projects.errors.missing_company') || 'Company is required. Please sign in again.');
+      return;
+    }
     try {
-      const payload = { ...formData, company_id: user?.company_id || 1 };
+      const payload = { ...formData, company_id: companyId };
       if (editingTask) await tasksAPI.update(editingTask.id, payload);
       else await tasksAPI.create(payload);
 
@@ -334,6 +377,15 @@ const TaskDashboard = () => {
               className="w-full bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 text-sm font-bold text-gray-700"
               value={filters.date_from}
               onChange={(e) => setFilters({ ...filters, date_from: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-black text-gray-400 uppercase mb-1.5 tracking-wider">{t('tasks.to_date')}</label>
+            <input
+              type="date"
+              className="w-full bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 text-sm font-bold text-gray-700"
+              value={filters.date_to}
+              onChange={(e) => setFilters({ ...filters, date_to: e.target.value })}
             />
           </div>
           <div className="flex items-end">

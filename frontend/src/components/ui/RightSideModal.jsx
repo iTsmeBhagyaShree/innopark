@@ -6,7 +6,7 @@ import { IoClose } from 'react-icons/io5'
  * Clean Center Modal Component - Developo Style
  * Fixed compact width, centered, fully responsive
  */
-const RightSideModal = ({ isOpen, onClose, title, children, width, size }) => {
+const RightSideModal = ({ isOpen, onClose, title, children, width, size, className: boxClassName }) => {
   const contentRef = useRef(null)
   const previousIsOpen = useRef(false)
   const [portalContainer, setPortalContainer] = useState(null)
@@ -77,7 +77,7 @@ const RightSideModal = ({ isOpen, onClose, title, children, width, size }) => {
       <div className="flex min-h-full items-start justify-center p-2 sm:p-4 pt-4 sm:pt-10 md:pt-20">
         {/* Modal Box - Responsive width */}
         <div
-          className="relative bg-white rounded-lg shadow-2xl w-full max-w-[95vw] sm:max-w-[90vw] md:max-w-[800px] my-2 sm:my-4"
+          className={`relative bg-white rounded-lg shadow-2xl w-full max-w-[95vw] sm:max-w-[90vw] md:max-w-[800px] my-2 sm:my-4${boxClassName ? ` ${boxClassName}` : ''}`}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}

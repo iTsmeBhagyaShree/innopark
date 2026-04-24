@@ -316,7 +316,7 @@ const getCategories = async (req, res) => {
     console.error('Get categories error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch categories'
+      error: req.t ? req.t('api_msg_a31d6ecd') : "Failed to fetch categories"
     });
   }
 };
@@ -461,7 +461,7 @@ const exportExcel = async (req, res) => {
     console.error('Export Excel error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to export expenses'
+      error: req.t ? req.t('api_msg_beea844b') : "Failed to export expenses"
     });
   }
 };
@@ -541,7 +541,7 @@ const exportPrint = async (req, res) => {
     console.error('Export Print error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to export expenses for print'
+      error: req.t ? req.t('api_msg_8b804368') : "Failed to export expenses for print"
     });
   }
 };
@@ -618,13 +618,13 @@ const create = async (req, res) => {
     res.status(201).json({
       success: true,
       data: expenses[0],
-      message: 'Expense created successfully'
+      message: req.t ? req.t('api_msg_e1e0e192') : "Expense created successfully"
     });
   } catch (error) {
     console.error('Create expense error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to create expense',
+      error: req.t ? req.t('api_msg_4c8413bb') : "Failed to create expense",
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
@@ -655,7 +655,7 @@ const getById = async (req, res) => {
     if (expenses.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Expense not found'
+        error: req.t ? req.t('api_msg_229cf817') : "Expense not found"
       });
     }
 
@@ -685,7 +685,7 @@ const getById = async (req, res) => {
     console.error('Get expense by ID error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch expense'
+      error: req.t ? req.t('api_msg_2d708707') : "Failed to fetch expense"
     });
   }
 };
@@ -714,7 +714,7 @@ const update = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Expense not found'
+        error: req.t ? req.t('api_msg_229cf817') : "Expense not found"
       });
     }
 
@@ -771,13 +771,13 @@ const update = async (req, res) => {
     res.json({
       success: true,
       data: expenses[0],
-      message: 'Expense updated successfully'
+      message: req.t ? req.t('api_msg_cefbcb85') : "Expense updated successfully"
     });
   } catch (error) {
     console.error('Update expense error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to update expense'
+      error: req.t ? req.t('api_msg_4a34f83d') : "Failed to update expense"
     });
   }
 };
@@ -798,7 +798,7 @@ const deleteExpense = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Expense not found or already deleted'
+        error: req.t ? req.t('api_msg_e60a6f4b') : "Expense not found or already deleted"
       });
     }
 
@@ -809,13 +809,13 @@ const deleteExpense = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Expense deleted successfully'
+      message: req.t ? req.t('api_msg_ab09a827') : "Expense deleted successfully"
     });
   } catch (error) {
     console.error('Delete expense error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete expense'
+      error: req.t ? req.t('api_msg_5054dc7c') : "Failed to delete expense"
     });
   }
 };
@@ -837,14 +837,14 @@ const approve = async (req, res) => {
     if (expenses.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Expense not found'
+        error: req.t ? req.t('api_msg_229cf817') : "Expense not found"
       });
     }
 
     if (expenses[0].status === 'Approved') {
       return res.status(400).json({
         success: false,
-        error: 'Expense is already approved'
+        error: req.t ? req.t('api_msg_ce212772') : "Expense is already approved"
       });
     }
 
@@ -858,13 +858,13 @@ const approve = async (req, res) => {
     res.json({
       success: true,
       data: updated[0],
-      message: 'Expense approved successfully'
+      message: req.t ? req.t('api_msg_b6428354') : "Expense approved successfully"
     });
   } catch (error) {
     console.error('Approve expense error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to approve expense'
+      error: req.t ? req.t('api_msg_d9400e90') : "Failed to approve expense"
     });
   }
 };
@@ -887,14 +887,14 @@ const reject = async (req, res) => {
     if (expenses.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Expense not found'
+        error: req.t ? req.t('api_msg_229cf817') : "Expense not found"
       });
     }
 
     if (expenses[0].status === 'Rejected') {
       return res.status(400).json({
         success: false,
-        error: 'Expense is already rejected'
+        error: req.t ? req.t('api_msg_410d65ad') : "Expense is already rejected"
       });
     }
 
@@ -908,13 +908,13 @@ const reject = async (req, res) => {
     res.json({
       success: true,
       data: updated[0],
-      message: 'Expense rejected successfully'
+      message: req.t ? req.t('api_msg_d45443cd') : "Expense rejected successfully"
     });
   } catch (error) {
     console.error('Reject expense error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to reject expense'
+      error: req.t ? req.t('api_msg_516cf93c') : "Failed to reject expense"
     });
   }
 };
@@ -930,7 +930,7 @@ const uploadFile = async (req, res) => {
     if (!req.file) {
       return res.status(400).json({
         success: false,
-        error: 'No file uploaded'
+        error: req.t ? req.t('api_msg_46ab5730') : "No file uploaded"
       });
     }
 
@@ -945,13 +945,13 @@ const uploadFile = async (req, res) => {
     res.json({
       success: true,
       data: { file_path: filePath },
-      message: 'File uploaded successfully'
+      message: req.t ? req.t('api_msg_40070e1f') : "File uploaded successfully"
     });
   } catch (error) {
     console.error('Upload file error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to upload file'
+      error: req.t ? req.t('api_msg_d831d180') : "Failed to upload file"
     });
   }
 };

@@ -16,7 +16,7 @@ const getAll = async (req, res) => {
         if (!companyId) {
             return res.status(400).json({
                 success: false,
-                error: 'company_id is required'
+                error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
             });
         }
 
@@ -85,7 +85,7 @@ const getAll = async (req, res) => {
         console.error('Get custom fields error:', error);
         res.status(500).json({
             success: false,
-            error: 'Failed to fetch custom fields'
+            error: req.t ? req.t('api_msg_e43162da') : "Failed to fetch custom fields"
         });
     }
 };
@@ -107,7 +107,7 @@ const getById = async (req, res) => {
         if (fields.length === 0) {
             return res.status(404).json({
                 success: false,
-                error: 'Custom field not found'
+                error: req.t ? req.t('api_msg_7a4e931b') : "Custom field not found"
             });
         }
 
@@ -140,7 +140,7 @@ const getById = async (req, res) => {
         console.error('Get custom field error:', error);
         res.status(500).json({
             success: false,
-            error: 'Failed to fetch custom field'
+            error: req.t ? req.t('api_msg_5ec6dfea') : "Failed to fetch custom field"
         });
     }
 };
@@ -162,12 +162,12 @@ const create = async (req, res) => {
         const companyId = req.companyId || req.body.company_id;
 
         if (!companyId) {
-            return res.status(400).json({ success: false, error: 'company_id is required' });
+            return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required" });
         }
 
         // Basic validation
         if (!label || !type || !module) {
-            return res.status(400).json({ success: false, error: 'label, type, and module are required' });
+            return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_d4057e48') : "label, type, and module are required" });
         }
 
         // Auto-generate name from label if not provided
@@ -224,7 +224,7 @@ const create = async (req, res) => {
         res.status(201).json({
             success: true,
             data: { id: fieldId, ...req.body },
-            message: 'Custom field created successfully'
+            message: req.t ? req.t('api_msg_40466860') : "Custom field created successfully"
         });
 
     } catch (error) {
@@ -239,7 +239,7 @@ const create = async (req, res) => {
         });
         res.status(500).json({
             success: false,
-            error: 'Failed to create custom field',
+            error: req.t ? req.t('api_msg_7c0c0eba') : "Failed to create custom field",
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
@@ -271,7 +271,7 @@ const update = async (req, res) => {
         if (existing.length === 0) {
             await connection.rollback();
             connection.release();
-            return res.status(404).json({ success: false, error: 'Custom field not found' });
+            return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_7a4e931b') : "Custom field not found" });
         }
 
         // Update main table
@@ -317,7 +317,7 @@ const update = async (req, res) => {
 
         res.json({
             success: true,
-            message: 'Custom field updated successfully'
+            message: req.t ? req.t('api_msg_da1208e0') : "Custom field updated successfully"
         });
 
     } catch (error) {
@@ -326,7 +326,7 @@ const update = async (req, res) => {
         console.error('Update custom field error:', error);
         res.status(500).json({
             success: false,
-            error: 'Failed to update custom field'
+            error: req.t ? req.t('api_msg_ca718afc') : "Failed to update custom field"
         });
     }
 };
@@ -347,7 +347,7 @@ const deleteField = async (req, res) => {
         );
 
         if (existing.length === 0) {
-            return res.status(404).json({ success: false, error: 'Custom field not found' });
+            return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_7a4e931b') : "Custom field not found" });
         }
 
         // Hard delete for now as per schema implication (foreign keys should cascade if set up, or manual delete)
@@ -357,13 +357,13 @@ const deleteField = async (req, res) => {
 
         res.json({
             success: true,
-            message: 'Custom field deleted successfully'
+            message: req.t ? req.t('api_msg_f31e119b') : "Custom field deleted successfully"
         });
     } catch (error) {
         console.error('Delete custom field error:', error);
         res.status(500).json({
             success: false,
-            error: 'Failed to delete custom field'
+            error: req.t ? req.t('api_msg_ede04a91') : "Failed to delete custom field"
         });
     }
 };

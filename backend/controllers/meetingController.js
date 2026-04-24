@@ -59,12 +59,12 @@ const create = async (req, res) => {
         const createdBy = req.user?.id || 1;
 
         if (!title || !meeting_date || !start_time || !end_time || !assigned_to) {
-            return res.status(400).json({ success: false, error: 'Title, Date, Start Time, End Time, and Assigned User are required' });
+            return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_377516fa') : "Title, Date, Start Time, End Time, and Assigned User are required" });
         }
 
         // Validate time
         if (start_time >= end_time) {
-            return res.status(400).json({ success: false, error: 'End time must be after start time' });
+            return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_815d372c') : "End time must be after start time" });
         }
 
         const [result] = await pool.execute(
@@ -76,7 +76,7 @@ const create = async (req, res) => {
         const newMeetingId = result.insertId;
         const [newMeeting] = await pool.execute('SELECT * FROM meetings WHERE id = ?', [newMeetingId]);
 
-        res.status(201).json({ success: true, data: newMeeting[0], message: 'Meeting created successfully' });
+        res.status(201).json({ success: true, data: newMeeting[0], message: req.t ? req.t('api_msg_2f14f1d6') : "Meeting created successfully" });
     } catch (err) {
         console.error('Create meeting error:', err);
         res.status(500).json({ success: false, error: err.message });
@@ -96,7 +96,7 @@ const update = async (req, res) => {
         // Time validation if both provided or merged
         // For simplicity, if start/end time are updated, we trust frontend or perform simple check if both exist in updates
         if (updates.start_time && updates.end_time && updates.start_time >= updates.end_time) {
-            return res.status(400).json({ success: false, error: 'End time must be after start time' });
+            return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_815d372c') : "End time must be after start time" });
         }
 
         for (const key of Object.keys(updates)) {
@@ -106,14 +106,14 @@ const update = async (req, res) => {
             }
         }
 
-        if (fields.length === 0) return res.status(400).json({ success: false, error: 'No valid fields to update' });
+        if (fields.length === 0) return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_e9f00744') : "No valid fields to update" });
 
         values.push(id);
 
         await pool.execute(`UPDATE meetings SET ${fields.join(', ')} WHERE id = ?`, values);
 
         const [updatedMeeting] = await pool.execute('SELECT * FROM meetings WHERE id = ?', [id]);
-        res.json({ success: true, data: updatedMeeting[0], message: 'Meeting updated successfully' });
+        res.json({ success: true, data: updatedMeeting[0], message: req.t ? req.t('api_msg_91d35b28') : "Meeting updated successfully" });
     } catch (err) {
         console.error('Update meeting error:', err);
         res.status(500).json({ success: false, error: err.message });

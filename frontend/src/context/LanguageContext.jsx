@@ -19,11 +19,11 @@ export const useLanguage = () => {
 export const LanguageProvider = ({ children }) => {
     const { settings } = useSettings()
 
-    // Initialize language from settings, then localStorage, then default to English
+    // localStorage > company settings > languageConfig (default German for this product)
     const [language, setLanguage] = useState(() => {
         const stored = localStorage.getItem('language')
         if (stored) return stored
-        return settings.default_language || 'en'
+        return settings.default_language || languageConfig.DEFAULT_LANGUAGE || 'de'
     })
 
     // Sync state when language changes
@@ -36,7 +36,9 @@ export const LanguageProvider = ({ children }) => {
     }, [language])
 
     // State to store current translations object
-    const [currentTranslations, setCurrentTranslations] = useState(translations[language] || translations.en)
+    const [currentTranslations, setCurrentTranslations] = useState(
+        translations[language] || translations[languageConfig.DEFAULT_LANGUAGE] || translations.de || translations.en
+    )
     const [isRTL, setIsRTL] = useState(false)
 
     // Load translations whenever language changes
@@ -45,11 +47,11 @@ export const LanguageProvider = ({ children }) => {
             try {
                 // In a real production setup, this could be an API call
                 // For now, we use our imported translation objects
-                const newTranslations = translations[language] || translations.en
+                const newTranslations = translations[language] || translations[languageConfig.DEFAULT_LANGUAGE] || translations.de || translations.en
                 setCurrentTranslations(newTranslations)
             } catch (error) {
                 console.error('Failed to load translations:', error)
-                setCurrentTranslations(translations.en)
+                setCurrentTranslations(translations[languageConfig.DEFAULT_LANGUAGE] || translations.de || translations.en)
             }
         }
         loadTranslations()
@@ -79,11 +81,23 @@ export const LanguageProvider = ({ children }) => {
             let res = obj;
             for (let i = 0; i < pathParts.length; i++) {
                 const part = pathParts[i];
-                if (!res || typeof res !== 'object') return null;
+                if (!res || typeof res !== 'object' || Array.isArray(res)) return null;
                 const allKeys = Object.keys(res);
-                const actualKey = allKeys.find(k => k.toLowerCase() === part);
-                if (actualKey) res = res[actualKey];
-                else return null;
+                const matches = allKeys.filter((k) => k.toLowerCase() === part);
+                if (matches.length === 0) return null;
+                // JSON may have e.g. "Contacts" (string) and "contacts" (nested object) at the same
+                // level — when the path continues, we must use the key that holds an object, not a string.
+                let actualKey;
+                if (i < pathParts.length - 1) {
+                    const forNested = matches.find((k) => {
+                        const v = res[k];
+                        return v != null && typeof v === 'object' && !Array.isArray(v);
+                    });
+                    actualKey = forNested || matches[0];
+                } else {
+                    actualKey = matches[0];
+                }
+                res = res[actualKey];
             }
             return res;
         };
@@ -96,7 +110,7 @@ export const LanguageProvider = ({ children }) => {
             result = findValue(currentTranslations, ['common', key.toLowerCase()]);
         }
 
-        // Attempt 3: English Global Fallback
+        // Attempt 3: English fallback (only if current locale has no string — keeps rare keys usable)
         if (result === null && language !== 'en') {
             result = findValue(translations.en, keys) || findValue(translations.en, ['common', key.toLowerCase()]);
         }

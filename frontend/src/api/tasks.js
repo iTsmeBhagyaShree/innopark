@@ -1,9 +1,30 @@
 import axiosInstance from './axiosInstance'
 
+const noCacheListConfig = (params) => ({
+  params: { ...params, _t: Date.now() },
+  headers: {
+    'Cache-Control': 'no-cache',
+    Pragma: 'no-cache',
+  },
+})
+
+const withCompanyId = (params) => {
+  const p = { ...(params || {}) }
+  if (p.company_id == null || p.company_id === '') {
+    const fromLs = localStorage.getItem('companyId') || localStorage.getItem('company_id')
+    if (fromLs) {
+      const n = parseInt(fromLs, 10)
+      if (!Number.isNaN(n) && n > 0) p.company_id = n
+    }
+  }
+  return p
+}
+
 export const tasksAPI = {
   // CRUD operations
-  getAll: (params) => axiosInstance.get('/tasks', { params }),
-  getById: (id, params) => axiosInstance.get(`/tasks/${id}`, { params }),
+  getAll: (params) => axiosInstance.get('/tasks', noCacheListConfig(withCompanyId(params || {}))),
+  getById: (id, params) =>
+    axiosInstance.get(`/tasks/${id}`, noCacheListConfig(withCompanyId(params || {}))),
   create: (data, params) => axiosInstance.post('/tasks', data, { params }),
   createWithFile: (formData, params) => axiosInstance.post('/tasks', formData, {
     headers: {

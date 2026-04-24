@@ -101,7 +101,7 @@ const getAll = async (req, res) => {
     console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch events',
+      error: req.t ? req.t('api_msg_33825399') : "Failed to fetch events",
       details: process.env.NODE_ENV !== 'production' ? error.message : undefined
     });
   }
@@ -180,7 +180,7 @@ const create = async (req, res) => {
       await connection.rollback();
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: event_name, where, start_date, start_time, end_date, end_time'
+        error: req.t ? req.t('api_msg_d8db9bdb') : "Missing required fields: event_name, where, start_date, start_time, end_date, end_time"
       });
     }
 
@@ -400,7 +400,7 @@ const create = async (req, res) => {
     res.status(201).json({
       success: true,
       data: { id: eventId },
-      message: 'Event created successfully'
+      message: req.t ? req.t('api_msg_92825f69') : "Event created successfully"
     });
   } catch (error) {
     await connection.rollback();
@@ -426,7 +426,7 @@ const getById = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
@@ -443,7 +443,7 @@ const getById = async (req, res) => {
     if (events.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Event not found'
+        error: req.t ? req.t('api_msg_a3bf16d4') : "Event not found"
       });
     }
 
@@ -492,7 +492,7 @@ const getById = async (req, res) => {
     console.error('Get event by ID error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch event'
+      error: req.t ? req.t('api_msg_6a090efc') : "Failed to fetch event"
     });
   }
 };
@@ -514,7 +514,7 @@ const update = async (req, res) => {
       await connection.rollback();
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
@@ -528,7 +528,7 @@ const update = async (req, res) => {
       await connection.rollback();
       return res.status(404).json({
         success: false,
-        error: 'Event not found'
+        error: req.t ? req.t('api_msg_a3bf16d4') : "Event not found"
       });
     }
 
@@ -696,7 +696,7 @@ const update = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Event updated successfully'
+      message: req.t ? req.t('api_msg_f335fa53') : "Event updated successfully"
     });
   } catch (error) {
     await connection.rollback();
@@ -722,7 +722,7 @@ const deleteEvent = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
@@ -735,19 +735,19 @@ const deleteEvent = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Event not found'
+        error: req.t ? req.t('api_msg_a3bf16d4') : "Event not found"
       });
     }
 
     res.json({
       success: true,
-      message: 'Event deleted successfully'
+      message: req.t ? req.t('api_msg_67b303ad') : "Event deleted successfully"
     });
   } catch (error) {
     console.error('Delete event error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete event'
+      error: req.t ? req.t('api_msg_6fb7a59a') : "Failed to delete event"
     });
   }
 };
@@ -765,7 +765,7 @@ const getUpcoming = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
@@ -792,7 +792,7 @@ const getUpcoming = async (req, res) => {
     console.error('Get upcoming events error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch upcoming events'
+      error: req.t ? req.t('api_msg_fbe13fae') : "Failed to fetch upcoming events"
     });
   }
 };

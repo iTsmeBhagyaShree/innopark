@@ -148,7 +148,7 @@ const getAll = async (req, res) => {
     }
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch notifications',
+      error: req.t ? req.t('api_msg_ad1303b7') : "Failed to fetch notifications",
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
@@ -176,7 +176,7 @@ const getById = async (req, res) => {
     if (notifications.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Notification not found'
+        error: req.t ? req.t('api_msg_fffdaac8') : "Notification not found"
       });
     }
 
@@ -194,7 +194,7 @@ const getById = async (req, res) => {
     console.error('Get notification error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch notification'
+      error: req.t ? req.t('api_msg_b4ebef96') : "Failed to fetch notification"
     });
   }
 };
@@ -220,7 +220,7 @@ const create = async (req, res) => {
     if (!user_id || !type || !title || !message) {
       return res.status(400).json({
         success: false,
-        error: 'User ID, type, title, and message are required'
+        error: req.t ? req.t('api_msg_d4ba21c6') : "User ID, type, title, and message are required"
       });
     }
 
@@ -308,13 +308,13 @@ const create = async (req, res) => {
     res.status(201).json({
       success: true,
       data: newNotification[0],
-      message: 'Notification created successfully'
+      message: req.t ? req.t('api_msg_88803c4b') : "Notification created successfully"
     });
   } catch (error) {
     console.error('Create notification error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to create notification',
+      error: req.t ? req.t('api_msg_1417bd25') : "Failed to create notification",
       details: error.message || 'Unknown error',
       sqlMessage: error.sqlMessage || null
     });
@@ -340,19 +340,19 @@ const markAsRead = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Notification not found'
+        error: req.t ? req.t('api_msg_fffdaac8') : "Notification not found"
       });
     }
 
     res.json({
       success: true,
-      message: 'Notification marked as read'
+      message: req.t ? req.t('api_msg_854759ca') : "Notification marked as read"
     });
   } catch (error) {
     console.error('Mark notification as read error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to mark notification as read'
+      error: req.t ? req.t('api_msg_ffe7d139') : "Failed to mark notification as read"
     });
   }
 };
@@ -372,13 +372,13 @@ const markAllAsRead = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'All notifications marked as read'
+      message: req.t ? req.t('api_msg_0153277d') : "All notifications marked as read"
     });
   } catch (error) {
     console.error('Mark all notifications as read error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to mark all notifications as read'
+      error: req.t ? req.t('api_msg_8b9f1f86') : "Failed to mark all notifications as read"
     });
   }
 };
@@ -402,19 +402,19 @@ const deleteNotification = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Notification not found'
+        error: req.t ? req.t('api_msg_fffdaac8') : "Notification not found"
       });
     }
 
     res.json({
       success: true,
-      message: 'Notification deleted successfully'
+      message: req.t ? req.t('api_msg_d0ff8753') : "Notification deleted successfully"
     });
   } catch (error) {
     console.error('Delete notification error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete notification'
+      error: req.t ? req.t('api_msg_7d136019') : "Failed to delete notification"
     });
   }
 };
@@ -442,7 +442,7 @@ const getUnreadCount = async (req, res) => {
     console.error('Get unread count error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to get unread count'
+      error: req.t ? req.t('api_msg_b1cc42fa') : "Failed to get unread count"
     });
   }
 };

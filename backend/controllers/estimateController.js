@@ -101,7 +101,7 @@ const getAll = async (req, res) => {
     if (!filterCompanyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
@@ -269,7 +269,7 @@ const getById = async (req, res) => {
       [id]
     );
     if (estimates.length === 0) {
-      return res.status(404).json({ success: false, error: 'Estimate not found' });
+      return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_e6a111fd') : "Estimate not found" });
     }
 
     const estimate = estimates[0];
@@ -298,7 +298,7 @@ const getById = async (req, res) => {
     res.json({ success: true, data: estimate });
   } catch (error) {
     console.error('Get estimate error:', error);
-    res.status(500).json({ success: false, error: 'Failed to fetch estimate' });
+    res.status(500).json({ success: false, error: req.t ? req.t('api_msg_8a120fec') : "Failed to fetch estimate" });
   }
 };
 
@@ -519,7 +519,7 @@ const create = async (req, res) => {
     res.status(201).json({
       success: true,
       data: estimates[0],
-      message: 'Estimate created successfully'
+      message: req.t ? req.t('api_msg_186d0478') : "Estimate created successfully"
     });
   } catch (error) {
     console.error('=== CREATE ESTIMATE ERROR ===');
@@ -531,7 +531,7 @@ const create = async (req, res) => {
     console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
-      error: 'Failed to create estimate',
+      error: req.t ? req.t('api_msg_16612cad') : "Failed to create estimate",
       details: process.env.NODE_ENV === 'development' ? {
         message: error.message,
         code: error.code,
@@ -562,7 +562,7 @@ const update = async (req, res) => {
     if (estimates.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Estimate not found'
+        error: req.t ? req.t('api_msg_e6a111fd') : "Estimate not found"
       });
     }
 
@@ -715,12 +715,12 @@ const update = async (req, res) => {
     res.json({
       success: true,
       data: updatedEstimates[0],
-      message: 'Estimate updated successfully'
+      message: req.t ? req.t('api_msg_8ca38b5b') : "Estimate updated successfully"
     });
   } catch (error) {
     console.error('Update estimate error:', error);
     console.error('Error details:', error.message);
-    res.status(500).json({ success: false, error: 'Failed to update estimate', details: error.message });
+    res.status(500).json({ success: false, error: req.t ? req.t('api_msg_a065fb33') : "Failed to update estimate", details: error.message });
   }
 };
 
@@ -735,14 +735,14 @@ const deleteEstimate = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Estimate not found'
+        error: req.t ? req.t('api_msg_e6a111fd') : "Estimate not found"
       });
     }
 
-    res.json({ success: true, message: 'Estimate deleted successfully' });
+    res.json({ success: true, message: req.t ? req.t('api_msg_d42df385') : "Estimate deleted successfully" });
   } catch (error) {
     console.error('Delete estimate error:', error);
-    res.status(500).json({ success: false, error: 'Failed to delete estimate' });
+    res.status(500).json({ success: false, error: req.t ? req.t('api_msg_b8847f24') : "Failed to delete estimate" });
   }
 };
 
@@ -824,7 +824,7 @@ const convertToInvoice = async (req, res) => {
     if (estimates.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Estimate not found'
+        error: req.t ? req.t('api_msg_e6a111fd') : "Estimate not found"
       });
     }
 
@@ -848,7 +848,7 @@ const convertToInvoice = async (req, res) => {
     if (estimateItems.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'Estimate has no items. Please provide items in the request body or add items to the estimate first.'
+        error: req.t ? req.t('api_msg_0c34e5e7') : "Estimate has no items. Please provide items in the request body or add items to the estimate first."
       });
     }
 
@@ -856,7 +856,7 @@ const convertToInvoice = async (req, res) => {
     if (!invoice_date || !due_date) {
       return res.status(400).json({
         success: false,
-        error: 'invoice_date and due_date are required'
+        error: req.t ? req.t('api_msg_3ac45109') : "invoice_date and due_date are required"
       });
     }
 
@@ -1026,13 +1026,13 @@ const convertToInvoice = async (req, res) => {
     res.status(201).json({
       success: true,
       data: invoices[0],
-      message: 'Estimate converted to invoice successfully'
+      message: req.t ? req.t('api_msg_5a45baaf') : "Estimate converted to invoice successfully"
     });
   } catch (error) {
     console.error('Convert estimate to invoice error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to convert estimate to invoice'
+      error: req.t ? req.t('api_msg_9fe6d887') : "Failed to convert estimate to invoice"
     });
   }
 };
@@ -1068,7 +1068,7 @@ const sendEmail = async (req, res) => {
     );
 
     if (estimates.length === 0) {
-      return res.status(404).json({ success: false, error: 'Estimate not found' });
+      return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_e6a111fd') : "Estimate not found" });
     }
 
     const estimate = estimates[0];
@@ -1106,7 +1106,7 @@ const sendEmail = async (req, res) => {
     // Send email
     const recipientEmail = to || estimate.client_email;
     if (!recipientEmail) {
-      return res.status(400).json({ success: false, error: 'Recipient email is required' });
+      return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_4a2ce470') : "Recipient email is required" });
     }
 
     // Handle CC and BCC from request body
@@ -1127,12 +1127,12 @@ const sendEmail = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Estimate sent successfully',
+      message: req.t ? req.t('api_msg_12a90403') : "Estimate sent successfully",
       data: { email: recipientEmail }
     });
   } catch (error) {
     console.error('Send estimate email error:', error);
-    res.status(500).json({ success: false, error: 'Failed to send estimate email' });
+    res.status(500).json({ success: false, error: req.t ? req.t('api_msg_7e87e9a6') : "Failed to send estimate email" });
   }
 };
 
@@ -1160,7 +1160,7 @@ const getPDF = async (req, res) => {
     );
 
     if (estimates.length === 0) {
-      return res.status(404).json({ success: false, error: 'Estimate not found' });
+      return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_e6a111fd') : "Estimate not found" });
     }
 
     const estimate = estimates[0];
@@ -1183,11 +1183,11 @@ const getPDF = async (req, res) => {
     res.json({
       success: true,
       data: estimate,
-      message: 'PDF generation will be implemented with pdfkit or puppeteer'
+      message: req.t ? req.t('api_msg_cb75e169') : "PDF generation will be implemented with pdfkit or puppeteer"
     });
   } catch (error) {
     console.error('Get estimate PDF error:', error);
-    res.status(500).json({ success: false, error: 'Failed to generate PDF' });
+    res.status(500).json({ success: false, error: req.t ? req.t('api_msg_53ac43e9') : "Failed to generate PDF" });
   }
 };
 

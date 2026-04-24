@@ -419,7 +419,7 @@ exports.getAttendanceSettings = async (req, res) => {
     if (!company_id) {
       return res.status(400).json({
         success: false,
-        error: 'Company ID is required'
+        error: req.t ? req.t('api_msg_c9d0dab7') : "Company ID is required"
       });
     }
 
@@ -477,7 +477,7 @@ exports.getAttendanceSettings = async (req, res) => {
     console.error('Error fetching attendance settings:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch attendance settings',
+      error: req.t ? req.t('api_msg_70ba5d42') : "Failed to fetch attendance settings",
       details: error.message
     });
   }
@@ -497,7 +497,7 @@ exports.updateAttendanceSettings = async (req, res) => {
     if (!company_id) {
       return res.status(400).json({
         success: false,
-        error: 'Company ID is required'
+        error: req.t ? req.t('api_msg_c9d0dab7') : "Company ID is required"
       });
     }
 
@@ -535,7 +535,7 @@ exports.updateAttendanceSettings = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Attendance settings updated successfully',
+      message: req.t ? req.t('api_msg_f0490b74') : "Attendance settings updated successfully",
       data: {
         ...updatedSettings[0],
         clock_in_ip_addresses: JSON.parse(updatedSettings[0].clock_in_ip_addresses || '[]')
@@ -545,7 +545,7 @@ exports.updateAttendanceSettings = async (req, res) => {
     console.error('Error updating attendance settings:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to update attendance settings',
+      error: req.t ? req.t('api_msg_0f89b481') : "Failed to update attendance settings",
       details: error.message
     });
   }
@@ -564,7 +564,7 @@ exports.getAllShifts = async (req, res) => {
     if (!company_id) {
       return res.status(400).json({
         success: false,
-        error: 'Company ID is required'
+        error: req.t ? req.t('api_msg_c9d0dab7') : "Company ID is required"
       });
     }
 
@@ -604,7 +604,7 @@ exports.getAllShifts = async (req, res) => {
     console.error('Error fetching shifts:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch shifts',
+      error: req.t ? req.t('api_msg_f854b6df') : "Failed to fetch shifts",
       details: error.message
     });
   }
@@ -624,7 +624,7 @@ exports.getShiftById = async (req, res) => {
     if (!company_id) {
       return res.status(400).json({
         success: false,
-        error: 'Company ID is required'
+        error: req.t ? req.t('api_msg_c9d0dab7') : "Company ID is required"
       });
     }
 
@@ -636,7 +636,7 @@ exports.getShiftById = async (req, res) => {
     if (shifts.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Shift not found'
+        error: req.t ? req.t('api_msg_4bc674be') : "Shift not found"
       });
     }
 
@@ -669,7 +669,7 @@ exports.getShiftById = async (req, res) => {
     console.error('Error fetching shift:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch shift',
+      error: req.t ? req.t('api_msg_76b0b031') : "Failed to fetch shift",
       details: error.message
     });
   }
@@ -689,7 +689,7 @@ exports.createShift = async (req, res) => {
     if (!company_id) {
       return res.status(400).json({
         success: false,
-        error: 'Company ID is required'
+        error: req.t ? req.t('api_msg_c9d0dab7') : "Company ID is required"
       });
     }
 
@@ -697,7 +697,7 @@ exports.createShift = async (req, res) => {
     if (!shiftData.shift_name || !shiftData.start_time || !shiftData.end_time) {
       return res.status(400).json({
         success: false,
-        error: 'Shift name, start time, and end time are required'
+        error: req.t ? req.t('api_msg_a6ee1722') : "Shift name, start time, and end time are required"
       });
     }
 
@@ -757,7 +757,7 @@ exports.createShift = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Shift created successfully',
+      message: req.t ? req.t('api_msg_30e4844d') : "Shift created successfully",
       data: {
         ...newShift[0],
         working_days: JSON.parse(newShift[0].working_days || '[]')
@@ -767,7 +767,7 @@ exports.createShift = async (req, res) => {
     console.error('Error creating shift:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to create shift',
+      error: req.t ? req.t('api_msg_1c2afb5a') : "Failed to create shift",
       details: error.message
     });
   }
@@ -788,7 +788,7 @@ exports.updateShift = async (req, res) => {
     if (!company_id) {
       return res.status(400).json({
         success: false,
-        error: 'Company ID is required'
+        error: req.t ? req.t('api_msg_c9d0dab7') : "Company ID is required"
       });
     }
 
@@ -801,7 +801,7 @@ exports.updateShift = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Shift not found'
+        error: req.t ? req.t('api_msg_4bc674be') : "Shift not found"
       });
     }
 
@@ -837,7 +837,7 @@ exports.updateShift = async (req, res) => {
     if (Object.keys(dbUpdates).length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'No valid fields to update'
+        error: req.t ? req.t('api_msg_e9f00744') : "No valid fields to update"
       });
     }
 
@@ -855,7 +855,7 @@ exports.updateShift = async (req, res) => {
     const shift = updatedShift[0];
     res.json({
       success: true,
-      message: 'Shift updated successfully',
+      message: req.t ? req.t('api_msg_6e1b2d34') : "Shift updated successfully",
       data: {
         id: shift.id,
         company_id: shift.company_id,
@@ -883,7 +883,7 @@ exports.updateShift = async (req, res) => {
     console.error('Error updating shift:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to update shift',
+      error: req.t ? req.t('api_msg_e0b8fd6e') : "Failed to update shift",
       details: error.message
     });
   }
@@ -903,7 +903,7 @@ exports.deleteShift = async (req, res) => {
     if (!company_id) {
       return res.status(400).json({
         success: false,
-        error: 'Company ID is required'
+        error: req.t ? req.t('api_msg_c9d0dab7') : "Company ID is required"
       });
     }
 
@@ -916,7 +916,7 @@ exports.deleteShift = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Shift not found'
+        error: req.t ? req.t('api_msg_4bc674be') : "Shift not found"
       });
     }
 
@@ -924,7 +924,7 @@ exports.deleteShift = async (req, res) => {
     if (existing[0].is_default) {
       return res.status(400).json({
         success: false,
-        error: 'Cannot delete the default shift'
+        error: req.t ? req.t('api_msg_c6aaf79e') : "Cannot delete the default shift"
       });
     }
 
@@ -937,7 +937,7 @@ exports.deleteShift = async (req, res) => {
     if (assignments[0].count > 0) {
       return res.status(400).json({
         success: false,
-        error: 'Cannot delete shift that has employee assignments'
+        error: req.t ? req.t('api_msg_88a9e7ef') : "Cannot delete shift that has employee assignments"
       });
     }
 
@@ -948,13 +948,13 @@ exports.deleteShift = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Shift deleted successfully'
+      message: req.t ? req.t('api_msg_14cb29dd') : "Shift deleted successfully"
     });
   } catch (error) {
     console.error('Error deleting shift:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete shift',
+      error: req.t ? req.t('api_msg_5bb3eda7') : "Failed to delete shift",
       details: error.message
     });
   }
@@ -974,7 +974,7 @@ exports.setDefaultShift = async (req, res) => {
     if (!company_id) {
       return res.status(400).json({
         success: false,
-        error: 'Company ID is required'
+        error: req.t ? req.t('api_msg_c9d0dab7') : "Company ID is required"
       });
     }
 
@@ -987,7 +987,7 @@ exports.setDefaultShift = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Shift not found'
+        error: req.t ? req.t('api_msg_4bc674be') : "Shift not found"
       });
     }
 
@@ -1005,13 +1005,13 @@ exports.setDefaultShift = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Default shift updated successfully'
+      message: req.t ? req.t('api_msg_92930211') : "Default shift updated successfully"
     });
   } catch (error) {
     console.error('Error setting default shift:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to set default shift',
+      error: req.t ? req.t('api_msg_a206a92a') : "Failed to set default shift",
       details: error.message
     });
   }
@@ -1030,7 +1030,7 @@ exports.getAllRotations = async (req, res) => {
     if (!company_id) {
       return res.status(400).json({
         success: false,
-        error: 'Company ID is required'
+        error: req.t ? req.t('api_msg_c9d0dab7') : "Company ID is required"
       });
     }
 
@@ -1053,7 +1053,7 @@ exports.getAllRotations = async (req, res) => {
     console.error('Error fetching rotations:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch rotations',
+      error: req.t ? req.t('api_msg_aef91c3a') : "Failed to fetch rotations",
       details: error.message
     });
   }
@@ -1073,7 +1073,7 @@ exports.createRotation = async (req, res) => {
     if (!company_id) {
       return res.status(400).json({
         success: false,
-        error: 'Company ID is required'
+        error: req.t ? req.t('api_msg_c9d0dab7') : "Company ID is required"
       });
     }
 
@@ -1081,7 +1081,7 @@ exports.createRotation = async (req, res) => {
     if (!rotationData.rotation_name || !rotationData.rotation_frequency) {
       return res.status(400).json({
         success: false,
-        error: 'Rotation name and frequency are required'
+        error: req.t ? req.t('api_msg_31a5b642') : "Rotation name and frequency are required"
       });
     }
 
@@ -1112,7 +1112,7 @@ exports.createRotation = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Shift rotation created successfully',
+      message: req.t ? req.t('api_msg_86caad9e') : "Shift rotation created successfully",
       data: {
         ...newRotation[0],
         shifts_in_sequence: JSON.parse(newRotation[0].shift_sequence || newRotation[0].shifts_in_sequence || '[]')
@@ -1122,7 +1122,7 @@ exports.createRotation = async (req, res) => {
     console.error('Error creating rotation:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to create rotation',
+      error: req.t ? req.t('api_msg_340a148e') : "Failed to create rotation",
       details: error.message
     });
   }
@@ -1142,7 +1142,7 @@ exports.deleteRotation = async (req, res) => {
     if (!company_id) {
       return res.status(400).json({
         success: false,
-        error: 'Company ID is required'
+        error: req.t ? req.t('api_msg_c9d0dab7') : "Company ID is required"
       });
     }
 
@@ -1155,7 +1155,7 @@ exports.deleteRotation = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Rotation not found'
+        error: req.t ? req.t('api_msg_e23592bb') : "Rotation not found"
       });
     }
 
@@ -1166,13 +1166,13 @@ exports.deleteRotation = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Rotation deleted successfully'
+      message: req.t ? req.t('api_msg_dcc33929') : "Rotation deleted successfully"
     });
   } catch (error) {
     console.error('Error deleting rotation:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete rotation',
+      error: req.t ? req.t('api_msg_b4cc600f') : "Failed to delete rotation",
       details: error.message
     });
   }
@@ -1192,14 +1192,14 @@ exports.runRotation = async (req, res) => {
     if (!company_id) {
       return res.status(400).json({
         success: false,
-        error: 'Company ID is required'
+        error: req.t ? req.t('api_msg_c9d0dab7') : "Company ID is required"
       });
     }
 
     if (!rotation_id || !employee_ids || !Array.isArray(employee_ids)) {
       return res.status(400).json({
         success: false,
-        error: 'Rotation ID and employee IDs are required'
+        error: req.t ? req.t('api_msg_994d7de3') : "Rotation ID and employee IDs are required"
       });
     }
 
@@ -1212,7 +1212,7 @@ exports.runRotation = async (req, res) => {
     if (rotations.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Rotation not found'
+        error: req.t ? req.t('api_msg_e23592bb') : "Rotation not found"
       });
     }
 
@@ -1223,7 +1223,7 @@ exports.runRotation = async (req, res) => {
     if (shiftsInSequence.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'Rotation has no shifts defined'
+        error: req.t ? req.t('api_msg_47bbcc3d') : "Rotation has no shifts defined"
       });
     }
 
@@ -1284,7 +1284,7 @@ exports.runRotation = async (req, res) => {
     console.error('Error running rotation:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to run rotation',
+      error: req.t ? req.t('api_msg_681cc651') : "Failed to run rotation",
       details: error.message
     });
   }

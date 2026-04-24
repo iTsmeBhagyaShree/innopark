@@ -41,7 +41,7 @@ const getByCategory = async (req, res) => {
     if (!category) {
       return res.status(400).json({
         success: false,
-        error: 'Category is required'
+        error: req.t ? req.t('api_msg_b7e25993') : "Category is required"
       });
     }
 
@@ -74,7 +74,7 @@ const getSingle = async (req, res) => {
     if (!key) {
       return res.status(400).json({
         success: false,
-        error: 'Setting key is required'
+        error: req.t ? req.t('api_msg_8dd60c81') : "Setting key is required"
       });
     }
 
@@ -118,7 +118,7 @@ const update = async (req, res) => {
     if (!setting_key) {
       return res.status(400).json({
         success: false,
-        error: 'setting_key is required'
+        error: req.t ? req.t('api_msg_dad0a78e') : "setting_key is required"
       });
     }
 
@@ -127,7 +127,7 @@ const update = async (req, res) => {
     if (!validation.valid) {
       return res.status(400).json({
         success: false,
-        error: 'Validation failed',
+        error: req.t ? req.t('api_msg_d10fb60c') : "Validation failed",
         errors: validation.errors
       });
     }
@@ -137,7 +137,7 @@ const update = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Setting updated successfully',
+      message: req.t ? req.t('api_msg_d86fce85') : "Setting updated successfully",
       data: result
     });
   } catch (error) {
@@ -162,14 +162,14 @@ const bulkUpdate = async (req, res) => {
     if (!settings || !Array.isArray(settings)) {
       return res.status(400).json({
         success: false,
-        error: 'Settings must be an array'
+        error: req.t ? req.t('api_msg_b4af831b') : "Settings must be an array"
       });
     }
 
     if (settings.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'At least one setting is required'
+        error: req.t ? req.t('api_msg_b3083c35') : "At least one setting is required"
       });
     }
 
@@ -178,7 +178,7 @@ const bulkUpdate = async (req, res) => {
     if (!validation.valid) {
       return res.status(400).json({
         success: false,
-        error: 'Validation failed',
+        error: req.t ? req.t('api_msg_d10fb60c') : "Validation failed",
         errors: validation.errors
       });
     }
@@ -214,7 +214,7 @@ const deleteSetting = async (req, res) => {
     if (!key) {
       return res.status(400).json({
         success: false,
-        error: 'Setting key is required'
+        error: req.t ? req.t('api_msg_8dd60c81') : "Setting key is required"
       });
     }
 
@@ -222,7 +222,7 @@ const deleteSetting = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Setting deleted successfully'
+      message: req.t ? req.t('api_msg_5cce1e40') : "Setting deleted successfully"
     });
   } catch (error) {
     console.error('Delete setting error:', error);
@@ -273,7 +273,7 @@ const reset = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Settings reset to default successfully',
+      message: req.t ? req.t('api_msg_3b7c753a') : "Settings reset to default successfully",
       data: result
     });
   } catch (error) {
@@ -336,7 +336,7 @@ const importSettings = async (req, res) => {
     if (!importData || typeof importData !== 'object') {
       return res.status(400).json({
         success: false,
-        error: 'Settings data must be an object'
+        error: req.t ? req.t('api_msg_2112d4ae') : "Settings data must be an object"
       });
     }
 

@@ -98,7 +98,7 @@ const getAll = async (req, res) => {
     console.error('Get credit notes error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch credit notes'
+      error: req.t ? req.t('api_msg_090e5c9a') : "Failed to fetch credit notes"
     });
   }
 };
@@ -128,7 +128,7 @@ const getById = async (req, res) => {
     if (creditNotes.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Credit note not found'
+        error: req.t ? req.t('api_msg_b782f1f2') : "Credit note not found"
       });
     }
 
@@ -140,7 +140,7 @@ const getById = async (req, res) => {
     console.error('Get credit note error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch credit note'
+      error: req.t ? req.t('api_msg_0bea56bb') : "Failed to fetch credit note"
     });
   }
 };
@@ -220,7 +220,7 @@ const create = async (req, res) => {
     res.status(201).json({
       success: true,
       data: { id: result.insertId, credit_note_number: creditNoteNumber },
-      message: 'Credit note created successfully'
+      message: req.t ? req.t('api_msg_bf3c4bbd') : "Credit note created successfully"
     });
   } catch (error) {
     console.error('Create credit note error:', error);
@@ -250,7 +250,7 @@ const update = async (req, res) => {
     if (creditNotes.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Credit note not found'
+        error: req.t ? req.t('api_msg_b782f1f2') : "Credit note not found"
       });
     }
 
@@ -282,7 +282,7 @@ const update = async (req, res) => {
     if (updates.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'No fields to update'
+        error: req.t ? req.t('api_msg_003199ed') : "No fields to update"
       });
     }
 
@@ -311,7 +311,7 @@ const update = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Credit note updated successfully'
+      message: req.t ? req.t('api_msg_6f3a9df3') : "Credit note updated successfully"
     });
   } catch (error) {
     console.error('Update credit note error:', error);
@@ -342,14 +342,14 @@ const deleteCreditNote = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Credit note not found'
+        error: req.t ? req.t('api_msg_b782f1f2') : "Credit note not found"
       });
     }
 
     if (existing[0].is_deleted === 1) {
       return res.status(400).json({
         success: false,
-        error: 'Credit note is already deleted'
+        error: req.t ? req.t('api_msg_165520b8') : "Credit note is already deleted"
       });
     }
 
@@ -362,20 +362,20 @@ const deleteCreditNote = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Credit note not found or already deleted'
+        error: req.t ? req.t('api_msg_72217628') : "Credit note not found or already deleted"
       });
     }
 
     res.json({
       success: true,
-      message: 'Credit note deleted successfully'
+      message: req.t ? req.t('api_msg_69cfdfc5') : "Credit note deleted successfully"
     });
   } catch (error) {
     console.error('Delete credit note error:', error);
     console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete credit note',
+      error: req.t ? req.t('api_msg_cca13ead') : "Failed to delete credit note",
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }

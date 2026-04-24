@@ -7,16 +7,16 @@
     "add": "Add",
     "search": "Search...",
     "loading": "Loading...",
+    "list": "List",
     "no_data": "No data available",
-    "actions": "Actions",
+    "actions": {
+      "view": "View",
+      "edit": "Edit",
+      "delete": "Delete"
+    },
     "status": {
-      "in_progress": "In Progress",
       "active": "Active",
-      "inactive": "Inactive",
-      "pending": "Pending",
-      "completed": "Completed",
-      "on_hold": "On Hold",
-      "cancelled": "Cancelled"
+      "inactive": "Inactive"
     },
     "date": "Date",
     "name": "Name",
@@ -123,7 +123,6 @@
     "enable_recurring_tasks": "Enable Recurring Tasks",
     "save_changes": "Save Changes",
     "add_new": "Add New",
-    "list": "List",
     "show_columns": "Show Columns",
     "rows_selected": "Rows Selected",
     "no_filters_configured": "No Filters Configured",
@@ -159,15 +158,6 @@
     "recurring": "Recurring",
     "enable_recurring": "Enable Recurring",
     "repeat_every": "Repeat Every",
-    "days": "Day(s)",
-    "weeks": "Week(s)",
-    "months": "Month(s)",
-    "years": "Year(s)",
-    "daily": "Daily",
-    "weekly": "Weekly",
-    "monthly": "Monthly",
-    "yearly": "Yearly",
-    "cycles": "Cycles",
     "days": {
       "monday_short": "Mon",
       "tuesday_short": "Tue",
@@ -177,6 +167,27 @@
       "saturday_short": "Sat",
       "sunday_short": "Sun"
     },
+    "weeks": "Week(s)",
+    "months": {
+      "april": "april",
+      "august": "august",
+      "december": "december",
+      "february": "february",
+      "january": "january",
+      "july": "july",
+      "june": "june",
+      "march": "march",
+      "may": "may",
+      "november": "november",
+      "october": "october",
+      "september": "september"
+    },
+    "years": "Year(s)",
+    "daily": "Daily",
+    "weekly": "Weekly",
+    "monthly": "Monthly",
+    "yearly": "Yearly",
+    "cycles": "Cycles",
     "add_payment": "Add Payment",
     "method": "Payment Method",
     "apply": "Apply",
@@ -210,8 +221,6 @@
     },
     "clear": "Clear",
     "change_language": "Change Language",
-    "monthly": "Monthly",
-    "yearly": "Yearly",
     "custom": "Custom",
     "dynamic": "Dynamic",
     "last_email_seen": "Last Email Seen",
@@ -266,7 +275,49 @@
     "medium": "Medium",
     "low": "Low",
     "choose_file": "Choose File",
-    "hour": "Hour"
+    "hour": "Hour",
+    "alerts": {
+      "archive_success": "archive_success",
+      "delete_success": "delete_success",
+      "restore_success": "restore_success"
+    },
+    "all_users": "All Users",
+    "archive": "archive",
+    "archive_error": "archive_error",
+    "archive_success": "archive_success",
+    "back_to_leads": "back_to_leads",
+    "color": "color",
+    "date_from": "Date From",
+    "date_to": "date_to",
+    "default": "default",
+    "delete_error": "delete_error",
+    "delete_success": "delete_success",
+    "departments": "departments",
+    "display": "display",
+    "edit_lead": "edit_lead",
+    "end_time": "end_time",
+    "errors": {
+      "invalid_access": "invalid_access",
+      "invalid_company_id": "invalid_company_id"
+    },
+    "file_selected": "file_selected",
+    "hrs": "hrs",
+    "lead_not_found": "lead_not_found",
+    "no_file_chosen": "no_file_chosen",
+    "no_users_assigned": "no_users_assigned",
+    "optional": "optional",
+    "permanent_delete": "permanent_delete",
+    "please_enter": "please_enter",
+    "positions": "positions",
+    "restore": "restore",
+    "restore_error": "restore_error",
+    "restore_success": "restore_success",
+    "save_settings": "save_settings",
+    "select": "select",
+    "select_stage": "select_stage",
+    "start": "start",
+    "stop": "stop",
+    "assigned_to": "Assigned to"
   },
   "auth": {
     "welcome_back": "Welcome Back",
@@ -323,6 +374,7 @@
     "expenses": "Expenses",
     "teamOperations": "Team Operations",
     "employees": "Employees",
+    "team": "Team",
     "attendance": "Attendance",
     "leaves": "Leaves",
     "communication": "Communication",
@@ -379,7 +431,11 @@
     "maintenance": "Maintenance",
     "crm_settings": "CRM Settings",
     "administration": "Administration",
-    "item_related_to": "Related To"
+    "item_related_to": "Related To",
+    "deals_lost": "deals_lost",
+    "deals_won": "deals_won",
+    "tickets": "tickets",
+    "time_tracking": "time_tracking"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -449,7 +505,14 @@
       "import_failed": "Import Failed"
     },
     "kanban": {
-      "load_error": "Load Error"
+      "load_error": "Load Error",
+      "no_stages": "No stages in this pipeline",
+      "no_stages_hint": "Add at least one stage under Settings → Pipelines. Then you can move cards between columns here.",
+      "no_stages_list": "Add stages in pipeline settings to use drag and drop",
+      "no_stages_running": "This pipeline has no stages yet — your leads are shown in one column. Add stages in settings for a full Kanban with drag and drop between columns.",
+      "fallback_title": "Leads in this pipeline",
+      "manage_pipelines_short": "Pipeline settings (add stages)",
+      "leads_waiting": "Leads in this pipeline (not placed in a column until stages exist):"
     },
     "confirm_delete_contact": "Are you sure you want to delete this contact?",
     "columns": {
@@ -488,6 +551,9 @@
     "total_leads": "Total Leads",
     "ownership": "Ownership",
     "lead_details": "Lead Details",
+    "form": {
+      "pipeline_stage_hint": "The lead is created in the first stage of the selected pipeline. Change the stage in Kanban or by dragging the card."
+    },
     "select_source": "Select Source",
     "select_label": "Select Label",
     "no_labels_found": "No labels found",
@@ -521,7 +587,50 @@
     "send_email": "Send Email",
     "add_event": "Add Event",
     "confirmed": "Confirmed",
-    "search_placeholder": "Search leads..."
+    "search_placeholder": "Search leads...",
+    "assigned_users": "assigned_users",
+    "confirm_delete_lead": "confirm_delete_lead",
+    "contacts_subtitle": "contacts_subtitle",
+    "detail": {
+      "company_info": "company_info",
+      "contact_details": "contact_details",
+      "fields": {
+        "priority": "priority",
+        "source": "source",
+        "status": "status",
+        "value": "value"
+      },
+      "lead_info": "lead_info",
+      "linked_contacts": "linked_contacts",
+      "recent_activities": "recent_activities"
+    },
+    "events_subtitle": "events_subtitle",
+    "follow_ups": "follow_ups",
+    "invalid_phone": "invalid_phone",
+    "lost_leads": "lost_leads",
+    "new_leads": "new_leads",
+    "no_contacts_found": "no_contacts_found",
+    "no_reminders": "no_reminders",
+    "no_tasks": "no_tasks",
+    "overdose_today": "overdose_today",
+    "reminders": "reminders",
+    "save_lead": "save_lead",
+    "stages": {
+      "converted": "converted",
+      "in_progress": "in_progress",
+      "lost": "lost",
+      "proposal": "proposal",
+      "won": "won"
+    },
+    "templates": {
+      "contract": "contract",
+      "follow_up": "follow_up",
+      "negotiation": "negotiation",
+      "proposal": "proposal"
+    },
+    "upcoming": "upcoming",
+    "update_lead": "update_lead",
+    "won_leads": "won_leads"
   },
   "projects": {
     "title": "Projects",
@@ -533,12 +642,48 @@
     "manage_labels": "Manage Labels",
     "use_template": "Use Template",
     "search_placeholder": "Search projects...",
+    "form": {
+      "create_project": "Create New Project",
+      "edit_project": "Edit Project Details",
+      "project_info": "Project Information",
+      "project_name": "Project Name *",
+      "schedule_budget": "Schedule & Budget",
+      "start_date": "Start Date *",
+      "deadline": "Deadline",
+      "no_deadline": "No Deadline",
+      "budget": "Budget ($)",
+      "team_assignment": "Team Assignment",
+      "department": "Department",
+      "all_departments": "-- All Departments --",
+      "project_manager": "Project Manager *",
+      "select_manager": "-- Select Manager --",
+      "search_members": "Search members...",
+      "additional_details": "Additional Details",
+      "project_summary": "Enter project summary...",
+      "priority_label": "Priority / Label",
+      "none": "-- None --",
+      "status": "Status",
+      "status_in_bearbeitung": "In progress",
+      "status_on_hold": "On hold",
+      "status_cancelled": "Cancelled",
+      "status_completed": "Completed",
+     
+      "additional_information": "Additional Information",
+      "manager": "Manager"
+    },
     "actions": {
       "manage_labels": "Manage Labels",
       "import_projects": "Import Projects",
       "use_template": "Use Template",
       "add_project": "Add Project",
-      "advanced_filters": "Advanced Filters"
+      "advanced_filters": "Advanced Filters",
+      "clone": "clone",
+      "create_invoice": "create_invoice",
+      "edit": "edit",
+      "mark_cancelled": "mark_cancelled",
+      "mark_completed": "mark_completed",
+      "mark_hold": "mark_hold",
+      "title": "title"
     },
     "columns": {
       "id": "Project ID",
@@ -568,7 +713,12 @@
       "in_progress": "In Progress",
       "completed": "Completed",
       "doing": "Doing",
-      "done": "Done"
+      "done": "Done",
+      "deadline": "deadline",
+      "on_track": "on_track",
+      "start_date": "start_date",
+      "status": "status",
+      "urgent": "urgent"
     },
     "progress": "Progress",
     "deadline": "Deadline",
@@ -578,6 +728,11 @@
     "no_members": "No team members assigned",
     "no_tasks_assigned": "No tasks assigned for this project",
     "no_projects_found": "No projects found",
+    "errors": {
+      "missing_company": "Company is required. Please sign in again.",
+      "load_failed": "Could not load projects. Check your connection and API URL (CORS)."
+    },
+    "retry_load": "Retry",
     "status_open": "Status Open",
     "status_completed": "Status Completed",
     "status_on_hold": "Status On Hold",
@@ -594,7 +749,93 @@
     "add_comment": "Add Comment",
     "files": "Files",
     "upload_file": "Upload File",
-    "no_files": "No Files"
+    "no_files": "No Files",
+    "activity": {
+      "actions": "actions",
+      "add_note": "add_note",
+      "add_task": "add_task",
+      "added_note": "added_note",
+      "comments": {
+        "add": "add",
+        "no_comments": "no_comments",
+        "placeholder": "placeholder",
+        "title": "title"
+      },
+      "contracts": {
+        "add": "add",
+        "title": "title"
+      },
+      "events": {
+        "title": "title"
+      },
+      "expenses": {
+        "add": "add",
+        "title": "title"
+      },
+      "files": {
+        "add": "add",
+        "files_count": "files_count",
+        "no_files": "no_files",
+        "search": "search",
+        "table": {
+          "category": "category",
+          "name": "name",
+          "size": "size",
+          "upload_date": "upload_date",
+          "uploaded_by": "uploaded_by"
+        },
+        "title": "title"
+      },
+      "invoices": {
+        "add": "add",
+        "bill_date": "bill_date",
+        "due_date": "due_date",
+        "issue_date": "issue_date",
+        "title": "title"
+      },
+      "no_activity": "no_activity",
+      "no_notes": "no_notes",
+      "note": "note",
+      "notes": "notes",
+      "payments": {
+        "add": "add",
+        "title": "title"
+      },
+      "remove_member": "remove_member",
+      "search_notes": "search_notes",
+      "tasks": "tasks",
+      "timesheets": {
+        "add": "add",
+        "no_data": "no_data",
+        "title": "title"
+      },
+      "title": "title"
+    },
+    "labels": {
+      "no_labels": "no_labels"
+    },
+    "members": {
+      "add": "add",
+      "add_member_error": "add_member_error",
+      "no_members": "no_members",
+      "role_fallback": "role_fallback",
+      "select_employee": "select_employee",
+      "title": "title"
+    },
+    "reminders": "reminders",
+    "settings": "settings",
+    "stats": {
+      "done": "done",
+      "in_progress": "in_progress",
+      "review": "review",
+      "to_do": "to_do",
+      "total_hours": "total_hours"
+    },
+    "visibility": {
+      "private": "private",
+      "public": "public",
+      "title": "title"
+    }
   },
   "tasks": {
     "title": "Tasks",
@@ -755,7 +996,18 @@
     "total_paid": "Total Paid",
     "total_unpaid": "Total Unpaid",
     "all_status": "All Statuses",
-    "copy_link": "Copy Link"
+    "copy_link": "Copy Link",
+    "method": {
+      "check": "check",
+      "online": "online"
+    },
+    "period": "period",
+    "chooseFile": "Choose file",
+    "selectedFile": "Selected",
+    "removeAttachment": "Remove",
+    "fileUploadHint": "PDF or images. The file is saved to Documents and linked to this invoice after you save.",
+    "attachmentUploadFailed": "Invoice was saved, but the file could not be uploaded. Try again from Documents or contact support.",
+    "allDatesShown": "All bill dates are included when this range is selected."
   },
   "employees": {
     "title": "Employees",
@@ -767,6 +1019,7 @@
       "department": "Department",
       "status": "Status",
       "id": "Employee ID",
+      "role": "Role",
       "actions": "Actions"
     },
     "edit_employee": "Edit Employee",
@@ -800,13 +1053,26 @@
       "hourly_rate": "Hourly Rate",
       "slack_id": "Slack Member ID",
       "skills": "Skills",
+      "skills_placeholder": "e.g. React, Node.js, Design",
       "probation_end": "Probation End",
       "notice_start": "Notice Start",
       "notice_end": "Notice End",
       "employment_type": "Employment Type",
       "marital_status": "Marital Status",
       "business_address": "Business Address",
-      "select": "-- Select --"
+      "select": "-- Select --",
+      "lang_en": "English",
+      "lang_de": "Deutsch",
+      "lang_fr": "Français",
+      "lang_it": "Italiano",
+      "lang_es": "Español",
+      "add_department": "Add department",
+      "add_position": "Add position",
+      "new_department_name": "Department name",
+      "new_position_name": "Position / designation",
+      "select_department_first": "Select a department first, then you can add a position.",
+      "quick_add_dept_title": "New department",
+      "quick_add_pos_title": "New position"
     },
     "values": {
       "mr": "Mr.",
@@ -823,6 +1089,7 @@
       "part_time": "Part Time",
       "contract": "Contract",
       "internship": "Internship",
+      "employee": "Employee",
       "trainee": "Trainee",
       "single": "Single",
       "married": "Married",
@@ -1061,7 +1328,12 @@
     "accept_confirm": "Are you sure you want to accept this company request? A company will be created.",
     "accept_success": "Company request accepted and company created successfully!",
     "reject_reason": "Enter rejection reason (optional):",
-    "reject_success": "Company request rejected successfully!"
+    "reject_success": "Company request rejected successfully!",
+    "company_name": "company_name",
+    "currency": "currency",
+    "delete": "delete",
+    "error": "error",
+    "select_package": "select_package"
   },
   "settings": {
     "title": "Settings",
@@ -1188,7 +1460,13 @@
       "push_notifications": "Push Notifications",
       "push_notifications_desc": "Receive browser push notifications",
       "sound": "Notification Sound",
-      "sound_desc": "Play sound when a notification arrives"
+      "sound_desc": "Play sound when a notification arrives",
+      "email": "email",
+      "email_desc": "email_desc",
+      "push": "push",
+      "push_desc": "push_desc",
+      "sms": "sms",
+      "sms_desc": "sms_desc"
     },
     "ui_settings": {
       "design_settings": "Design Settings",
@@ -1204,7 +1482,8 @@
       "compact": "Compact",
       "icon_only": "Icon Only",
       "centered": "Centered",
-      "minimal": "Minimal"
+      "minimal": "Minimal",
+      "collapsed": "collapsed"
     },
     "alerts": {
       "load_failed": "Failed to load settings",
@@ -1538,13 +1817,67 @@
       "stage_name": "Stage Name",
       "stage_color": "Stage Color",
       "set_as_default": "Set as default",
-      "reassign_title": "Delete Stage & Reassign Records"
+      "reassign_title": "Delete Stage & Reassign Records",
+      "reassign_to": "reassign_to",
+      "default_badge": "Default",
+      "no_pipelines": "No pipelines found"
     },
     "modules": {
       "enable": "Enable",
-      "disable": "Disable"
+      "disable": "Disable",
+      "disabled": "disabled",
+      "enabled": "enabled"
     },
-    "updates_label": "Updates"
+    "updates_label": "Updates",
+    "attendance": {
+      "add_shift": "add_shift",
+      "alerts": {
+        "create_error": "create_error",
+        "create_success": "create_success",
+        "delete_confirm": "delete_confirm",
+        "delete_error": "delete_error",
+        "delete_success": "delete_success",
+        "load_error": "load_error",
+        "name_required": "name_required",
+        "update_error": "update_error",
+        "update_success": "update_success"
+      },
+      "allowed_ip": "allowed_ip",
+      "assignment_rules": "assignment_rules",
+      "create_shift": "create_shift",
+      "description": "description",
+      "end_time": "end_time",
+      "ip_restriction": "ip_restriction",
+      "late_mark": "late_mark",
+      "location_restrictions": "location_restrictions",
+      "manage_timings": "manage_timings",
+      "no_shifts": "no_shifts",
+      "office_shifts": "office_shifts",
+      "radius_check": "radius_check",
+      "radius_meters": "radius_meters",
+      "regularization": "regularization",
+      "regularization_desc": "regularization_desc",
+      "shift_color": "shift_color",
+      "shift_name": "shift_name",
+      "shift_rotation": "shift_rotation",
+      "shift_rotation_desc": "shift_rotation_desc",
+      "short_code": "short_code",
+      "start_time": "start_time",
+      "title": "title"
+    },
+    "font_system": "font_system",
+    "leave": {
+      "add_new": "add_new",
+      "archived_desc": "archived_desc",
+      "archived_title": "archived_title",
+      "modal": {
+        "all_depts_desc": "all_depts_desc",
+        "all_desigs_desc": "all_desigs_desc"
+      },
+      "no_archived": "no_archived",
+      "no_types": "no_types",
+      "types_desc": "types_desc"
+    }
   },
   "dashboard_title": "Dashboard",
   "dashboard_subtitle": "System overview and statistics",
@@ -1631,7 +1964,9 @@
     "no_results": "No results found",
     "untitled": "Untitled",
     "no_project": "No Project",
-    "no_status": "No Status"
+    "no_status": "No Status",
+    "client": "client",
+    "esc": "esc"
   },
   "loading": "Loading...",
   "no_data": "No data available",
@@ -1653,7 +1988,7 @@
   },
   "custom_fields": {
     "title": "Custom Fields",
-    "subtitle": "Create custom fields for leads, clients, projects, tasks, and finance modules",
+    "subtitle": "Create custom fields for leads, deals, contacts, clients, projects, tasks, and finance modules",
     "loading": "Loading custom fields...",
     "add": "Add Custom Field",
     "search_placeholder": "Search custom fields...",
@@ -1707,8 +2042,13 @@
       "filters": "Filters",
       "reports": "Reports"
     },
+    "create_success": "Custom field created successfully!",
+    "save_success": "Custom field updated successfully!",
     "errors": {
-      "fetch_failed": "Failed to load custom fields"
+      "fetch_failed": "Failed to load custom fields",
+      "save_failed": "Failed to update custom field",
+      "create_failed": "Failed to create custom field",
+      "delete_failed": "Failed to delete custom field"
     }
   },
   "messages": {
@@ -1756,7 +2096,9 @@
     "delete_conversation": "Delete Conversation",
     "type_message": "Type Message",
     "saveFailed": "SaveFailed",
-    "deleteFailed": "DeleteFailed"
+    "deleteFailed": "DeleteFailed",
+    "confirmDelete": "confirmDelete",
+    "fieldRequired": "fieldRequired"
   },
   "reports": {
     "title": "Reports",
@@ -2016,24 +2358,61 @@
       "start_time": "Start Time",
       "end_date": "End Date",
       "end_time": "End Time",
-      "location_placeholder": "Event location"
-    }
+      "location_placeholder": "Event location",
+      "date": "date",
+      "host": "host",
+      "link": "link",
+      "ort": "ort",
+      "start_date": "start_date",
+      "status": "status",
+      "time": "time",
+      "uhrzeit": "uhrzeit",
+      "where": "where"
+    },
+    "alerts": {
+      "fetch_failed": "fetch_failed"
+    },
+    "details": "details",
+    "modes": {
+      "day": "day",
+      "list": "list",
+      "month": "month",
+      "week": "week"
+    },
+    "more": "more",
+    "subtitle": "subtitle"
   },
   "store": {
     "no_description": "No description available",
     "add_to_cart": "Add to Cart",
     "process_order_help": "You are about to create this order. Please review the details before submitting.",
     "no_items_in_cart": "No items in cart",
-    "note_placeholder": "Add notes for this order..."
+    "note_placeholder": "Add notes for this order...",
+    "all_categories": "all_categories",
+    "column": {
+      "item": "item",
+      "qty": "qty",
+      "rate": "rate",
+      "total": "total"
+    },
+    "no_items_found": "no_items_found",
+    "no_items_help": "no_items_help",
+    "no_search_results": "no_search_results",
+    "subtitle": "subtitle",
+    "subtotal": "subtotal",
+    "title": "title",
+    "total": "total"
   },
   "credit_notes": {
     "title": "Credit Notes",
     "subtitle": "Manage credit notes",
     "add": "Add Credit Note",
     "loading": "Loading credit notes...",
-    "search_placeholder": "Search credit notes..."
+    "search_placeholder": "Search credit notes...",
+    "reason_placeholder": "reason_placeholder"
   },
   "deals": {
+    "title": "Deals",
     "items": "Deals",
     "search_placeholder": "Search deals...",
     "loading": "Loading deals...",
@@ -2055,6 +2434,7 @@
       "select_pipeline": "Select Pipeline",
       "stage": "Stage",
       "select_stage": "Select Stage",
+      "stage_inherited_hint": "The deal starts in the first stage of this pipeline. Change stage by dragging the card in Kanban.",
       "amount": "Amount",
       "valid_till": "Valid Till",
       "description": "Description",
@@ -2069,9 +2449,14 @@
     "kanban": {
       "drop_here": "Drop Here",
       "no_stages": "No stages found for this pipeline.",
-      "manage_pipelines": "Manage Pipelines"
+      "no_stages_list": "Add stages in pipeline settings to use drag and drop",
+      "no_stages_running": "This pipeline has no stages yet — your deals are shown in one column. Add stages in settings to get a full Kanban with drag and drop between columns.",
+      "no_stages_hint": "Create at least one stage for this deal pipeline, then you can move cards between columns here.",
+      "fallback_title": "Deals in this pipeline",
+      "manage_pipelines": "Manage Pipelines",
+      "manage_pipelines_short": "Pipeline settings (add stages)"
     },
-    "date_to": "To Date",
+    "date_to": "Date To",
     "min_value": "Min Value",
     "max_value": "Max Value",
     "list": {
@@ -2090,7 +2475,6 @@
       "title": "Delete Deal?",
       "message": "This action cannot be undone."
     },
-    "title": "Deals",
     "pipelines": {
       "sales": "Sales Pipeline"
     }
@@ -2112,7 +2496,26 @@
     "enter_title_description": "Please enter a title or description",
     "quote_title": "Quote Title",
     "quote_value": "Quote Value",
-    "enter_title": "Enter title"
+    "enter_title": "Enter title",
+    "columns": {
+      "valid_till": "valid_till"
+    }
+  },
+  "offersForm": {
+    "addOffer": "Add offer",
+    "discountType": "Discount type",
+    "fixedAmount": "Fixed amount",
+    "status": "Status",
+    "descriptionPlaceholder": "Describe the offer, scope, or line items",
+    "noteForRecipient": "Note for recipient",
+    "notePlaceholder": "Optional message shown to the recipient",
+    "offerStatus": {
+      "draft": "Draft",
+      "sent": "Sent",
+      "accepted": "Accepted",
+      "declined": "Declined",
+      "expired": "Expired"
+    }
   },
   "proposals": {
     "title": "Proposals",
@@ -2144,7 +2547,31 @@
     "title": "Attendance",
     "markAttendance": "Mark Attendance",
     "checkIn": "Check In",
-    "checkOut": "Check Out"
+    "checkOut": "Check Out",
+    "alerts": {
+      "mark_failed": "mark_failed",
+      "required_fields": "required_fields"
+    },
+    "fields": {
+      "clock_in": "clock_in",
+      "clock_out": "clock_out",
+      "late_reason": "late_reason",
+      "legend": "legend",
+      "work_from": "work_from",
+      "you": "you"
+    },
+    "status": {
+      "cancelled": "cancelled",
+      "completed": "completed",
+      "day_off": "day_off",
+      "on_leave": "on_leave",
+      "pending": "pending"
+    },
+    "values": {
+      "home": "home",
+      "office": "office",
+      "other": "other"
+    }
   },
   "payments": {
     "title": "Payments",
@@ -2158,22 +2585,16 @@
   },
   "contacts": {
     "title": "Contacts",
-    "subtitle": "Manage all CRM contacts in one place",
-    "search_placeholder": "Search contacts by Name, Email or...",
+    "subtitle": "Manage all your CRM contacts",
     "add_contact": "Add Contact",
     "edit_contact": "Edit Contact",
-    "total_contacts": "Total Contacts",
-    "active_contacts": "Active Contacts",
+    "search_placeholder": "Search contacts...",
     "columns": {
-      "name": "Contact Name",
-      "email": "Email & Phone",
+      "name": "Name",
+      "email": "Email",
       "company": "Company",
-      "status": "Contact Status"
-    },
-    "view_contact": "Contact Details",
-    "send_email": "Send Email",
-    "status_active": "Active",
-    "status_inactive": "Inactive"
+      "status": "Status"
+    }
   },
   "modals": {
     "confirmDelete": "Confirm Delete",
@@ -2915,6 +3336,294 @@
       "placeholders": {
         "description": "Add notes about this time entry"
       }
+    }
+  },
+  "-": "-",
+  "/": {
+    "/": {
+      "/api": "/api",
+      "/api/financeTemplates": "/api/financeTemplates"
+    },
+    "/api": "/api"
+  },
+  "/activities": "/activities",
+  "/attendance": "/attendance",
+  "/attendance-settings": "/attendance-settings",
+  "/attendance-settings/shift-rotations": "/attendance-settings/shift-rotations",
+  "/attendance-settings/shift-rotations/run": "/attendance-settings/shift-rotations/run",
+  "/attendance-settings/shifts": "/attendance-settings/shifts",
+  "/attendance/bulk": "/attendance/bulk",
+  "/attendance/calendar": "/attendance/calendar",
+  "/attendance/check-in": "/attendance/check-in",
+  "/attendance/check-out": "/attendance/check-out",
+  "/attendance/percentage": "/attendance/percentage",
+  "/attendance/summary": "/attendance/summary",
+  "/attendance/today-status": "/attendance/today-status",
+  "/audit-logs": "/audit-logs",
+  "/auth/change-password": "/auth/change-password",
+  "/auth/login": "/auth/login",
+  "/auth/me": "/auth/me",
+  "/bank-accounts": "/bank-accounts",
+  "/companies": "/companies",
+  "/company-packages": "/company-packages",
+  "/contacts": "/contacts",
+  "/contracts": "/contracts",
+  "/credit-notes": "/credit-notes",
+  "/custom-fields": "/custom-fields",
+  "/dashboard": "/dashboard",
+  "/dashboard/admin": "/dashboard/admin",
+  "/dashboard/client": "/dashboard/client",
+  "/dashboard/employee": "/dashboard/employee",
+  "/dashboard/sticky-note": "/dashboard/sticky-note",
+  "/dashboard/todo": "/dashboard/todo",
+  "/deal-pipelines": "/deal-pipelines",
+  "/deals": "/deals",
+  "/deals/filters": "/deals/filters",
+  "/deals/kanban-stats": "/deals/kanban-stats",
+  "/departments": "/departments",
+  "/documents": "/documents",
+  "/email-templates": "/email-templates",
+  "/employees": "/employees",
+  "/employees/dashboard": "/employees/dashboard",
+  "/employees/profile": "/employees/profile",
+  "/events": "/events",
+  "/events/upcoming": "/events/upcoming",
+  "/expenses": "/expenses",
+  "/expenses/categories": "/expenses/categories",
+  "/expenses/export/excel": "/expenses/export/excel",
+  "/expenses/export/print": "/expenses/export/print",
+  "/finance-templates": "/finance-templates",
+  "/invoices": "/invoices",
+  "/invoices/create-from-time-logs": "/invoices/create-from-time-logs",
+  "/invoices/create-recurring": "/invoices/create-recurring",
+  "/items": "/items",
+  "/items/import": "/items/import",
+  "/lead-pipelines": "/lead-pipelines",
+  "/lead-sources": "/lead-sources",
+  "/leads": "/leads",
+  "/leads/bulk-action": "/leads/bulk-action",
+  "/leads/contacts": "/leads/contacts",
+  "/leads/import": "/leads/import",
+  "/leads/labels": "/leads/labels",
+  "/leads/overview": "/leads/overview",
+  "/leave-requests": "/leave-requests",
+  "/leave-settings/general-settings": "/leave-settings/general-settings",
+  "/leave-settings/leave-types": "/leave-settings/leave-types",
+  "/meetings": "/meetings",
+  "/messages": "/messages",
+  "/messages/available-users": "/messages/available-users",
+  "/module-settings": "/module-settings",
+  "/module-settings/reset": "/module-settings/reset",
+  "/notes": "/notes",
+  "/notification-settings": "/notification-settings",
+  "/notification-settings/categories": "/notification-settings/categories",
+  "/notifications": "/notifications",
+  "/notifications/mark-all-read": "/notifications/mark-all-read",
+  "/notifications/unread-count": "/notifications/unread-count",
+  "/offers": "/offers",
+  "/orders": "/orders",
+  "/payments": "/payments",
+  "/payments/bulk": "/payments/bulk",
+  "/positions": "/positions",
+  "/project-templates": "/project-templates",
+  "/projects": "/projects",
+  "/projects/filters": "/projects/filters",
+  "/projects/labels": "/projects/labels",
+  "/reports/employees": "/reports/employees",
+  "/reports/expenses-summary": "/reports/expenses-summary",
+  "/reports/income-vs-expenses": "/reports/income-vs-expenses",
+  "/reports/invoice-details": "/reports/invoice-details",
+  "/reports/invoices-summary": "/reports/invoices-summary",
+  "/reports/payments-summary": "/reports/payments-summary",
+  "/reports/projects": "/reports/projects",
+  "/reports/projects-summary": "/reports/projects-summary",
+  "/reports/revenue": "/reports/revenue",
+  "/reports/sales": "/reports/sales",
+  "/reports/summary": "/reports/summary",
+  "/reports/timesheets": "/reports/timesheets",
+  "/roles": "/roles",
+  "/settings": "/settings",
+  "/settings/bulk": "/settings/bulk",
+  "/settings/export": "/settings/export",
+  "/settings/import": "/settings/import",
+  "/settings/initialize": "/settings/initialize",
+  "/settings/reset": "/settings/reset",
+  "/social-media-integrations": "/social-media-integrations",
+  "/subscriptions": "/subscriptions",
+  "/superadmin/audit-logs": "/superadmin/audit-logs",
+  "/superadmin/offline-requests": "/superadmin/offline-requests",
+  "/superadmin/settings/test-email": "/superadmin/settings/test-email",
+  "/superadmin/support-tickets": "/superadmin/support-tickets",
+  "/superadmin/users": "/superadmin/users",
+  "/tasks": "/tasks",
+  "/tickets": "/tickets",
+  "/time-logs": "/time-logs",
+  "/time-logs/stats": "/time-logs/stats",
+  "/users": "/users",
+  "CSV must contain a column with": "CSV must contain a column with",
+  "Enter recipient email:": "Enter recipient email:",
+  "Invalid project ID:": "Invalid project ID:",
+  "Number of columns:": "Number of columns:",
+  "Number of rows:": "Number of rows:",
+  "Please select a valid member": {
+    " Selected:": " Selected:"
+  },
+  "auto": {
+    "auto_02771a43": "auto_02771a43",
+    "auto_0651f264": "auto_0651f264",
+    "auto_07ca5050": "auto_07ca5050",
+    "auto_0d466f15": "auto_0d466f15",
+    "auto_0d8d5800": "auto_0d8d5800",
+    "auto_0f51bb78": "auto_0f51bb78",
+    "auto_128bd84a": "auto_128bd84a",
+    "auto_13348442": "auto_13348442",
+    "auto_142948a0": "auto_142948a0",
+    "auto_162647d9": "auto_162647d9",
+    "auto_17b83ae3": "auto_17b83ae3",
+    "auto_17c45184": "auto_17c45184",
+    "auto_18a80225": "auto_18a80225",
+    "auto_1956ff5e": "auto_1956ff5e",
+    "auto_1b498eaa": "auto_1b498eaa",
+    "auto_1c76cbfe": "auto_1c76cbfe",
+    "auto_1d17cb99": "auto_1d17cb99",
+    "auto_1f98842c": "auto_1f98842c",
+    "auto_205bc73c": "auto_205bc73c",
+    "auto_251e2607": "auto_251e2607",
+    "auto_2722ef4e": "auto_2722ef4e",
+    "auto_280cd410": "auto_280cd410",
+    "auto_2b7dabba": "auto_2b7dabba",
+    "auto_2bca6161": "auto_2bca6161",
+    "auto_2fa965ff": "auto_2fa965ff",
+    "auto_319ab3bf": "auto_319ab3bf",
+    "auto_32f56b8a": "auto_32f56b8a",
+    "auto_35bedb45": "auto_35bedb45",
+    "auto_38d26750": "auto_38d26750",
+    "auto_3ad6cb61": "auto_3ad6cb61",
+    "auto_3ea46477": "auto_3ea46477",
+    "auto_434acb78": "auto_434acb78",
+    "auto_4474fbc0": "auto_4474fbc0",
+    "auto_455285f2": "auto_455285f2",
+    "auto_466eadd4": "auto_466eadd4",
+    "auto_46b5f8c5": "auto_46b5f8c5",
+    "auto_4a790384": "auto_4a790384",
+    "auto_4a998251": "auto_4a998251",
+    "auto_50344533": "auto_50344533",
+    "auto_5080acb2": "auto_5080acb2",
+    "auto_50fd8f22": "auto_50fd8f22",
+    "auto_52b058fc": "auto_52b058fc",
+    "auto_5427b3c0": "auto_5427b3c0",
+    "auto_556fdcc5": "auto_556fdcc5",
+    "auto_558fa744": "auto_558fa744",
+    "auto_5706de96": "auto_5706de96",
+    "auto_5b0c87e0": "auto_5b0c87e0",
+    "auto_5cd0776d": "auto_5cd0776d",
+    "auto_634a1fb9": "auto_634a1fb9",
+    "auto_65963846": "auto_65963846",
+    "auto_66855ac3": "auto_66855ac3",
+    "auto_66c4c511": "auto_66c4c511",
+    "auto_694e8d1f": "auto_694e8d1f",
+    "auto_6c25e6a6": "auto_6c25e6a6",
+    "auto_7020426c": "auto_7020426c",
+    "auto_7022ed6d": "auto_7022ed6d",
+    "auto_7442e29d": "auto_7442e29d",
+    "auto_76348cf9": "auto_76348cf9",
+    "auto_76bd1386": "auto_76bd1386",
+    "auto_78463a38": "auto_78463a38",
+    "auto_79564e01": "auto_79564e01",
+    "auto_7a1920d6": "auto_7a1920d6",
+    "auto_7c1878b1": "auto_7c1878b1",
+    "auto_7d385bb3": "auto_7d385bb3",
+    "auto_7d74f3b9": "auto_7d74f3b9",
+    "auto_8196446d": "auto_8196446d",
+    "auto_8524de96": "auto_8524de96",
+    "auto_86f5978d": "auto_86f5978d",
+    "auto_8a2e38c7": "auto_8a2e38c7",
+    "auto_8b0261a6": "auto_8b0261a6",
+    "auto_8b3bda8c": "auto_8b3bda8c",
+    "auto_8e3a4215": "auto_8e3a4215",
+    "auto_9030e39f": "auto_9030e39f",
+    "auto_9042a776": "auto_9042a776",
+    "auto_91778c19": "auto_91778c19",
+    "auto_92928e48": "auto_92928e48",
+    "auto_9461bed8": "auto_9461bed8",
+    "auto_953e1cf9": "auto_953e1cf9",
+    "auto_96b01412": "auto_96b01412",
+    "auto_9aa698f6": "auto_9aa698f6",
+    "auto_9e365dd1": "auto_9e365dd1",
+    "auto_9e727fdd": "auto_9e727fdd",
+    "auto_a149e85a": "auto_a149e85a",
+    "auto_a4ecfc70": "auto_a4ecfc70",
+    "auto_a5574b2f": "auto_a5574b2f",
+    "auto_a6122a65": "auto_a6122a65",
+    "auto_a6a2a55b": "auto_a6a2a55b",
+    "auto_a745d95c": "auto_a745d95c",
+    "auto_a9e97e87": "auto_a9e97e87",
+    "auto_ab21632f": "auto_ab21632f",
+    "auto_abbbd19b": "auto_abbbd19b",
+    "auto_ac4f2b92": "auto_ac4f2b92",
+    "auto_ae21d822": "auto_ae21d822",
+    "auto_ae94be3c": "auto_ae94be3c",
+    "auto_b021df6a": "auto_b021df6a",
+    "auto_b18048c3": "auto_b18048c3",
+    "auto_b2844b8e": "auto_b2844b8e",
+    "auto_b2f40690": "auto_b2f40690",
+    "auto_b3320b3c": "auto_b3320b3c",
+    "auto_b41f8031": "auto_b41f8031",
+    "auto_b5e8acd7": "auto_b5e8acd7",
+    "auto_b6d172bb": "auto_b6d172bb",
+    "auto_b6ef6732": "auto_b6ef6732",
+    "auto_b78a3223": "auto_b78a3223",
+    "auto_b939b52f": "auto_b939b52f",
+    "auto_b98920c3": "auto_b98920c3",
+    "auto_ba316914": "auto_ba316914",
+    "auto_ba86aa52": "auto_ba86aa52",
+    "auto_bbaff128": "auto_bbaff128",
+    "auto_bcec0a9d": "auto_bcec0a9d",
+    "auto_be09b22e": "auto_be09b22e",
+    "auto_be25f2c6": "auto_be25f2c6",
+    "auto_c1060bbe": "auto_c1060bbe",
+    "auto_c1d25382": "auto_c1d25382",
+    "auto_c512b685": "auto_c512b685",
+    "auto_c5c8ac6b": "auto_c5c8ac6b",
+    "auto_cb5feb1b": "auto_cb5feb1b",
+    "auto_cf5ea795": "auto_cf5ea795",
+    "auto_d7778d0c": "auto_d7778d0c",
+    "auto_d8a0f53b": "auto_d8a0f53b",
+    "auto_db3794c7": "auto_db3794c7",
+    "auto_dcb66ff6": "auto_dcb66ff6",
+    "auto_ddc35f88": "auto_ddc35f88",
+    "auto_ded71747": "auto_ded71747",
+    "auto_e09e91c8": "auto_e09e91c8",
+    "auto_e24e0bba": "auto_e24e0bba",
+    "auto_e3db9a40": "auto_e3db9a40",
+    "auto_e55f75a2": "auto_e55f75a2",
+    "auto_ea45fc10": "auto_ea45fc10",
+    "auto_ec53a8c4": "auto_ec53a8c4",
+    "auto_edefbda3": "auto_edefbda3",
+    "auto_ef615563": "auto_ef615563",
+    "auto_f0f7d233": "auto_f0f7d233",
+    "auto_f2c12ae1": "auto_f2c12ae1",
+    "auto_f31bbdd1": "auto_f31bbdd1",
+    "auto_f4949814": "auto_f4949814",
+    "auto_fbb7d719": "auto_fbb7d719",
+    "auto_ff11c641": "auto_ff11c641"
+  },
+  "days": {
+    "friday_short": "friday_short",
+    "monday_short": "monday_short",
+    "saturday_short": "saturday_short",
+    "sunday_short": "sunday_short",
+    "thursday_short": "thursday_short",
+    "tuesday_short": "tuesday_short",
+    "wednesday_short": "wednesday_short"
+  },
+  "de-DE": "de-DE",
+  "en-US": "en-US",
+  "logout": "logout",
+  "pwa-install-available": "pwa-install-available",
+  "system_settings": {
+    "backup_settings": {
+      "frequency_desc": "frequency_desc"
     }
   }
 }

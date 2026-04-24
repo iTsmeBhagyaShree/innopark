@@ -136,7 +136,7 @@ const getById = async (req, res) => {
     if (packages.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Package not found'
+        error: req.t ? req.t('api_msg_407bbcd6') : "Package not found"
       });
     }
 
@@ -190,7 +190,7 @@ const getById = async (req, res) => {
     console.error('Get package by ID error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch package'
+      error: req.t ? req.t('api_msg_2a2550ec') : "Failed to fetch package"
     });
   }
 };
@@ -218,7 +218,7 @@ const create = async (req, res) => {
     if (!package_name || price === undefined) {
       return res.status(400).json({
         success: false,
-        error: 'Package name and price are required'
+        error: req.t ? req.t('api_msg_900ec21a') : "Package name and price are required"
       });
     }
 
@@ -318,13 +318,13 @@ const create = async (req, res) => {
     res.status(201).json({
       success: true,
       data: pkg,
-      message: 'Package created successfully'
+      message: req.t ? req.t('api_msg_d6872d36') : "Package created successfully"
     });
   } catch (error) {
     console.error('Create package error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to create package'
+      error: req.t ? req.t('api_msg_9b7fe4bb') : "Failed to create package"
     });
   }
 };
@@ -354,7 +354,7 @@ const update = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Package not found'
+        error: req.t ? req.t('api_msg_407bbcd6') : "Package not found"
       });
     }
 
@@ -390,7 +390,7 @@ const update = async (req, res) => {
     if (updateFields.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'No fields to update'
+        error: req.t ? req.t('api_msg_003199ed') : "No fields to update"
       });
     }
 
@@ -458,13 +458,13 @@ const update = async (req, res) => {
     res.json({
       success: true,
       data: pkg,
-      message: 'Package updated successfully'
+      message: req.t ? req.t('api_msg_1ab4127d') : "Package updated successfully"
     });
   } catch (error) {
     console.error('Update package error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to update package'
+      error: req.t ? req.t('api_msg_7128dfbe') : "Failed to update package"
     });
   }
 };
@@ -486,7 +486,7 @@ const deletePackage = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Package not found'
+        error: req.t ? req.t('api_msg_407bbcd6') : "Package not found"
       });
     }
 
@@ -499,13 +499,13 @@ const deletePackage = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Package deleted successfully'
+      message: req.t ? req.t('api_msg_2ad610dc') : "Package deleted successfully"
     });
   } catch (error) {
     console.error('Delete package error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete package'
+      error: req.t ? req.t('api_msg_0859f79b') : "Failed to delete package"
     });
   }
 };

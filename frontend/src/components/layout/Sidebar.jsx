@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '../../context/ThemeContext'
 import { useModules } from '../../context/ModulesContext'
 import { usePermissions } from '../../context/PermissionsContext'
+import { useSettings } from '../../context/SettingsContext'
 import { IoClose, IoChevronDown, IoLogOut, IoChevronForward } from 'react-icons/io5'
 import adminSidebarData from '../../config/adminSidebarData'
 import employeeSidebarData from '../../config/employeeSidebarData'
@@ -16,6 +17,7 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
   const { theme } = useTheme()
   const { t } = useLanguage()
   const { employeeMenus } = useModules()
+  const { settings } = useSettings()
   const { canView, loading: permissionsLoading, modulePermissions } = usePermissions()
   const isDark = theme.mode === 'dark'
   const location = useLocation()
@@ -125,8 +127,10 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
       if (item.moduleKey) {
         // Check if module is enabled in module settings
         const isEnabled = moduleSettings[item.moduleKey] !== false
-        if (!isEnabled) {
-          console.log(`🚫 Module disabled: ${item.label} (${item.moduleKey})`)
+        const isGlobalEnabled = settings[`module_${item.moduleKey}`] !== false
+        
+        if (!isEnabled || !isGlobalEnabled) {
+          console.log(`🚫 Module disabled: ${item.label} (${item.moduleKey}) - isEnabled: ${isEnabled}, isGlobalEnabled: ${isGlobalEnabled}`)
           return false
         }
 
@@ -148,7 +152,8 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
         const filteredChildren = item.children.filter(child => {
           if (child.moduleKey) {
             const isEnabled = moduleSettings[child.moduleKey] !== false
-            if (!isEnabled) return false
+            const isGlobalEnabled = settings[`module_${child.moduleKey}`] !== false
+            if (!isEnabled || !isGlobalEnabled) return false
 
             // Check if user has view permission (for EMPLOYEE only)
             if (user && user.role === 'EMPLOYEE' && !permissionsLoading) {
@@ -177,7 +182,7 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
       }
       return true
     })
-  }, [canView, user])
+  }, [canView, user, settings, modulePermissions])
 
   // Get sidebar data based on user role with module filtering
   const getSidebarData = useCallback(() => {
@@ -200,7 +205,7 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
 
     // Apply module filtering for EMPLOYEE only
 
-    if (user.role === 'EMPLOYEE') {
+    if (user.role === 'EMPLOYEE' || user.role === 'ADMIN') {
       return filterMenusByModuleSettings([...rawData.map(item => ({ ...item, children: item.children ? [...item.children] : undefined }))], employeeMenus)
     }
 

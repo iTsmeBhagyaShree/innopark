@@ -65,7 +65,7 @@ const getAll = async (req, res) => {
     console.error('Get audit logs error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch audit logs'
+      error: req.t ? req.t('api_msg_112560c5') : "Failed to fetch audit logs"
     });
   }
 };
@@ -100,7 +100,7 @@ const getById = async (req, res) => {
     if (logs.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Audit log not found'
+        error: req.t ? req.t('api_msg_0331e695') : "Audit log not found"
       });
     }
 
@@ -112,7 +112,7 @@ const getById = async (req, res) => {
     console.error('Get audit log error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch audit log'
+      error: req.t ? req.t('api_msg_dfdebfc7') : "Failed to fetch audit log"
     });
   }
 };
@@ -137,7 +137,7 @@ const create = async (req, res) => {
     if (!action || !entity_type) {
       return res.status(400).json({
         success: false,
-        error: 'Action and entity type are required'
+        error: req.t ? req.t('api_msg_f0a1d0e1') : "Action and entity type are required"
       });
     }
 
@@ -172,13 +172,13 @@ const create = async (req, res) => {
     res.status(201).json({
       success: true,
       data: newLog[0],
-      message: 'Audit log created successfully'
+      message: req.t ? req.t('api_msg_16ee6a77') : "Audit log created successfully"
     });
   } catch (error) {
     console.error('Create audit log error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to create audit log'
+      error: req.t ? req.t('api_msg_d6b34aa6') : "Failed to create audit log"
     });
   }
 };

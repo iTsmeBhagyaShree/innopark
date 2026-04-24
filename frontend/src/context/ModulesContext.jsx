@@ -12,14 +12,15 @@ const DEFAULT_EMPLOYEE_MENUS = {
   dashboard: true,
   myTasks: true,
   myProjects: true,
-  timeTracking: true,
+  timeTracking: false,
   events: true,
   myProfile: true,
   documents: true,
-  attendance: true,
-  leaveRequests: true,
-  messages: true,
-  tickets: true,
+  attendance: false,
+  hrm: false,
+  leaveRequests: false,
+  messages: false,
+  tickets: false,
 }
 
 // Create context

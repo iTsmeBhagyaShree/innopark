@@ -182,7 +182,7 @@ const getById = async (req, res) => {
     if (templates.length === 0) {
       return res.status(404).json({ 
         success: false, 
-        error: 'Email template not found' 
+        error: req.t ? req.t('api_msg_303e8066') : "Email template not found" 
       });
     }
 
@@ -225,7 +225,7 @@ const create = async (req, res) => {
     if (!name || !subject || !body) {
       return res.status(400).json({
         success: false,
-        error: 'name, subject, and body are required'
+        error: req.t ? req.t('api_msg_334184e7') : "name, subject, and body are required"
       });
     }
 
@@ -233,7 +233,7 @@ const create = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: "company_id is required"
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
@@ -307,7 +307,7 @@ const create = async (req, res) => {
     res.status(201).json({ 
       success: true, 
       data: template,
-      message: 'Email template created successfully' 
+      message: req.t ? req.t('api_msg_561ad677') : "Email template created successfully" 
     });
   } catch (error) {
     console.error('Create email template error:', error);
@@ -346,7 +346,7 @@ const update = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Email template not found'
+        error: req.t ? req.t('api_msg_303e8066') : "Email template not found"
       });
     }
 
@@ -408,7 +408,7 @@ const update = async (req, res) => {
     res.json({
       success: true,
       data: template,
-      message: 'Email template updated successfully'
+      message: req.t ? req.t('api_msg_9f361f48') : "Email template updated successfully"
     });
   } catch (error) {
     console.error('Update email template error:', error);
@@ -433,13 +433,13 @@ const deleteTemplate = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Email template not found'
+        error: req.t ? req.t('api_msg_303e8066') : "Email template not found"
       });
     }
     
     res.json({ 
       success: true, 
-      message: 'Email template deleted successfully' 
+      message: req.t ? req.t('api_msg_a9ca92a1') : "Email template deleted successfully" 
     });
   } catch (error) {
     console.error('Delete email template error:', error);

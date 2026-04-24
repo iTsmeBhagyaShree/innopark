@@ -8,7 +8,7 @@ const getAll = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
     
@@ -61,7 +61,7 @@ const getAll = async (req, res) => {
     });
     res.status(500).json({ 
       success: false, 
-      error: 'Failed to fetch time logs',
+      error: req.t ? req.t('api_msg_b1535188') : "Failed to fetch time logs",
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
@@ -83,7 +83,7 @@ const create = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
@@ -135,7 +135,7 @@ const create = async (req, res) => {
     res.status(201).json({ 
       success: true, 
       data: timeLogs[0] || { id: result.insertId },
-      message: 'Time log created successfully'
+      message: req.t ? req.t('api_msg_1f081138') : "Time log created successfully"
     });
   } catch (error) {
     console.error('Create time log error:', error);
@@ -158,7 +158,7 @@ const update = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
     
@@ -171,7 +171,7 @@ const update = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Time log not found'
+        error: req.t ? req.t('api_msg_7049fe6d') : "Time log not found"
       });
     }
 
@@ -185,7 +185,7 @@ const update = async (req, res) => {
       if (userCheck.length > 0 && userCheck[0].role === 'EMPLOYEE') {
         return res.status(403).json({
           success: false,
-          error: 'You can only update your own time logs'
+          error: req.t ? req.t('api_msg_c8a0dcfc') : "You can only update your own time logs"
         });
       }
     }
@@ -218,7 +218,7 @@ const update = async (req, res) => {
     if (updates.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'No fields to update'
+        error: req.t ? req.t('api_msg_003199ed') : "No fields to update"
       });
     }
 
@@ -258,7 +258,7 @@ const update = async (req, res) => {
     res.json({
       success: true,
       data: timeLogs[0],
-      message: 'Time log updated successfully'
+      message: req.t ? req.t('api_msg_9595915b') : "Time log updated successfully"
     });
   } catch (error) {
     console.error('Update time log error:', error);
@@ -280,7 +280,7 @@ const deleteTimeLog = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
     
@@ -293,7 +293,7 @@ const deleteTimeLog = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Time log not found'
+        error: req.t ? req.t('api_msg_7049fe6d') : "Time log not found"
       });
     }
 
@@ -307,7 +307,7 @@ const deleteTimeLog = async (req, res) => {
       if (userCheck.length > 0 && userCheck[0].role === 'EMPLOYEE') {
         return res.status(403).json({
           success: false,
-          error: 'You can only delete your own time logs'
+          error: req.t ? req.t('api_msg_da4b47ef') : "You can only delete your own time logs"
         });
       }
     }
@@ -319,7 +319,7 @@ const deleteTimeLog = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Time log deleted successfully'
+      message: req.t ? req.t('api_msg_495023c9') : "Time log deleted successfully"
     });
   } catch (error) {
     console.error('Delete time log error:', error);
@@ -342,7 +342,7 @@ const getById = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
     
@@ -373,7 +373,7 @@ const getById = async (req, res) => {
     if (timeLogs.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Time log not found'
+        error: req.t ? req.t('api_msg_7049fe6d') : "Time log not found"
       });
     }
     
@@ -385,7 +385,7 @@ const getById = async (req, res) => {
     console.error('Get time log by ID error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch time log'
+      error: req.t ? req.t('api_msg_ead5045d') : "Failed to fetch time log"
     });
   }
 };
@@ -402,7 +402,7 @@ const getStats = async (req, res) => {
     if (!companyId || !userId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id and user_id are required'
+        error: req.t ? req.t('api_msg_6d05d6f9') : "company_id and user_id are required"
       });
     }
     
@@ -448,7 +448,7 @@ const getStats = async (req, res) => {
     console.error('Get time log stats error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch time log statistics'
+      error: req.t ? req.t('api_msg_4940f8a1') : "Failed to fetch time log statistics"
     });
   }
 };

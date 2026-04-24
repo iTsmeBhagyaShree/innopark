@@ -81,7 +81,7 @@ const calculateTotals = (items, discount, discountType) => {
 const getAll = async (req, res) => {
     try {
         const filterCompanyId = req.query.company_id || req.body.company_id || req.companyId;
-        if (!filterCompanyId) return res.status(400).json({ success: false, error: 'company_id is required' });
+        if (!filterCompanyId) return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required" });
 
         let whereClause = 'WHERE e.company_id = ? AND e.is_deleted = 0';
         const params = [filterCompanyId];
@@ -140,7 +140,7 @@ const getById = async (req, res) => {
             [req.params.id]
         );
 
-        if (offers.length === 0) return res.status(404).json({ success: false, error: 'Offer not found' });
+        if (offers.length === 0) return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_3fddf4f8') : "Offer not found" });
 
         const [items] = await pool.execute('SELECT * FROM offer_items WHERE offer_id = ?', [req.params.id]);
         offers[0].items = items;
@@ -226,7 +226,7 @@ const update = async (req, res) => {
         const { items, ...fields } = req.body;
 
         const [exists] = await pool.execute('SELECT id FROM offers WHERE id = ?', [id]);
-        if (exists.length === 0) return res.status(404).json({ success: false, error: 'Offer not found' });
+        if (exists.length === 0) return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_3fddf4f8') : "Offer not found" });
 
         // Simple update logic
         if (Object.keys(fields).length > 0) {
@@ -286,7 +286,7 @@ const update = async (req, res) => {
 const deleteOffer = async (req, res) => {
     try {
         await pool.execute('UPDATE offers SET is_deleted = 1 WHERE id = ?', [req.params.id]);
-        res.json({ success: true, message: 'Offer deleted successfully' });
+        res.json({ success: true, message: req.t ? req.t('api_msg_4eab7e4f') : "Offer deleted successfully" });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }

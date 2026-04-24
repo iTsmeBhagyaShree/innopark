@@ -46,7 +46,7 @@ exports.getCallsByLeadId = async (req, res) => {
     if (!company_id) {
       return res.status(400).json({
         success: false,
-        error: 'Company ID is required'
+        error: req.t ? req.t('api_msg_c9d0dab7') : "Company ID is required"
       });
     }
 
@@ -70,7 +70,7 @@ exports.getCallsByLeadId = async (req, res) => {
     console.error('Error fetching lead calls:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch lead calls',
+      error: req.t ? req.t('api_msg_dbb933fd') : "Failed to fetch lead calls",
       details: error.message
     });
   }
@@ -91,7 +91,7 @@ exports.createCall = async (req, res) => {
     if (!company_id) {
       return res.status(400).json({
         success: false,
-        error: 'Company ID is required'
+        error: req.t ? req.t('api_msg_c9d0dab7') : "Company ID is required"
       });
     }
 
@@ -99,7 +99,7 @@ exports.createCall = async (req, res) => {
     if (!callData.call_date || !callData.phone_number) {
       return res.status(400).json({
         success: false,
-        error: 'Call date and phone number are required'
+        error: req.t ? req.t('api_msg_2ec9de10') : "Call date and phone number are required"
       });
     }
 
@@ -136,14 +136,14 @@ exports.createCall = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Call log created successfully',
+      message: req.t ? req.t('api_msg_3e02944e') : "Call log created successfully",
       data: newCall[0]
     });
   } catch (error) {
     console.error('Error creating call log:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to create call log',
+      error: req.t ? req.t('api_msg_18734658') : "Failed to create call log",
       details: error.message
     });
   }
@@ -164,7 +164,7 @@ exports.updateCall = async (req, res) => {
     if (!company_id) {
       return res.status(400).json({
         success: false,
-        error: 'Company ID is required'
+        error: req.t ? req.t('api_msg_c9d0dab7') : "Company ID is required"
       });
     }
 
@@ -177,7 +177,7 @@ exports.updateCall = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Call log not found'
+        error: req.t ? req.t('api_msg_f6842dac') : "Call log not found"
       });
     }
 
@@ -201,14 +201,14 @@ exports.updateCall = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Call log updated successfully',
+      message: req.t ? req.t('api_msg_1bc47f2e') : "Call log updated successfully",
       data: updatedCall[0]
     });
   } catch (error) {
     console.error('Error updating call log:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to update call log',
+      error: req.t ? req.t('api_msg_a69b2010') : "Failed to update call log",
       details: error.message
     });
   }
@@ -228,7 +228,7 @@ exports.deleteCall = async (req, res) => {
     if (!company_id) {
       return res.status(400).json({
         success: false,
-        error: 'Company ID is required'
+        error: req.t ? req.t('api_msg_c9d0dab7') : "Company ID is required"
       });
     }
 
@@ -241,7 +241,7 @@ exports.deleteCall = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Call log not found'
+        error: req.t ? req.t('api_msg_f6842dac') : "Call log not found"
       });
     }
 
@@ -253,13 +253,13 @@ exports.deleteCall = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Call log deleted successfully'
+      message: req.t ? req.t('api_msg_7731ba23') : "Call log deleted successfully"
     });
   } catch (error) {
     console.error('Error deleting call log:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete call log',
+      error: req.t ? req.t('api_msg_bef370cb') : "Failed to delete call log",
       details: error.message
     });
   }

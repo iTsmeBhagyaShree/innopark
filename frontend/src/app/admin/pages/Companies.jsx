@@ -46,7 +46,7 @@ import {
 
 const Companies = () => {
   const { user } = useAuth()
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   const navigate = useNavigate()
   const companyId = useMemo(() => {
     const id = user?.company_id || localStorage.getItem('companyId') || '1'
@@ -93,9 +93,11 @@ const Companies = () => {
   ]
 
   // Fetch companies on mount
+  const dateLocale = language === 'de' ? 'de-DE' : language === 'en' ? 'en-GB' : (language || 'en-GB')
+
   useEffect(() => {
     fetchCompanies()
-  }, [companyId])
+  }, [companyId, language])
 
   const fetchCompanies = async () => {
     try {
@@ -118,7 +120,7 @@ const Companies = () => {
           openDealsCount: company.open_deals_count || company.total_deals || 0,
           totalDealValue: company.total_deal_value || 0,
           status: company.status || 'Active',
-          createdDate: company.created_at ? new Date(company.created_at).toLocaleDateString('en-GB', {
+          createdDate: company.created_at ? new Date(company.created_at).toLocaleDateString(dateLocale, {
             day: 'numeric',
             month: 'short',
             year: 'numeric',
@@ -502,7 +504,7 @@ const Companies = () => {
             placeholder={t('companies.form.address')}
           />
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
               label={t('companies.form.city')}
               value={formData.city}

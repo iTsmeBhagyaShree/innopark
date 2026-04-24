@@ -21,7 +21,7 @@ const login = async (req, res) => {
     const { email, password, role } = req.body;
     
     if (!email || !password || !role) {
-      return res.status(400).json({ success: false, error: 'Email, Password and Role are required' });
+      return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_5f4480ad') : "Email, Password and Role are required" });
     }
 
     const normalizedRole = (role || '').toUpperCase().replace(/\s/g, '_');
@@ -62,12 +62,12 @@ const login = async (req, res) => {
     );
 
     if (users.length === 0) {
-      return res.status(401).json({ success: false, error: 'Invalid credentials' });
+      return res.status(401).json({ success: false, error: req.t ? req.t('api_msg_e6839791') : "Invalid credentials" });
     }
 
     const user = users[0];
     const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) return res.status(401).json({ success: false, error: 'Invalid credentials' });
+    if (!isPasswordValid) return res.status(401).json({ success: false, error: req.t ? req.t('api_msg_e6839791') : "Invalid credentials" });
 
     const jwtSecret = process.env.JWT_SECRET || 'worksuite_crm_jwt_secret_key_2025_change_in_production';
     const token = jwt.sign(
@@ -84,7 +84,7 @@ const login = async (req, res) => {
 
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ success: false, error: 'Login failed' });
+    res.status(500).json({ success: false, error: req.t ? req.t('api_msg_48649d8c') : "Login failed" });
   }
 };
 
@@ -94,7 +94,7 @@ const login = async (req, res) => {
 const getCurrentUser = async (req, res) => {
   try {
     const userId = req.userId || req.query.user_id || req.body.user_id;
-    if (!userId) return res.status(400).json({ success: false, error: 'User ID required' });
+    if (!userId) return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_56a8e6a1') : "User ID required" });
 
     // =====================================================
     // GET CURRENT USER BYPASS
@@ -109,20 +109,20 @@ const getCurrentUser = async (req, res) => {
       [userId]
     );
 
-    if (users.length === 0) return res.status(404).json({ success: false, error: 'User not found' });
+    if (users.length === 0) return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_b846d114') : "User not found" });
 
     res.json({ success: true, data: users[0] });
   } catch (error) {
     console.error('Get current user error:', error);
-    res.status(500).json({ success: false, error: 'Failed' });
+    res.status(500).json({ success: false, error: req.t ? req.t('api_msg_d7c8c85b') : "Failed" });
   }
 };
 
 const logout = async (req, res) => res.json({ success: true });
 
-const updateCurrentUser = async (req, res) => res.status(501).json({ success: false, error: 'Not implemented in bypass mode' });
+const updateCurrentUser = async (req, res) => res.status(501).json({ success: false, error: req.t ? req.t('api_msg_72ba9b19') : "Not implemented in bypass mode" });
 
-const changePassword = async (req, res) => res.status(501).json({ success: false, error: 'Not implemented in bypass mode' });
+const changePassword = async (req, res) => res.status(501).json({ success: false, error: req.t ? req.t('api_msg_72ba9b19') : "Not implemented in bypass mode" });
 
 module.exports = {
   login,

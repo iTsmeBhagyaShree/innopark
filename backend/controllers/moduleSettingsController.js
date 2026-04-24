@@ -13,14 +13,15 @@ const DEFAULT_EMPLOYEE_MENUS = {
   dashboard: true,
   myTasks: true,
   myProjects: true,
-  timeTracking: true,
+  timeTracking: false,
   events: true,
   myProfile: true,
   documents: true,
-  attendance: true,
-  leaveRequests: true,
-  messages: true,
-  tickets: true,
+  attendance: false,
+  hrm: false,
+  leaveRequests: false,
+  messages: false,
+  tickets: false,
 };
 
 // Valid menu keys for validation
@@ -86,7 +87,7 @@ const getModuleSettings = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'Company ID is required'
+        error: req.t ? req.t('api_msg_c9d0dab7') : "Company ID is required"
       });
     }
 
@@ -103,6 +104,7 @@ const getModuleSettings = async (req, res) => {
         data: {
           company_id: parseInt(companyId),
           employee_menus: DEFAULT_EMPLOYEE_MENUS,
+          module_permissions: {},
         }
       });
     }
@@ -150,7 +152,7 @@ const getModuleSettings = async (req, res) => {
     console.error('Error fetching module settings:', error);
     return res.status(500).json({
       success: false,
-      error: 'Failed to fetch module settings',
+      error: req.t ? req.t('api_msg_8862e877') : "Failed to fetch module settings",
       details: error.message
     });
   }
@@ -170,7 +172,7 @@ const updateModuleSettings = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'Company ID is required'
+        error: req.t ? req.t('api_msg_c9d0dab7') : "Company ID is required"
       });
     }
 
@@ -248,7 +250,7 @@ const updateModuleSettings = async (req, res) => {
 
     return res.json({
       success: true,
-      message: 'Module settings updated successfully',
+      message: req.t ? req.t('api_msg_6e01d0fb') : "Module settings updated successfully",
       data: {
         id: settings.id,
         company_id: settings.company_id,
@@ -262,7 +264,7 @@ const updateModuleSettings = async (req, res) => {
     console.error('Error updating module settings:', error);
     return res.status(500).json({
       success: false,
-      error: 'Failed to update module settings',
+      error: req.t ? req.t('api_msg_3c9cbe07') : "Failed to update module settings",
       details: error.message
     });
   }
@@ -281,7 +283,7 @@ const resetModuleSettings = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'Company ID is required'
+        error: req.t ? req.t('api_msg_c9d0dab7') : "Company ID is required"
       });
     }
 
@@ -293,7 +295,7 @@ const resetModuleSettings = async (req, res) => {
 
     return res.json({
       success: true,
-      message: 'Module settings reset to defaults',
+      message: req.t ? req.t('api_msg_f91e3000') : "Module settings reset to defaults",
       data: {
         company_id: parseInt(companyId),
           employee_menus: DEFAULT_EMPLOYEE_MENUS,
@@ -304,7 +306,7 @@ const resetModuleSettings = async (req, res) => {
     console.error('Error resetting module settings:', error);
     return res.status(500).json({
       success: false,
-      error: 'Failed to reset module settings',
+      error: req.t ? req.t('api_msg_fc9d1c50') : "Failed to reset module settings",
       details: error.message
     });
   }

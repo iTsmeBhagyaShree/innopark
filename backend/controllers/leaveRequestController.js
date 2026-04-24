@@ -26,14 +26,19 @@ const ensureTableExists = async () => {
         INDEX idx_status (status)
       )
     `);
-    
-    // Try to add user_id column if missing
-    try {
-      await pool.execute(`ALTER TABLE leave_requests ADD COLUMN user_id INT AFTER company_id`);
-    } catch (e) {
-      // Column already exists, ignore
+
+    // Add user_id only for legacy DBs. Blind ALTER causes MySQL to error; db.js logs every
+    // execute() failure (and does not rethrow), so try/catch here never silences the log.
+    const [colCheck] = await pool.execute(
+      `SELECT COUNT(*) AS c FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'leave_requests' AND COLUMN_NAME = 'user_id'`
+    );
+    if (Number(colCheck[0]?.c) === 0) {
+      await pool.execute(
+        `ALTER TABLE leave_requests ADD COLUMN user_id INT NULL AFTER company_id`
+      );
     }
-    
+
   } catch (error) {
     console.error('Error ensuring leave_requests table exists:', error);
   }
@@ -56,7 +61,7 @@ const getAll = async (req, res) => {
     if (!filterCompanyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
@@ -103,7 +108,7 @@ const getAll = async (req, res) => {
     console.error('Error details:', error.message);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch leave requests',
+      error: req.t ? req.t('api_msg_429500c7') : "Failed to fetch leave requests",
       details: process.env.NODE_ENV !== 'production' ? error.message : undefined
     });
   }
@@ -149,7 +154,7 @@ const getById = async (req, res) => {
     if (requests.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Leave request not found'
+        error: req.t ? req.t('api_msg_2eb61ca8') : "Leave request not found"
       });
     }
 
@@ -161,7 +166,7 @@ const getById = async (req, res) => {
     console.error('Get leave request error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch leave request'
+      error: req.t ? req.t('api_msg_04bf5e4c') : "Failed to fetch leave request"
     });
   }
 };
@@ -185,7 +190,7 @@ const create = async (req, res) => {
     if (!leave_type || !start_date || !end_date) {
       return res.status(400).json({
         success: false,
-        error: 'Leave type, start date, and end date are required'
+        error: req.t ? req.t('api_msg_6e1045a0') : "Leave type, start date, and end date are required"
       });
     }
 
@@ -195,7 +200,7 @@ const create = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
     
@@ -205,7 +210,7 @@ const create = async (req, res) => {
     if (!finalUserId) {
       return res.status(400).json({
         success: false,
-        error: 'user_id is required'
+        error: req.t ? req.t('api_msg_99a26527') : "user_id is required"
       });
     }
 
@@ -241,14 +246,14 @@ const create = async (req, res) => {
     res.status(201).json({
       success: true,
       data: newRequest[0],
-      message: 'Leave request created successfully'
+      message: req.t ? req.t('api_msg_f16c9e3a') : "Leave request created successfully"
     });
   } catch (error) {
     console.error('Create leave request error:', error);
     console.error('Error details:', error.message);
     res.status(500).json({
       success: false,
-      error: 'Failed to create leave request',
+      error: req.t ? req.t('api_msg_2d6e11d3') : "Failed to create leave request",
       details: process.env.NODE_ENV !== 'production' ? error.message : undefined
     });
   }
@@ -290,7 +295,7 @@ const update = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Leave request not found'
+        error: req.t ? req.t('api_msg_2eb61ca8') : "Leave request not found"
       });
     }
 
@@ -323,7 +328,7 @@ const update = async (req, res) => {
     if (updates.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'No fields to update'
+        error: req.t ? req.t('api_msg_003199ed') : "No fields to update"
       });
     }
 
@@ -369,13 +374,13 @@ const update = async (req, res) => {
     res.json({
       success: true,
       data: updatedRequest[0],
-      message: 'Leave request updated successfully'
+      message: req.t ? req.t('api_msg_666eaf09') : "Leave request updated successfully"
     });
   } catch (error) {
     console.error('Update leave request error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to update leave request'
+      error: req.t ? req.t('api_msg_1f8528fd') : "Failed to update leave request"
     });
   }
 };
@@ -526,7 +531,7 @@ const deleteRequest = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Leave request not found or cannot be deleted (only pending requests can be deleted)'
+        error: req.t ? req.t('api_msg_7925bd02') : "Leave request not found or cannot be deleted (only pending requests can be deleted)"
       });
     }
 
@@ -537,13 +542,13 @@ const deleteRequest = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Leave request deleted successfully'
+      message: req.t ? req.t('api_msg_4f2bc56f') : "Leave request deleted successfully"
     });
   } catch (error) {
     console.error('Delete leave request error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete leave request'
+      error: req.t ? req.t('api_msg_83702033') : "Failed to delete leave request"
     });
   }
 };

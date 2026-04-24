@@ -109,7 +109,8 @@ pool = {
     } catch (err) {
       console.error('⚠️ DB Execute Error:', err.message);
       console.error('SQL:', sql.substring(0, 200));
-      return [[], []];
+      // Throw the error so the controller can catch it and handle it (e.g. serve mock data or return 500)
+      throw err;
     }
   },
   query: async (sql, params = []) => {
@@ -121,7 +122,7 @@ pool = {
       return await originalQuery(sql, modifiedParams);
     } catch (err) {
       console.error('⚠️ DB Query Error:', err.message);
-      return [[], []];
+      throw err;
     }
   },
   getConnection: async () => {

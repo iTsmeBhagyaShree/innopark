@@ -167,7 +167,7 @@ const getAll = async (req, res) => {
     if (!filterCompanyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
@@ -355,7 +355,7 @@ const getById = async (req, res) => {
       [id]
     );
     if (proposals.length === 0) {
-      return res.status(404).json({ success: false, error: 'Proposal not found' });
+      return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_b51e64e5') : "Proposal not found" });
     }
 
     const proposal = proposals[0];
@@ -384,7 +384,7 @@ const getById = async (req, res) => {
     res.json({ success: true, data: proposal });
   } catch (error) {
     console.error('Get proposal error:', error);
-    res.status(500).json({ success: false, error: 'Failed to fetch proposal' });
+    res.status(500).json({ success: false, error: req.t ? req.t('api_msg_566687e4') : "Failed to fetch proposal" });
   }
 };
 
@@ -619,7 +619,7 @@ const update = async (req, res) => {
     );
 
     if (existing.length === 0) {
-      return res.status(404).json({ success: false, error: 'Proposal not found' });
+      return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_b51e64e5') : "Proposal not found" });
     }
 
     // Map status
@@ -811,7 +811,7 @@ const deleteProposal = async (req, res) => {
     );
 
     if (existing.length === 0) {
-      return res.status(404).json({ success: false, error: 'Proposal not found' });
+      return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_b51e64e5') : "Proposal not found" });
     }
 
     // Soft delete
@@ -820,10 +820,10 @@ const deleteProposal = async (req, res) => {
       [id]
     );
 
-    res.json({ success: true, message: 'Proposal deleted successfully' });
+    res.json({ success: true, message: req.t ? req.t('api_msg_0beb4f2b') : "Proposal deleted successfully" });
   } catch (error) {
     console.error('Delete proposal error:', error);
-    res.status(500).json({ success: false, error: 'Failed to delete proposal' });
+    res.status(500).json({ success: false, error: req.t ? req.t('api_msg_54beaa8f') : "Failed to delete proposal" });
   }
 };
 
@@ -839,7 +839,7 @@ const convertToInvoice = async (req, res) => {
     );
 
     if (proposals.length === 0) {
-      return res.status(404).json({ success: false, error: 'Proposal not found' });
+      return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_b51e64e5') : "Proposal not found" });
     }
 
     const proposal = proposals[0];
@@ -854,12 +854,12 @@ const convertToInvoice = async (req, res) => {
     // For now, just return success
     res.json({
       success: true,
-      message: 'Proposal converted to invoice successfully',
+      message: req.t ? req.t('api_msg_8c96e777') : "Proposal converted to invoice successfully",
       data: { proposal, items }
     });
   } catch (error) {
     console.error('Convert proposal to invoice error:', error);
-    res.status(500).json({ success: false, error: 'Failed to convert proposal to invoice' });
+    res.status(500).json({ success: false, error: req.t ? req.t('api_msg_cf2d9e28') : "Failed to convert proposal to invoice" });
   }
 };
 
@@ -884,7 +884,7 @@ const sendEmail = async (req, res) => {
     );
 
     if (proposals.length === 0) {
-      return res.status(404).json({ success: false, error: 'Proposal not found' });
+      return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_b51e64e5') : "Proposal not found" });
     }
 
     const proposal = proposals[0];
@@ -922,7 +922,7 @@ const sendEmail = async (req, res) => {
     // Send email
     const recipientEmail = to || proposal.client_email;
     if (!recipientEmail) {
-      return res.status(400).json({ success: false, error: 'Recipient email is required' });
+      return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_4a2ce470') : "Recipient email is required" });
     }
 
     // Handle CC and BCC from request body
@@ -943,12 +943,12 @@ const sendEmail = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Proposal sent successfully',
+      message: req.t ? req.t('api_msg_0b59e9fe') : "Proposal sent successfully",
       data: { email: recipientEmail }
     });
   } catch (error) {
     console.error('Send proposal email error:', error);
-    res.status(500).json({ success: false, error: 'Failed to send proposal email' });
+    res.status(500).json({ success: false, error: req.t ? req.t('api_msg_cf1943f8') : "Failed to send proposal email" });
   }
 };
 
@@ -964,7 +964,7 @@ const getPDF = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
@@ -980,7 +980,7 @@ const getPDF = async (req, res) => {
     );
 
     if (proposals.length === 0) {
-      return res.status(404).json({ success: false, error: 'Proposal not found' });
+      return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_b51e64e5') : "Proposal not found" });
     }
 
     const proposal = proposals[0];
@@ -999,7 +999,7 @@ const getPDF = async (req, res) => {
       return res.json({
         success: true,
         data: proposal,
-        message: 'JSON data for download'
+        message: req.t ? req.t('api_msg_6b664a04') : "JSON data for download"
       });
     }
 
@@ -1121,7 +1121,7 @@ const getPDF = async (req, res) => {
     res.send(html);
   } catch (error) {
     console.error('Get proposal PDF error:', error);
-    res.status(500).json({ success: false, error: 'Failed to generate PDF' });
+    res.status(500).json({ success: false, error: req.t ? req.t('api_msg_53ac43e9') : "Failed to generate PDF" });
   }
 };
 
@@ -1194,7 +1194,7 @@ const getFilters = async (req, res) => {
     console.error('Get filters error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch filter options'
+      error: req.t ? req.t('api_msg_833a7d25') : "Failed to fetch filter options"
     });
   }
 };
@@ -1211,7 +1211,7 @@ const updateStatus = async (req, res) => {
     if (!status) {
       return res.status(400).json({
         success: false,
-        error: 'Status is required'
+        error: req.t ? req.t('api_msg_89883263') : "Status is required"
       });
     }
 
@@ -1222,7 +1222,7 @@ const updateStatus = async (req, res) => {
     );
 
     if (existing.length === 0) {
-      return res.status(404).json({ success: false, error: 'Proposal not found' });
+      return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_b51e64e5') : "Proposal not found" });
     }
 
     // Map status
@@ -1255,7 +1255,7 @@ const updateStatus = async (req, res) => {
     res.json({
       success: true,
       data: proposal,
-      message: 'Proposal status updated successfully'
+      message: req.t ? req.t('api_msg_2771a6c7') : "Proposal status updated successfully"
     });
   } catch (error) {
     console.error('Update proposal status error:', error);
@@ -1282,7 +1282,7 @@ const duplicate = async (req, res) => {
     );
 
     if (proposals.length === 0) {
-      return res.status(404).json({ success: false, error: 'Proposal not found' });
+      return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_b51e64e5') : "Proposal not found" });
     }
 
     const originalProposal = proposals[0];
@@ -1371,7 +1371,7 @@ const duplicate = async (req, res) => {
     res.status(201).json({
       success: true,
       data: newProposal,
-      message: 'Proposal duplicated successfully'
+      message: req.t ? req.t('api_msg_d3f30c86') : "Proposal duplicated successfully"
     });
   } catch (error) {
     console.error('Duplicate proposal error:', error);

@@ -46,7 +46,7 @@ const getAll = async (req, res) => {
         console.error('Get activities error:', error);
         res.status(500).json({
             success: false,
-            error: 'Failed to fetch activities'
+            error: req.t ? req.t('api_msg_b2bb6964') : "Failed to fetch activities"
         });
     }
 };
@@ -61,7 +61,7 @@ const create = async (req, res) => {
         const created_by = req.user?.id || req.body.created_by;
 
         if (!type || !reference_type || !reference_id) {
-            return res.status(400).json({ success: false, error: 'Missing required fields' });
+            return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_7687f115') : "Missing required fields" });
         }
 
         // Validate activity type - support: call, meeting, note, email, task, comment
@@ -135,7 +135,7 @@ const create = async (req, res) => {
         console.error('Create activity error:', error);
         res.status(500).json({
             success: false,
-            error: 'Failed to create activity'
+            error: req.t ? req.t('api_msg_bcc5deec') : "Failed to create activity"
         });
     }
 };
@@ -178,7 +178,7 @@ const createWithExtras = async (req, res) => {
         if (!type || !reference_type || !reference_id) {
             return res.status(400).json({
                 success: false,
-                error: 'Missing required fields (type, reference_type, reference_id)'
+                error: req.t ? req.t('api_msg_63dbcbd9') : "Missing required fields (type, reference_type, reference_id)"
             });
         }
 
@@ -247,7 +247,7 @@ const createWithExtras = async (req, res) => {
         console.error('Create activity error:', error);
         res.status(500).json({
             success: false,
-            error: 'Failed to create activity: ' + error.message,
+            error: req.t ? req.t('api_msg_4f1f1680') : "Failed to create activity: " + error.message,
             details: error.sqlMessage || error.code
         });
     }
@@ -294,11 +294,11 @@ const update = async (req, res) => {
             ]
         );
 
-        if (result.affectedRows === 0) return res.status(404).json({ success: false, error: 'Activity not found' });
+        if (result.affectedRows === 0) return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_b58b3e72') : "Activity not found" });
         res.json({ success: true, data: { id, updated: true } });
     } catch (error) {
         console.error('Update activity error:', error);
-        res.status(500).json({ success: false, error: 'Failed to update activity' });
+        res.status(500).json({ success: false, error: req.t ? req.t('api_msg_fa15b149') : "Failed to update activity" });
     }
 };
 
@@ -311,17 +311,17 @@ const togglePin = async (req, res) => {
         const [col] = await pool.execute(
             `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'activities' AND COLUMN_NAME = 'is_pinned'`
         );
-        if (col.length === 0) return res.status(400).json({ success: false, error: 'is_pinned column not found' });
+        if (col.length === 0) return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_9c692882') : "is_pinned column not found" });
 
         const [result] = await pool.execute(
             'UPDATE activities SET is_pinned = IF(is_pinned = 1, 0, 1) WHERE id = ? AND is_deleted = 0',
             [id]
         );
-        if (result.affectedRows === 0) return res.status(404).json({ success: false, error: 'Activity not found' });
+        if (result.affectedRows === 0) return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_b58b3e72') : "Activity not found" });
         res.json({ success: true, data: { id, pinned: true } });
     } catch (error) {
         console.error('Toggle pin error:', error);
-        res.status(500).json({ success: false, error: 'Failed to toggle pin' });
+        res.status(500).json({ success: false, error: req.t ? req.t('api_msg_f4ba9f99') : "Failed to toggle pin" });
     }
 };
 

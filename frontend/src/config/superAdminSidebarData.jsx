@@ -15,6 +15,7 @@ import {
   IoTicket,
   IoGlobe,
   IoPhonePortrait,
+  IoRefresh
 } from 'react-icons/io5'
 
 const superAdminSidebarData = [
@@ -64,6 +65,12 @@ const superAdminSidebarData = [
     label: 'sidebar.pwaSettings',
     icon: IoPhonePortrait,
     path: '/app/superadmin/pwa-settings',
+    section: 'sidebar.toolsUtilities',
+  },
+  {
+    label: 'sidebar.updates',
+    icon: IoRefresh,
+    path: '/app/superadmin/updates',
     section: 'sidebar.toolsUtilities',
   },
 ]

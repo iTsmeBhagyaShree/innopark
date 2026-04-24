@@ -251,7 +251,7 @@ const PipelineSettings = () => {
                             <div className="text-center py-10"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-accent mx-auto"></div></div>
                         ) : pipelines.length === 0 ? (
                             <div className="bg-white border border-dashed border-gray-200 rounded-2xl p-6 text-center">
-                                <p className="text-sm text-gray-400 font-medium italic">{t('auto.auto_a5574b2f') || 'No pipelines found'}</p>
+                                <p className="text-sm text-gray-400 font-medium italic">{t('settings.pipeline.no_pipelines')}</p>
                             </div>
                         ) : (
                             pipelines.map(p => (
@@ -266,7 +266,7 @@ const PipelineSettings = () => {
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2">
                                             <span className={`font-bold truncate ${selectedPipeline?.id === p.id ? 'text-gray-900' : 'text-gray-500'}`}>{['lead pipeline'].includes((p.name||'').replace(/['"]/g, '').toLowerCase().trim()) ? 'Lead-Pipeline' : ['international sales'].includes((p.name||'').replace(/['"]/g, '').toLowerCase().trim()) ? 'Internationaler Vertrieb' : ['sales pipeline'].includes((p.name||'').replace(/['"]/g, '').toLowerCase().trim()) ? 'Vertriebspipeline' : p.name}</span>
-                                            {p.is_default === 1 && <span className="text-[9px] font-black bg-primary-accent/10 text-primary-accent px-1.5 py-0.5 rounded uppercase tracking-wider">{t('auto.auto_7a1920d6') || 'Default'}</span>}
+                                            {p.is_default === 1 && <span className="text-[9px] font-black bg-primary-accent/10 text-primary-accent px-1.5 py-0.5 rounded uppercase tracking-wider">{t('settings.pipeline.default_badge')}</span>}
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-1">
@@ -494,12 +494,12 @@ const PipelineSettings = () => {
 
                     <div className="flex items-center justify-end gap-3 mt-8">
                         <Button variant="outline" onClick={() => setIsReassignModalOpen(false)}>{t('common.cancel') || 'Abbrechen'}</Button>
-                        <Button variant="danger" onClick={handleConfirmReassignDelete} disabled={!transferStageId}>{t('auto.auto_9e365dd1') || 'Confirm Delete'}</Button>
+                        <Button variant="danger" onClick={handleConfirmReassignDelete} disabled={!transferStageId}>{t('modals.confirmDelete')}</Button>
                     </div>
                 </div>
             </Modal>
 
-            <style jsx>{`
+            <style>{`
                 .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
                 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
                 .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }

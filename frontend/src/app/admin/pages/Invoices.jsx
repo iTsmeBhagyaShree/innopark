@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLanguage } from "../../../context/LanguageContext";
 import RightSideModal from "../../../components/ui/RightSideModal";
@@ -14,6 +14,7 @@ import {
   companiesAPI,
   paymentsAPI,
   customFieldsAPI,
+  documentsAPI,
 } from "../../../api";
 import { useSettings } from "../../../context/SettingsContext";
 import { useAuth } from "../../../context/AuthContext";
@@ -51,13 +52,68 @@ import {
   IoColorPalette,
 } from "react-icons/io5";
 
+const resolveCompanyId = (u) => {
+  const candidates = [u?.company_id, u?.companyId];
+  for (const c of candidates) {
+    if (c == null || c === "") continue;
+    const n = parseInt(String(c).trim(), 10);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  const ls = localStorage.getItem("companyId") || localStorage.getItem("company_id");
+  if (ls) {
+    const n = parseInt(ls, 10);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return null;
+};
+
+const parseLabels = (value) => {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  return String(value)
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+};
+
+const calculateInvoiceStatus = (invoice) => {
+  const total = parseFloat(invoice.total || invoice.total_amount || 0);
+  const paid = parseFloat(invoice.paid_amount || invoice.paid || 0);
+  const due = Math.max(total - paid, 0);
+  const dueDate = invoice.due_date || invoice.dueDate;
+  if (!total) return "Draft";
+  if (paid >= total) return "Paid";
+  if (paid > 0 && paid < total) return "Partially Paid";
+  if (dueDate) {
+    const dueTime = new Date(dueDate).getTime();
+    if (!Number.isNaN(dueTime) && dueTime < new Date().setHours(0, 0, 0, 0)) {
+      return "Overdue";
+    }
+  }
+  return "Not Paid";
+};
+
+const toInvoiceDateString = (v) => {
+  if (v == null || v === "") return "";
+  if (typeof v === "string") return v.split("T")[0];
+  if (v instanceof Date && !Number.isNaN(v.getTime())) return v.toISOString().split("T")[0];
+  const s = String(v);
+  return s.includes("T") ? s.split("T")[0] : s;
+};
+
 const Invoices = () => {
   const { t } = useLanguage();
   const { user } = useAuth();
   const navigate = useNavigate();
   const { settings, formatDate, formatCurrency } = useSettings();
-  const companyId = parseInt(user?.company_id || localStorage.getItem("companyId") || 1, 10);
+  const companyId = useMemo(() => resolveCompanyId(user), [user]);
   const userId = parseInt(user?.id || localStorage.getItem("userId") || 1, 10);
+
+  useEffect(() => {
+    if (user?.company_id && !localStorage.getItem("companyId")) {
+      localStorage.setItem("companyId", String(user.company_id));
+    }
+  }, [user?.company_id]);
 
   // Tab state
   const [activeTab, setActiveTab] = useState("invoices");
@@ -103,7 +159,8 @@ const Invoices = () => {
   const [invoiceFilter, setInvoiceFilter] = useState("All");
   const [currencyFilter, setCurrencyFilter] = useState("All");
   const [showFilterPanel, setShowFilterPanel] = useState(false);
-  const [periodFilter, setPeriodFilter] = useState("yearly");
+  /** "all" = no date range filter. "yearly" alone hid invoices from other years by default. */
+  const [periodFilter, setPeriodFilter] = useState("all");
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [customDateStart, setCustomDateStart] = useState("");
@@ -117,7 +174,44 @@ const Invoices = () => {
   // Invoice items state
   const [invoiceItems, setInvoiceItems] = useState([]);
   const [uploadedFile, setUploadedFile] = useState(null);
+  const fileInputRef = useRef(null);
   const [customFields, setCustomFields] = useState([]);
+
+  const mapApiInvoiceToListRow = useCallback(
+    (invoice) => {
+      if (!invoice) return null;
+      let invNumber = String(invoice.invoice_number || "");
+      const numMatch = invNumber.match(/\d+/);
+      const numPart = numMatch ? numMatch[0] : String(invoice.id);
+      const formattedInvoiceNumber = `INV #${numPart}`;
+      const totalValue = parseFloat(invoice.total || 0);
+      const paidValue = parseFloat(invoice.paid_amount || 0);
+      const dueValue = parseFloat(invoice.due_amount || Math.max(totalValue - paidValue, 0));
+      const statusValue = calculateInvoiceStatus({
+        ...invoice,
+        total: totalValue,
+        paid_amount: paidValue,
+        due_amount: dueValue,
+      });
+      return {
+        id: invoice.id,
+        invoiceNumber: formattedInvoiceNumber,
+        name: "External Billing",
+        project: invoice.project_name || "-",
+        invoiceDate: toInvoiceDateString(invoice.bill_date ?? invoice.invoice_date),
+        dueDate: toInvoiceDateString(invoice.due_date),
+        total: totalValue,
+        paid: paidValue,
+        unpaid: dueValue,
+        status: statusValue,
+        labels: parseLabels(invoice.labels),
+        items: invoice.items || [],
+        currency: invoice.currency || settings?.default_currency || "USD",
+        custom_fields: invoice.custom_fields || {},
+      };
+    },
+    [settings?.default_currency]
+  );
 
   // Form state
   const [formData, setFormData] = useState({
@@ -152,47 +246,29 @@ const Invoices = () => {
 
   // Fetch functions
   const fetchInvoices = useCallback(async () => {
+    if (!companyId || companyId <= 0) {
+      setInvoices([]);
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       const params = { company_id: companyId };
-      if (statusFilter !== "All") {
-        params.status = statusFilter;
-      }
       const response = await invoicesAPI.getAll(params);
-      if (response.data.success) {
-        const fetchedInvoices = response.data.data || [];
-        const transformedInvoices = fetchedInvoices.map((invoice) => {
-          let invNumber = String(invoice.invoice_number || "");
-          const numMatch = invNumber.match(/\d+/);
-          const numPart = numMatch ? numMatch[0] : String(invoice.id);
-          const formattedInvoiceNumber = `INV #${numPart}`;
-          const totalValue = parseFloat(invoice.total || 0);
-          const paidValue = parseFloat(invoice.paid_amount || 0);
-          const dueValue = parseFloat(invoice.due_amount || Math.max(totalValue - paidValue, 0));
-          const statusValue = calculateInvoiceStatus({
-            ...invoice,
-            total: totalValue,
-            paid_amount: paidValue,
-            due_amount: dueValue,
-          });
-
-          return {
-            id: invoice.id,
-            invoiceNumber: formattedInvoiceNumber,
-            name: "External Billing", // Placeholder or from project if available
-            project: invoice.project_name || "-",
-            invoiceDate: invoice.bill_date || invoice.invoice_date || "",
-            dueDate: invoice.due_date || "",
-            total: totalValue,
-            paid: paidValue,
-            unpaid: dueValue,
-            status: statusValue,
-            labels: parseLabels(invoice.labels),
-            items: invoice.items || [],
-            currency: invoice.currency || settings?.default_currency || "USD",
-            custom_fields: invoice.custom_fields || {},
-          };
-        });
+      const raw = response.data;
+      const fetchedInvoices = Array.isArray(raw?.data)
+        ? raw.data
+        : Array.isArray(raw)
+          ? raw
+          : [];
+      if (raw?.success === false) {
+        setInvoices([]);
+        return;
+      }
+      if (raw?.success !== false) {
+        const transformedInvoices = fetchedInvoices
+          .map((inv) => mapApiInvoiceToListRow(inv))
+          .filter(Boolean);
         setInvoices(transformedInvoices);
       }
     } catch (error) {
@@ -200,9 +276,10 @@ const Invoices = () => {
     } finally {
       setLoading(false);
     }
-  }, [companyId, statusFilter, settings?.default_currency]);
+  }, [companyId, mapApiInvoiceToListRow]);
 
   const fetchProjects = useCallback(async () => {
+    if (!companyId) return;
     try {
       const response = await projectsAPI.getAll({ company_id: companyId });
       if (response.data.success) {
@@ -214,10 +291,15 @@ const Invoices = () => {
   }, [companyId]);
 
   useEffect(() => {
+    if (!companyId) {
+      setLoading(false);
+      setInvoices([]);
+      return;
+    }
     fetchInvoices();
     fetchProjects();
     fetchCustomFields();
-  }, [fetchInvoices, fetchProjects]);
+  }, [fetchInvoices, fetchProjects, companyId]);
 
   const fetchCustomFields = async () => {
     try {
@@ -247,6 +329,21 @@ const Invoices = () => {
     return `INV#${String(nextNum).padStart(3, "0")}`;
   };
 
+  const uploadInvoiceAttachment = async (invoiceId, invoiceNumberStr) => {
+    if (!uploadedFile || !invoiceId) return;
+    const safeTitle = String(
+      invoiceNumberStr || `${t("invoices.invoice")} #${invoiceId}`
+    ).slice(0, 250);
+    const fd = new FormData();
+    fd.append("file", uploadedFile);
+    fd.append("company_id", String(companyId));
+    fd.append("user_id", String(userId));
+    fd.append("title", safeTitle);
+    fd.append("category", "Invoice");
+    fd.append("description", `invoice_id:${invoiceId}`);
+    await documentsAPI.create(fd);
+  };
+
   const resetForm = () => {
     const today = new Date();
     const dueDate = new Date(today);
@@ -271,14 +368,20 @@ const Invoices = () => {
       cycles: "",
       discount: 0,
       discountType: "%",
+      custom_fields: {},
     });
     setInvoiceItems([]);
     setUploadedFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleSave = async () => {
     if (!formData.dueDate) {
       alert(t('common.due_date_required'));
+      return;
+    }
+    if (!companyId) {
+      alert(t("projects.errors.missing_company") || "Company is required. Please sign in again.");
       return;
     }
 
@@ -322,7 +425,25 @@ const Invoices = () => {
       if (isEditModalOpen && selectedInvoice) {
         const response = await invoicesAPI.update(selectedInvoice.id, invoiceData);
         if (response.data.success) {
-          alert(t('messages.saveSuccess'));
+          let uploadFailed = false;
+          if (uploadedFile) {
+            try {
+              await uploadInvoiceAttachment(
+                selectedInvoice.id,
+                selectedInvoice.invoiceNumber || ""
+              );
+            } catch (uploadErr) {
+              console.error("Invoice attachment upload failed:", uploadErr);
+              uploadFailed = true;
+            }
+          }
+          if (uploadFailed) {
+            alert(t("invoices.attachmentUploadFailed"));
+          } else {
+            alert(t('messages.saveSuccess'));
+          }
+          setCurrentPage(1);
+          setActiveTab("invoices");
           await fetchInvoices();
           setIsEditModalOpen(false);
           setSelectedInvoice(null);
@@ -331,14 +452,74 @@ const Invoices = () => {
       } else {
         const response = await invoicesAPI.create(invoiceData);
         if (response.data.success) {
-          alert(t('messages.saveSuccess'));
-          await fetchInvoices();
+          const created = response.data.data;
+          const createdId = created?.id ?? created?.invoice_id;
+          let uploadFailed = false;
+          if (uploadedFile && createdId) {
+            try {
+              await uploadInvoiceAttachment(
+                createdId,
+                created?.invoice_number || formData.invoiceNumber || ""
+              );
+            } catch (uploadErr) {
+              console.error("Invoice attachment upload failed:", uploadErr);
+              uploadFailed = true;
+            }
+          }
+          if (uploadFailed) {
+            alert(t("invoices.attachmentUploadFailed"));
+          } else {
+            alert(t('messages.saveSuccess'));
+          }
+          // Reset filters that hide rows client-side (status, period, currency, search)
+          setStatusFilter("All");
+          setInvoiceFilter("All");
+          setCurrencyFilter("All");
+          setPeriodFilter("all");
+          setSearchQuery("");
+
+          setCurrentPage(1);
+          setActiveTab("invoices");
           setIsAddModalOpen(false);
           resetForm();
-          const createdId = response.data.data?.id || response.data.data?.invoice_id;
-          if (createdId) {
-            const path = user?.role === 'EMPLOYEE' ? `/app/employee/invoices/${createdId}` : `/app/admin/invoices/${createdId}`;
-            navigate(path);
+          try {
+            await fetchInvoices();
+          } catch (refErr) {
+            console.error("Invoice list refresh failed (save may still be OK):", refErr);
+          }
+          // Full joined row (same as list) — GET list can be empty if SQL/DB quirk, but by-id should work
+          if (created?.id != null && companyId) {
+            try {
+              const one = await invoicesAPI.getById(created.id, { company_id: companyId });
+              if (one.data?.success && one.data.data) {
+                const row = mapApiInvoiceToListRow(one.data.data);
+                if (row) {
+                  setInvoices((prev) => {
+                    const idn = Number(row.id);
+                    return [row, ...prev.filter((p) => Number(p.id) !== idn)];
+                  });
+                }
+              } else {
+                const row = mapApiInvoiceToListRow(created);
+                if (row) {
+                  setInvoices((prev) => {
+                    const idn = Number(row.id);
+                    if (prev.some((p) => Number(p.id) === idn)) return prev;
+                    return [row, ...prev];
+                  });
+                }
+              }
+            } catch (e) {
+              console.error("getById after create failed, using create payload for list row:", e);
+              const row = mapApiInvoiceToListRow(created);
+              if (row) {
+                setInvoices((prev) => {
+                  const idn = Number(row.id);
+                  if (prev.some((p) => Number(p.id) === idn)) return prev;
+                  return [row, ...prev];
+                });
+              }
+            }
           }
         }
       }
@@ -350,7 +531,7 @@ const Invoices = () => {
 
   const handleEdit = async (invoice) => {
     try {
-      const response = await invoicesAPI.getById(invoice.id);
+      const response = await invoicesAPI.getById(invoice.id, { company_id: companyId || undefined });
       if (response.data.success) {
         const data = response.data.data;
         setSelectedInvoice(invoice);
@@ -406,7 +587,7 @@ const Invoices = () => {
 
   const handleCopy = async (invoice) => {
     try {
-      const response = await invoicesAPI.getById(invoice.id);
+      const response = await invoicesAPI.getById(invoice.id, { company_id: companyId || undefined });
       if (response.data.success) {
         const data = response.data.data;
         const copyData = {
@@ -524,7 +705,7 @@ const Invoices = () => {
     setStatusFilter("All");
     setInvoiceFilter("All");
     setCurrencyFilter("All");
-    setPeriodFilter("yearly");
+    setPeriodFilter("all");
     setSelectedYear(new Date().getFullYear());
     setSelectedMonth(new Date().getMonth() + 1);
     setCustomDateStart("");
@@ -601,15 +782,6 @@ const Invoices = () => {
       console.error("Error saving payment:", error);
       alert(error.response?.data?.error || "Zahlung konnte nicht gespeichert werden");
     }
-  };
-
-  const parseLabels = (value) => {
-    if (!value) return [];
-    if (Array.isArray(value)) return value;
-    return String(value)
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
   };
 
   const hexToHsl = (hex) => {
@@ -724,23 +896,6 @@ const Invoices = () => {
     };
   };
 
-  const calculateInvoiceStatus = (invoice) => {
-    const total = parseFloat(invoice.total || invoice.total_amount || 0);
-    const paid = parseFloat(invoice.paid_amount || invoice.paid || 0);
-    const due = Math.max(total - paid, 0);
-    const dueDate = invoice.due_date || invoice.dueDate;
-    if (!total) return "Draft";
-    if (paid >= total) return "Paid";
-    if (paid > 0 && paid < total) return "Partially Paid";
-    if (dueDate) {
-      const dueTime = new Date(dueDate).getTime();
-      if (!Number.isNaN(dueTime) && dueTime < new Date().setHours(0, 0, 0, 0)) {
-        return "Overdue";
-      }
-    }
-    return "Not Paid";
-  };
-
   // Filtered invoices
   const filteredInvoices = invoices.filter((invoice) => {
     if (!invoice) return false;
@@ -765,30 +920,37 @@ const Invoices = () => {
 
 
 
-    const invoiceDate = invoice.invoiceDate ? new Date(invoice.invoiceDate) : null;
+    const invoiceDate = (() => {
+      const raw = invoice.invoiceDate;
+      if (!raw) return null;
+      const d = new Date(raw);
+      return Number.isNaN(d.getTime()) ? null : d;
+    })();
 
-    if (periodFilter === "yearly" && invoiceDate) {
-      if (invoiceDate.getFullYear() !== selectedYear) return false;
-    }
-
-    if (periodFilter === "monthly" && invoiceDate) {
-      if (invoiceDate.getFullYear() !== selectedYear || invoiceDate.getMonth() + 1 !== selectedMonth) return false;
-    }
-
-    if (periodFilter === "custom" && invoiceDate) {
-      if (customDateStart && invoiceDate < new Date(customDateStart)) return false;
-      if (customDateEnd) {
-        const endDate = new Date(customDateEnd);
-        endDate.setHours(23, 59, 59, 999);
-        if (invoiceDate > endDate) return false;
+    if (periodFilter !== "all") {
+      if (periodFilter === "yearly" && invoiceDate) {
+        if (invoiceDate.getFullYear() !== selectedYear) return false;
       }
-    }
 
-    if (periodFilter === "dynamic" && invoiceDate) {
-      const days = parseInt(dynamicRange) || 30;
-      const start = new Date();
-      start.setDate(start.getDate() - days);
-      if (invoiceDate < start) return false;
+      if (periodFilter === "monthly" && invoiceDate) {
+        if (invoiceDate.getFullYear() !== selectedYear || invoiceDate.getMonth() + 1 !== selectedMonth) return false;
+      }
+
+      if (periodFilter === "custom" && invoiceDate) {
+        if (customDateStart && invoiceDate < new Date(customDateStart)) return false;
+        if (customDateEnd) {
+          const endDate = new Date(customDateEnd);
+          endDate.setHours(23, 59, 59, 999);
+          if (invoiceDate > endDate) return false;
+        }
+      }
+
+      if (periodFilter === "dynamic" && invoiceDate) {
+        const days = parseInt(dynamicRange) || 30;
+        const start = new Date();
+        start.setDate(start.getDate() - days);
+        if (invoiceDate < start) return false;
+      }
     }
 
     return true;
@@ -946,22 +1108,26 @@ const Invoices = () => {
               <div className="col-span-2 sm:col-span-1">
                 <label className="text-[10px] sm:text-xs font-semibold text-secondary-text uppercase tracking-wider">{t('invoices.period') || 'Zeitraum'}</label>
                 <div className="mt-1 flex flex-wrap gap-1 sm:gap-2">
-                  {["monthly", "yearly", "custom", "dynamic"].map((period) => (
+                  {["all", "monthly", "yearly", "custom", "dynamic"].map((period) => (
                     <button
                       key={period}
+                      type="button"
                       onClick={() => setPeriodFilter(period)}
                       className={`px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-semibold rounded-md border ${periodFilter === period
                         ? "bg-primary-accent text-white border-transparent"
                         : "border-border-light text-secondary-text hover:bg-main-bg"
                         }`}
                     >
-                      {period.charAt(0).toUpperCase() + period.slice(1, 3)}
+                      {period === "all" ? t("common.all") : period.charAt(0).toUpperCase() + period.slice(1, 3)}
                     </button>
                   ))}
                 </div>
               </div>
               <div className="col-span-2 lg:col-span-2">
                 <label className="text-[10px] sm:text-xs font-semibold text-secondary-text uppercase tracking-wider">{t('auto.auto_7d385bb3') || 'Datumsbereich'}</label>
+                {periodFilter === "all" && (
+                  <p className="mt-1 text-[11px] text-muted-text">{t("invoices.allDatesShown")}</p>
+                )}
                 {periodFilter === "monthly" && (
                   <div className="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <select
@@ -1421,15 +1587,42 @@ const Invoices = () => {
           {/* File Upload */}
           <div className="flex items-start">
             <label className="w-32 text-sm font-medium text-secondary-text pt-2">{t('common.file_upload')}</label>
-            <div className="flex-1">
+            <div className="flex-1 space-y-2">
               <input
+                ref={fileInputRef}
                 type="file"
+                id="invoice-add-attachment"
+                className="sr-only"
+                accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx"
                 onChange={(e) => setUploadedFile(e.target.files?.[0] || null)}
-                className="w-full px-3 py-2 border border-border-light rounded-lg bg-input-bg text-sm"
               />
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <label
+                  htmlFor="invoice-add-attachment"
+                  className="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-xl border border-dashed border-border-light bg-input-bg cursor-pointer hover:border-primary-accent hover:bg-main-bg transition-colors"
+                >
+                  <IoCloudUpload size={18} className="text-primary-accent flex-shrink-0" />
+                  <span>{t('invoices.chooseFile')}</span>
+                </label>
+                {uploadedFile && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUploadedFile(null);
+                      if (fileInputRef.current) fileInputRef.current.value = "";
+                    }}
+                    className="text-xs text-red-600 hover:underline self-start sm:self-center"
+                  >
+                    {t('invoices.removeAttachment')}
+                  </button>
+                )}
+              </div>
               {uploadedFile && (
-                <p className="text-xs text-secondary-text mt-2">Ausgewählt: {uploadedFile.name}</p>
+                <p className="text-xs text-secondary-text">
+                  {t('invoices.selectedFile')}: <span className="font-medium text-primary-text break-all">{uploadedFile.name}</span>
+                </p>
               )}
+              <p className="text-[11px] text-muted-text">{t('invoices.fileUploadHint')}</p>
             </div>
           </div>
 

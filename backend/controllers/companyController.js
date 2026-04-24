@@ -4,6 +4,7 @@
 
 const pool = require('../config/db');
 const settingsService = require('../services/settingsService');
+const customFieldService = require('../services/customFieldService');
 
 /**
  * Ensure companies table has all required columns
@@ -83,6 +84,11 @@ const getAll = async (req, res) => {
           });
         }
 
+        // Get custom fields for each client
+        for (let client of clients) {
+          client.custom_fields = await customFieldService.getCustomFieldsWithValues(companyId, 'Clients', client.id);
+        }
+
         return res.json({ success: true, data: clients });
       } catch (clientError) {
         console.error('Get clients error (serving mock data):', clientError.message);
@@ -131,12 +137,19 @@ const getAll = async (req, res) => {
 
         const defaultLogo = await settingsService.getSetting('company_logo', null);
 
+        // Get custom fields for each company
+        const companiesWithCF = await Promise.all(companies.map(async (c) => {
+          const custom_fields = await customFieldService.getCustomFieldsWithValues(c.id, 'Companies', c.id);
+          return {
+            ...c,
+            logo: c.logo || defaultLogo,
+            custom_fields
+          };
+        }));
+
         return res.json({
           success: true,
-          data: companies.map(c => ({
-            ...c,
-            logo: c.logo || defaultLogo
-          }))
+          data: companiesWithCF
         });
       } catch (companyError) {
         console.error('Get companies error (serving mock data):', companyError.message);
@@ -150,7 +163,7 @@ const getAll = async (req, res) => {
     }
   } catch (error) {
     console.error('Critical getAll error:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
+    res.status(500).json({ success: false, error: req.t ? req.t('api_msg_e9cf3193') : "Internal server error" });
   }
 };
 
@@ -176,13 +189,17 @@ const getById = async (req, res) => {
       if (clients.length === 0) {
         return res.status(404).json({
           success: false,
-          error: 'Customer organization not found'
+          error: req.t ? req.t('api_msg_137b48da') : "Customer organization not found"
         });
       }
 
+      const client = clients[0];
+      // Get custom fields using service
+      client.custom_fields = await customFieldService.getCustomFieldsWithValues(companyId, 'Clients', client.id);
+
       return res.json({
         success: true,
-        data: clients[0]
+        data: client
       });
     }
 
@@ -198,7 +215,7 @@ const getById = async (req, res) => {
     if (companies.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Company not found'
+        error: req.t ? req.t('api_msg_692d285b') : "Company not found"
       });
     }
 
@@ -206,6 +223,9 @@ const getById = async (req, res) => {
     if (!company.logo) {
       company.logo = await settingsService.getSetting('company_logo', null);
     }
+
+    // Get custom fields using service
+    company.custom_fields = await customFieldService.getCustomFieldsWithValues(company.id, 'Companies', company.id);
 
     res.json({
       success: true,
@@ -235,15 +255,15 @@ const create = async (req, res) => {
       address,
       notes,
       logo,
-      currency = 'USD',
       timezone = 'UTC',
-      lead_id
+      lead_id,
+      custom_fields = {}
     } = req.body;
 
     if (!name) {
       return res.status(400).json({
         success: false,
-        error: 'Company name is required'
+        error: req.t ? req.t('api_msg_844728e1') : "Company name is required"
       });
     }
 
@@ -258,10 +278,15 @@ const create = async (req, res) => {
       [result.insertId]
     );
 
+    const companyId = result.insertId;
+    // Save custom fields using service
+    // If this is a SuperAdmin creating a company, module is 'Companies'
+    await customFieldService.saveCustomFields(companyId, 'Companies', companyId, custom_fields);
+
     res.status(201).json({
       success: true,
       data: newCompany[0],
-      message: 'Company created successfully'
+      message: req.t ? req.t('api_msg_07cc9c6f') : "Company created successfully"
     });
   } catch (error) {
     console.error('Create company error:', error);
@@ -288,9 +313,8 @@ const update = async (req, res) => {
       address,
       notes,
       logo,
-      currency,
-      timezone,
-      package_id
+      package_id,
+      custom_fields
     } = req.body;
 
     // Check if company exists
@@ -303,7 +327,7 @@ const update = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Company not found'
+        error: req.t ? req.t('api_msg_692d285b') : "Company not found"
       });
     }
 
@@ -358,7 +382,7 @@ const update = async (req, res) => {
     if (updateFields.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'No fields to update'
+        error: req.t ? req.t('api_msg_003199ed') : "No fields to update"
       });
     }
 
@@ -369,6 +393,13 @@ const update = async (req, res) => {
       [...updateValues, id]
     );
 
+    // Save custom fields using service
+    if (custom_fields) {
+      const module = (req.user?.role === 'SUPERADMIN') ? 'Companies' : 'Clients';
+      const effectiveCompanyId = (module === 'Companies') ? id : (req.companyId || req.body.company_id);
+      await customFieldService.saveCustomFields(effectiveCompanyId, module, id, custom_fields);
+    }
+
     const [updated] = await pool.execute(
       `SELECT * FROM companies WHERE id = ?`,
       [id]
@@ -377,7 +408,7 @@ const update = async (req, res) => {
     res.json({
       success: true,
       data: updated[0],
-      message: 'Company updated successfully'
+      message: req.t ? req.t('api_msg_574dda96') : "Company updated successfully"
     });
   } catch (error) {
     console.error('Update company error:', error);
@@ -405,7 +436,7 @@ const deleteCompany = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Company not found'
+        error: req.t ? req.t('api_msg_692d285b') : "Company not found"
       });
     }
 
@@ -418,7 +449,7 @@ const deleteCompany = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Company deleted successfully'
+      message: req.t ? req.t('api_msg_dd7fac3b') : "Company deleted successfully"
     });
   } catch (error) {
     console.error('Delete company error:', error);
@@ -446,7 +477,7 @@ const getCompanyWithDetails = async (req, res) => {
     if (companies.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Company not found'
+        error: req.t ? req.t('api_msg_692d285b') : "Company not found"
       });
     }
 
@@ -519,7 +550,7 @@ const getCompanyActivities = async (req, res) => {
     console.error('Get company activities error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch activities'
+      error: req.t ? req.t('api_msg_b2bb6964') : "Failed to fetch activities"
     });
   }
 };
@@ -538,7 +569,7 @@ const addCompanyActivity = async (req, res) => {
     if (!type || !description) {
       return res.status(400).json({
         success: false,
-        error: 'type and description are required'
+        error: req.t ? req.t('api_msg_93c21665') : "type and description are required"
       });
     }
 
@@ -557,13 +588,13 @@ const addCompanyActivity = async (req, res) => {
     res.status(201).json({
       success: true,
       data: { id: result.insertId },
-      message: 'Activity added successfully'
+      message: req.t ? req.t('api_msg_cdef6d1c') : "Activity added successfully"
     });
   } catch (error) {
     console.error('Add company activity error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to add activity'
+      error: req.t ? req.t('api_msg_c761316c') : "Failed to add activity"
     });
   }
 };
@@ -580,7 +611,7 @@ const addContact = async (req, res) => {
     if (!name || !email) {
       return res.status(400).json({
         success: false,
-        error: 'Name and email are required'
+        error: req.t ? req.t('api_msg_b8d89881') : "Name and email are required"
       });
     }
 
@@ -593,7 +624,7 @@ const addContact = async (req, res) => {
     if (companies.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Company not found'
+        error: req.t ? req.t('api_msg_692d285b') : "Company not found"
       });
     }
 
@@ -616,13 +647,13 @@ const addContact = async (req, res) => {
     res.status(201).json({
       success: true,
       data: { id: result.insertId },
-      message: 'Contact added successfully'
+      message: req.t ? req.t('api_msg_ff375ac2') : "Contact added successfully"
     });
   } catch (error) {
     console.error('Add company contact error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to add contact'
+      error: req.t ? req.t('api_msg_5de94db4') : "Failed to add contact"
     });
   }
 };
@@ -650,7 +681,7 @@ const getContacts = async (req, res) => {
     console.error('Get company contacts error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch contacts'
+      error: req.t ? req.t('api_msg_b4210ea5') : "Failed to fetch contacts"
     });
   }
 };

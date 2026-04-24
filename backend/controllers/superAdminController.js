@@ -67,7 +67,7 @@ const getAllCompanies = async (req, res) => {
     console.error('Get all companies error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch companies'
+      error: req.t ? req.t('api_msg_2de13f3a') : "Failed to fetch companies"
     });
   }
 };
@@ -98,7 +98,7 @@ const getCompanyById = async (req, res) => {
     if (companies.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Company not found'
+        error: req.t ? req.t('api_msg_692d285b') : "Company not found"
       });
     }
 
@@ -110,7 +110,7 @@ const getCompanyById = async (req, res) => {
     console.error('Get company by ID error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch company'
+      error: req.t ? req.t('api_msg_3779be36') : "Failed to fetch company"
     });
   }
 };
@@ -136,7 +136,7 @@ const createCompany = async (req, res) => {
     if (!name) {
       return res.status(400).json({
         success: false,
-        error: 'Company name is required'
+        error: req.t ? req.t('api_msg_844728e1') : "Company name is required"
       });
     }
 
@@ -155,13 +155,13 @@ const createCompany = async (req, res) => {
     res.status(201).json({
       success: true,
       data: newCompany[0],
-      message: 'Company created successfully'
+      message: req.t ? req.t('api_msg_07cc9c6f') : "Company created successfully"
     });
   } catch (error) {
     console.error('Create company error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to create company'
+      error: req.t ? req.t('api_msg_da377064') : "Failed to create company"
     });
   }
 };
@@ -233,7 +233,7 @@ const updateCompany = async (req, res) => {
     if (updateFields.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'No fields to update'
+        error: req.t ? req.t('api_msg_003199ed') : "No fields to update"
       });
     }
 
@@ -253,13 +253,13 @@ const updateCompany = async (req, res) => {
     res.json({
       success: true,
       data: updatedCompany[0],
-      message: 'Company updated successfully'
+      message: req.t ? req.t('api_msg_574dda96') : "Company updated successfully"
     });
   } catch (error) {
     console.error('Update company error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to update company'
+      error: req.t ? req.t('api_msg_9d3fa0c7') : "Failed to update company"
     });
   }
 };
@@ -279,13 +279,13 @@ const deleteCompany = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Company deleted successfully'
+      message: req.t ? req.t('api_msg_dd7fac3b') : "Company deleted successfully"
     });
   } catch (error) {
     console.error('Delete company error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete company'
+      error: req.t ? req.t('api_msg_cc2850f5') : "Failed to delete company"
     });
   }
 };
@@ -516,7 +516,7 @@ const getSystemStats = async (req, res) => {
     console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch system statistics',
+      error: req.t ? req.t('api_msg_ed0eaaa6') : "Failed to fetch system statistics",
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
@@ -572,7 +572,7 @@ const getAllUsers = async (req, res) => {
     console.error('Get all users error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch users'
+      error: req.t ? req.t('api_msg_361fdbd8') : "Failed to fetch users"
     });
   }
 };
@@ -606,7 +606,7 @@ const getUserById = async (req, res) => {
     if (users.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'User not found'
+        error: req.t ? req.t('api_msg_b846d114') : "User not found"
       });
     }
 
@@ -618,7 +618,7 @@ const getUserById = async (req, res) => {
     console.error('Get user by ID error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch user'
+      error: req.t ? req.t('api_msg_74548435') : "Failed to fetch user"
     });
   }
 };
@@ -635,7 +635,7 @@ const createUser = async (req, res) => {
     if (!name || !email || !password || !role) {
       return res.status(400).json({
         success: false,
-        error: 'name, email, password, and role are required'
+        error: req.t ? req.t('api_msg_ac80ff80') : "name, email, password, and role are required"
       });
     }
 
@@ -644,7 +644,7 @@ const createUser = async (req, res) => {
     if (!validRoles.includes(role.toUpperCase())) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid role. Must be SUPERADMIN, ADMIN, EMPLOYEE, or CLIENT'
+        error: req.t ? req.t('api_msg_d75c308a') : "Invalid role. Must be SUPERADMIN, ADMIN, EMPLOYEE, or CLIENT"
       });
     }
 
@@ -657,7 +657,7 @@ const createUser = async (req, res) => {
     if (existingUsers.length > 0) {
       return res.status(400).json({
         success: false,
-        error: 'User with this email already exists'
+        error: req.t ? req.t('api_msg_26c4a934') : "User with this email already exists"
       });
     }
 
@@ -670,7 +670,7 @@ const createUser = async (req, res) => {
       if (companies.length === 0) {
         return res.status(400).json({
           success: false,
-          error: 'Company not found'
+          error: req.t ? req.t('api_msg_692d285b') : "Company not found"
         });
       }
     }
@@ -714,13 +714,13 @@ const createUser = async (req, res) => {
     res.status(201).json({
       success: true,
       data: users[0],
-      message: 'User created successfully'
+      message: req.t ? req.t('api_msg_30fae028') : "User created successfully"
     });
   } catch (error) {
     console.error('Create user error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to create user'
+      error: req.t ? req.t('api_msg_8538c89b') : "Failed to create user"
     });
   }
 };
@@ -743,7 +743,7 @@ const updateUser = async (req, res) => {
     if (existingUsers.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'User not found'
+        error: req.t ? req.t('api_msg_b846d114') : "User not found"
       });
     }
 
@@ -756,7 +756,7 @@ const updateUser = async (req, res) => {
       if (emailCheck.length > 0) {
         return res.status(400).json({
           success: false,
-          error: 'User with this email already exists'
+          error: req.t ? req.t('api_msg_26c4a934') : "User with this email already exists"
         });
       }
     }
@@ -770,7 +770,7 @@ const updateUser = async (req, res) => {
       if (companies.length === 0) {
         return res.status(400).json({
           success: false,
-          error: 'Company not found'
+          error: req.t ? req.t('api_msg_692d285b') : "Company not found"
         });
       }
     }
@@ -781,7 +781,7 @@ const updateUser = async (req, res) => {
       if (!validRoles.includes(role.toUpperCase())) {
         return res.status(400).json({
           success: false,
-          error: 'Invalid role. Must be SUPERADMIN, ADMIN, EMPLOYEE, or CLIENT'
+          error: req.t ? req.t('api_msg_d75c308a') : "Invalid role. Must be SUPERADMIN, ADMIN, EMPLOYEE, or CLIENT"
         });
       }
     }
@@ -819,7 +819,7 @@ const updateUser = async (req, res) => {
     if (updates.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'No fields to update'
+        error: req.t ? req.t('api_msg_003199ed') : "No fields to update"
       });
     }
 
@@ -853,13 +853,13 @@ const updateUser = async (req, res) => {
     res.json({
       success: true,
       data: users[0],
-      message: 'User updated successfully'
+      message: req.t ? req.t('api_msg_df370ab9') : "User updated successfully"
     });
   } catch (error) {
     console.error('Update user error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to update user'
+      error: req.t ? req.t('api_msg_7f0ba385') : "Failed to update user"
     });
   }
 };
@@ -881,7 +881,7 @@ const deleteUser = async (req, res) => {
     if (users.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'User not found'
+        error: req.t ? req.t('api_msg_b846d114') : "User not found"
       });
     }
 
@@ -893,13 +893,13 @@ const deleteUser = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'User deleted successfully'
+      message: req.t ? req.t('api_msg_18af0a35') : "User deleted successfully"
     });
   } catch (error) {
     console.error('Delete user error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete user'
+      error: req.t ? req.t('api_msg_7355690b') : "Failed to delete user"
     });
   }
 };
@@ -1041,7 +1041,7 @@ const createPackage = async (req, res) => {
     if (!package_name || price === undefined || price === null) {
       return res.status(400).json({
         success: false,
-        error: 'Package name and price are required'
+        error: req.t ? req.t('api_msg_900ec21a') : "Package name and price are required"
       });
     }
 
@@ -1090,13 +1090,13 @@ const createPackage = async (req, res) => {
     res.status(201).json({
       success: true,
       data: packageData,
-      message: 'Package created successfully'
+      message: req.t ? req.t('api_msg_d6872d36') : "Package created successfully"
     });
   } catch (error) {
     console.error('Create package error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to create package'
+      error: req.t ? req.t('api_msg_9b7fe4bb') : "Failed to create package"
     });
   }
 };
@@ -1125,7 +1125,7 @@ const updatePackage = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Package not found'
+        error: req.t ? req.t('api_msg_407bbcd6') : "Package not found"
       });
     }
 
@@ -1157,7 +1157,7 @@ const updatePackage = async (req, res) => {
     if (updates.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'No fields to update'
+        error: req.t ? req.t('api_msg_003199ed') : "No fields to update"
       });
     }
 
@@ -1189,13 +1189,13 @@ const updatePackage = async (req, res) => {
     res.json({
       success: true,
       data: packageData,
-      message: 'Package updated successfully'
+      message: req.t ? req.t('api_msg_1ab4127d') : "Package updated successfully"
     });
   } catch (error) {
     console.error('Update package error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to update package'
+      error: req.t ? req.t('api_msg_7128dfbe') : "Failed to update package"
     });
   }
 };
@@ -1217,7 +1217,7 @@ const deletePackage = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Package not found'
+        error: req.t ? req.t('api_msg_407bbcd6') : "Package not found"
       });
     }
 
@@ -1230,7 +1230,7 @@ const deletePackage = async (req, res) => {
     if (companies[0].count > 0) {
       return res.status(400).json({
         success: false,
-        error: 'Cannot delete package. It is assigned to one or more companies.'
+        error: req.t ? req.t('api_msg_d40d5250') : "Cannot delete package. It is assigned to one or more companies."
       });
     }
 
@@ -1242,13 +1242,13 @@ const deletePackage = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Package deleted successfully'
+      message: req.t ? req.t('api_msg_2ad610dc') : "Package deleted successfully"
     });
   } catch (error) {
     console.error('Delete package error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete package'
+      error: req.t ? req.t('api_msg_0859f79b') : "Failed to delete package"
     });
   }
 };
@@ -1273,7 +1273,7 @@ const getPackageById = async (req, res) => {
     if (packages.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Package not found'
+        error: req.t ? req.t('api_msg_407bbcd6') : "Package not found"
       });
     }
 
@@ -1285,7 +1285,7 @@ const getPackageById = async (req, res) => {
     console.error('Get package by ID error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch package'
+      error: req.t ? req.t('api_msg_2a2550ec') : "Failed to fetch package"
     });
   }
 };
@@ -1344,7 +1344,7 @@ const getBillingInfo = async (req, res) => {
     console.error('Get billing info error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch billing information'
+      error: req.t ? req.t('api_msg_a24ae031') : "Failed to fetch billing information"
     });
   }
 };
@@ -1395,7 +1395,7 @@ const getOfflineRequests = async (req, res) => {
     console.error('Get offline requests error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch offline requests'
+      error: req.t ? req.t('api_msg_8fce62af') : "Failed to fetch offline requests"
     });
   }
 };
@@ -1419,7 +1419,7 @@ const getOfflineRequestById = async (req, res) => {
     if (requests.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Offline request not found'
+        error: req.t ? req.t('api_msg_473e4ffc') : "Offline request not found"
       });
     }
 
@@ -1431,7 +1431,7 @@ const getOfflineRequestById = async (req, res) => {
     console.error('Get offline request error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch offline request'
+      error: req.t ? req.t('api_msg_153e64d7') : "Failed to fetch offline request"
     });
   }
 };
@@ -1499,13 +1499,13 @@ const createOfflineRequest = async (req, res) => {
     res.status(201).json({
       success: true,
       data: newRequest[0],
-      message: 'Offline request created successfully'
+      message: req.t ? req.t('api_msg_8028b2ed') : "Offline request created successfully"
     });
   } catch (error) {
     console.error('Create offline request error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to create offline request'
+      error: req.t ? req.t('api_msg_b7a7b4fd') : "Failed to create offline request"
     });
   }
 };
@@ -1542,7 +1542,7 @@ const updateOfflineRequest = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Offline request not found'
+        error: req.t ? req.t('api_msg_473e4ffc') : "Offline request not found"
       });
     }
 
@@ -1606,7 +1606,7 @@ const updateOfflineRequest = async (req, res) => {
     if (updates.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'No fields to update'
+        error: req.t ? req.t('api_msg_003199ed') : "No fields to update"
       });
     }
 
@@ -1626,13 +1626,13 @@ const updateOfflineRequest = async (req, res) => {
     res.json({
       success: true,
       data: updatedRequest[0],
-      message: 'Offline request updated successfully'
+      message: req.t ? req.t('api_msg_1c2efd97') : "Offline request updated successfully"
     });
   } catch (error) {
     console.error('Update offline request error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to update offline request'
+      error: req.t ? req.t('api_msg_924d4bb1') : "Failed to update offline request"
     });
   }
 };
@@ -1654,7 +1654,7 @@ const acceptCompanyRequest = async (req, res) => {
     if (requests.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Request not found'
+        error: req.t ? req.t('api_msg_0ef11029') : "Request not found"
       });
     }
 
@@ -1663,14 +1663,14 @@ const acceptCompanyRequest = async (req, res) => {
     if (request.request_type !== 'Company Request') {
       return res.status(400).json({
         success: false,
-        error: 'This endpoint is only for Company Request type'
+        error: req.t ? req.t('api_msg_aa1d0fd9') : "This endpoint is only for Company Request type"
       });
     }
 
     if (request.status === 'Approved' || request.status === 'Completed') {
       return res.status(400).json({
         success: false,
-        error: 'Request already processed'
+        error: req.t ? req.t('api_msg_e5236de0') : "Request already processed"
       });
     }
 
@@ -1713,13 +1713,13 @@ const acceptCompanyRequest = async (req, res) => {
         company: newCompany[0],
         request: { ...request, status: 'Approved', company_id: companyId }
       },
-      message: 'Company request accepted and company created successfully'
+      message: req.t ? req.t('api_msg_147198dd') : "Company request accepted and company created successfully"
     });
   } catch (error) {
     console.error('Accept company request error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to accept company request'
+      error: req.t ? req.t('api_msg_7e897f84') : "Failed to accept company request"
     });
   }
 };
@@ -1742,7 +1742,7 @@ const rejectCompanyRequest = async (req, res) => {
     if (requests.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Request not found'
+        error: req.t ? req.t('api_msg_0ef11029') : "Request not found"
       });
     }
 
@@ -1751,7 +1751,7 @@ const rejectCompanyRequest = async (req, res) => {
     if (request.status === 'Approved' || request.status === 'Completed') {
       return res.status(400).json({
         success: false,
-        error: 'Request already processed'
+        error: req.t ? req.t('api_msg_e5236de0') : "Request already processed"
       });
     }
 
@@ -1771,13 +1771,13 @@ const rejectCompanyRequest = async (req, res) => {
     res.json({
       success: true,
       data: updatedRequest[0],
-      message: 'Company request rejected successfully'
+      message: req.t ? req.t('api_msg_5b3b4ad2') : "Company request rejected successfully"
     });
   } catch (error) {
     console.error('Reject company request error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to reject company request'
+      error: req.t ? req.t('api_msg_3a7786a7') : "Failed to reject company request"
     });
   }
 };
@@ -1798,7 +1798,7 @@ const deleteOfflineRequest = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Offline request not found'
+        error: req.t ? req.t('api_msg_473e4ffc') : "Offline request not found"
       });
     }
 
@@ -1809,13 +1809,13 @@ const deleteOfflineRequest = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Offline request deleted successfully'
+      message: req.t ? req.t('api_msg_f9d2f426') : "Offline request deleted successfully"
     });
   } catch (error) {
     console.error('Delete offline request error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete offline request'
+      error: req.t ? req.t('api_msg_38a1183d') : "Failed to delete offline request"
     });
   }
 };
@@ -1867,7 +1867,7 @@ const getSupportTickets = async (req, res) => {
     console.error('Get support tickets error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch support tickets'
+      error: req.t ? req.t('api_msg_b0f7c461') : "Failed to fetch support tickets"
     });
   }
 };
@@ -2043,7 +2043,7 @@ const getSystemSettings = async (req, res) => {
     console.error('Get system settings error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch system settings'
+      error: req.t ? req.t('api_msg_94a075af') : "Failed to fetch system settings"
     });
   }
 };
@@ -2172,13 +2172,13 @@ const updateSystemSettings = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'System settings updated successfully'
+      message: req.t ? req.t('api_msg_7542b4a6') : "System settings updated successfully"
     });
   } catch (error) {
     console.error('Update system settings error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to update system settings',
+      error: req.t ? req.t('api_msg_bd9a3f07') : "Failed to update system settings",
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
@@ -2195,7 +2195,7 @@ const testEmailSettings = async (req, res) => {
     if (!test_email) {
       return res.status(400).json({
         success: false,
-        error: 'Test email address is required'
+        error: req.t ? req.t('api_msg_ece09677') : "Test email address is required"
       });
     }
 
@@ -2219,7 +2219,7 @@ const testEmailSettings = async (req, res) => {
     if (!smtpConfig.smtp_host || !smtpConfig.smtp_username) {
       return res.status(400).json({
         success: false,
-        error: 'SMTP settings are not fully configured. Please save SMTP settings first.'
+        error: req.t ? req.t('api_msg_151b3576') : "SMTP settings are not fully configured. Please save SMTP settings first."
       });
     }
 
@@ -2269,7 +2269,7 @@ const testEmailSettings = async (req, res) => {
     console.error('Test email error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to test email settings'
+      error: req.t ? req.t('api_msg_41c0d648') : "Failed to test email settings"
     });
   }
 };
@@ -2336,7 +2336,7 @@ const getAuditLogs = async (req, res) => {
     console.error('Get audit logs error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch audit logs'
+      error: req.t ? req.t('api_msg_112560c5') : "Failed to fetch audit logs"
     });
   }
 };

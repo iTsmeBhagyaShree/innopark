@@ -6,7 +6,7 @@ import DataTable from '../../../components/ui/DataTable'
 import RightSideModal from '../../../components/ui/RightSideModal'
 import Badge from '../../../components/ui/Badge'
 import Button from '../../../components/ui/Button'
-import { IoPencil, IoTrashOutline, IoEye } from 'react-icons/io5'
+import { IoPencil, IoTrashOutline, IoEye, IoAdd } from 'react-icons/io5'
 import { employeesAPI, departmentsAPI, positionsAPI } from '../../../api'
 import { useLanguage } from '../../../context/LanguageContext'
 import { FormRow, FormInput, FormSelect, FormTextarea } from '../../../components/ui/FormRow'
@@ -65,6 +65,11 @@ const Employees = () => {
   const [positions, setPositions] = useState([])
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [showAddDeptModal, setShowAddDeptModal] = useState(false)
+  const [showAddPosModal, setShowAddPosModal] = useState(false)
+  const [newDeptName, setNewDeptName] = useState('')
+  const [newPosName, setNewPosName] = useState('')
+  const [quickAddSaving, setQuickAddSaving] = useState(false)
 
   // Memoize fetch functions
   const fetchDepartments = useCallback(async () => {
@@ -101,14 +106,16 @@ const Employees = () => {
         const fetchedEmployees = response.data.data || []
         const transformedEmployees = fetchedEmployees.map(emp => ({
           ...emp, // Include all fields
-          id: emp.id,
+          id: emp.id || emp.uid, // fallback to user id if no employee record
           name: emp.name || '',
           email: emp.email || '',
           phone: emp.phone || '',
           department: emp.department_name || '',
           position: emp.position_name || '',
           status: emp.status || 'Active',
-          user_id: emp.user_id,
+          user_id: emp.user_id || emp.uid,
+          role: emp.user_role || emp.role || 'EMPLOYEE',
+          employee_number: emp.employee_number || (emp.user_role === 'ADMIN' ? 'ADMIN' : '—'),
         }))
         setEmployees(transformedEmployees)
       }
@@ -134,6 +141,69 @@ const Employees = () => {
     }
   }, [formData.department_id, fetchPositions])
 
+  const handleQuickAddDepartment = async () => {
+    if (!newDeptName.trim()) {
+      alert(t('validation.required'))
+      return
+    }
+    setQuickAddSaving(true)
+    try {
+      const res = await departmentsAPI.create({
+        name: newDeptName.trim(),
+        company_id: parseInt(companyId, 10),
+      })
+      if (res.data?.success && res.data.data?.id) {
+        const newId = res.data.data.id
+        await fetchDepartments()
+        setFormData((f) => ({ ...f, department_id: String(newId), position_id: '' }))
+        await fetchPositions(newId)
+        setShowAddDeptModal(false)
+        setNewDeptName('')
+      } else {
+        alert(res.data?.error || t('employees.alerts.save_failed'))
+      }
+    } catch (error) {
+      console.error(error)
+      alert(error.response?.data?.error || t('employees.alerts.save_failed'))
+    } finally {
+      setQuickAddSaving(false)
+    }
+  }
+
+  const handleQuickAddPosition = async () => {
+    if (!formData.department_id) {
+      alert(t('employees.form.select_department_first'))
+      return
+    }
+    if (!newPosName.trim()) {
+      alert(t('validation.required'))
+      return
+    }
+    setQuickAddSaving(true)
+    try {
+      const res = await positionsAPI.create({
+        name: newPosName.trim(),
+        company_id: parseInt(companyId, 10),
+        department_id: parseInt(formData.department_id, 10),
+        description: null,
+      })
+      if (res.data?.success && res.data.data?.id) {
+        const newId = res.data.data.id
+        await fetchPositions(formData.department_id)
+        setFormData((f) => ({ ...f, position_id: String(newId) }))
+        setShowAddPosModal(false)
+        setNewPosName('')
+      } else {
+        alert(res.data?.error || t('employees.alerts.save_failed'))
+      }
+    } catch (error) {
+      console.error(error)
+      alert(error.response?.data?.error || t('employees.alerts.save_failed'))
+    } finally {
+      setQuickAddSaving(false)
+    }
+  }
+
   // Columns for DataTable
   const columns = [
     { key: 'employee_number', label: t('employees.columns.id') },
@@ -147,6 +217,15 @@ const Employees = () => {
     },
     { key: 'email', label: t('employees.columns.email') },
     { key: 'department', label: t('employees.columns.department') },
+    {
+      key: 'role',
+      label: t('employees.columns.role') || 'Rolle',
+      render: (value) => (
+        <Badge variant={value === 'ADMIN' ? 'warning' : value === 'SUPERADMIN' ? 'danger' : 'info'}>
+          {value === 'ADMIN' ? 'Admin' : value === 'SUPERADMIN' ? 'Super Admin' : t('employees.values.employee') || 'Mitarbeiter'}
+        </Badge>
+      ),
+    },
     {
       key: 'status',
       label: t('employees.columns.status'),
@@ -166,7 +245,8 @@ const Employees = () => {
   const handleEdit = async (employee) => {
     try {
       setLoading(true)
-      const response = await employeesAPI.getById(employee.id)
+      const isUserId = employee.employee_number === 'ADMIN' || employee.employee_number === '—';
+      const response = await employeesAPI.getById(employee.id, { is_user_id: isUserId })
       if (response.data.success) {
         const emp = response.data.data
         setSelectedEmployee(employee)
@@ -273,7 +353,8 @@ const Employees = () => {
       }
 
       if (isEditModalOpen && selectedEmployee) {
-        const response = await employeesAPI.update(selectedEmployee.id, employeeData)
+        const isUserId = selectedEmployee.employee_number === 'ADMIN' || selectedEmployee.employee_number === '—';
+        const response = await employeesAPI.update(selectedEmployee.id, employeeData, { is_user_id: isUserId })
         if (response.data.success) {
           alert(t('employees.alerts.update_success'))
           await fetchEmployees()
@@ -309,7 +390,8 @@ const Employees = () => {
           e.stopPropagation()
           if (window.confirm(`${row.name} ${t('common.delete')}?`)) {
             try {
-              await employeesAPI.delete(row.id)
+              const isUserId = row.employee_number === 'ADMIN' || row.employee_number === '—';
+              await employeesAPI.delete(row.id, { is_user_id: isUserId })
               alert(t('employees.alerts.delete_success'))
               await fetchEmployees()
             } catch (error) {
@@ -350,6 +432,8 @@ const Employees = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <FormRow label={t('employees.form.employee_id')}>
           <FormInput value={formData.employee_number} onChange={(e) => setFormData({ ...formData, employee_number: e.target.value })} />
+        </FormRow>
+        <FormRow label={t('employees.form.salutation')}>
           <FormSelect value={formData.salutation} onChange={(e) => setFormData({ ...formData, salutation: e.target.value })}>
             <option value="Mr.">{t('employees.values.mr')}</option>
             <option value="Mrs.">{t('employees.values.mrs')}</option>
@@ -371,15 +455,24 @@ const Employees = () => {
 
       {isAddModalOpen && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-primary-text mb-2">{t('employees.form.password')} <span className="text-red-500">*</span></label>
+          <FormRow label={t('employees.form.password')} required>
             <div className="relative">
-              <FormInput type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} required />
-              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-secondary-text">
+              <FormInput
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="pr-20"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-secondary-text px-2 py-1 hover:text-primary-text"
+              >
                 {showPassword ? t('employees.form.hide') : t('employees.form.show')}
               </button>
             </div>
-          </div>
+          </FormRow>
         </div>
       )}
 
@@ -387,9 +480,8 @@ const Employees = () => {
         <FormRow label={t('employees.form.dob')}>
           <FormInput type="date" value={formData.date_of_birth} onChange={(e) => setFormData({ ...formData, date_of_birth: e.target.value })} />
         </FormRow>
-        <div>
-          <label className="block text-sm font-medium text-primary-text mb-2">{t('employees.form.gender')}</label>
-          <div className="flex gap-4 mt-2">
+        <FormRow label={t('employees.form.gender')}>
+          <div className="flex flex-wrap gap-x-4 gap-y-2 pt-1">
             {[
               { val: 'Male', label: t('employees.values.male') },
               { val: 'Female', label: t('employees.values.female') },
@@ -401,21 +493,55 @@ const Employees = () => {
               </label>
             ))}
           </div>
-        </div>
+        </FormRow>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <FormRow label={t('employees.form.department')}>
-          <FormSelect value={formData.department_id} onChange={(e) => setFormData({ ...formData, department_id: e.target.value })}>
-            <option value="">{t('employees.form.select')}</option>
-            {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-          </FormSelect>
+          <div className="flex gap-2 w-full min-w-0">
+            <div className="flex-1 min-w-0">
+              <FormSelect value={formData.department_id} onChange={(e) => setFormData({ ...formData, department_id: e.target.value, position_id: '' })}>
+                <option value="">{t('employees.form.select')}</option>
+                {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </FormSelect>
+            </div>
+            <button
+              type="button"
+              onClick={() => { setNewDeptName(''); setShowAddDeptModal(true) }}
+              className="shrink-0 flex items-center justify-center w-10 h-10 rounded-md border border-gray-200 bg-gray-50 hover:bg-primary-50 hover:border-primary-200 text-primary-700 transition-colors"
+              title={t('employees.form.add_department')}
+              aria-label={t('employees.form.add_department')}
+            >
+              <IoAdd size={22} />
+            </button>
+          </div>
         </FormRow>
         <FormRow label={t('employees.form.designation')}>
-          <FormSelect value={formData.position_id} onChange={(e) => setFormData({ ...formData, position_id: e.target.value })} disabled={!formData.department_id}>
-            <option value="">{t('employees.form.select')}</option>
-            {positions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </FormSelect>
+          <div className="flex gap-2 w-full min-w-0">
+            <div className="flex-1 min-w-0">
+              <FormSelect value={formData.position_id} onChange={(e) => setFormData({ ...formData, position_id: e.target.value })} disabled={!formData.department_id}>
+                <option value="">{t('employees.form.select')}</option>
+                {positions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </FormSelect>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (!formData.department_id) {
+                  alert(t('employees.form.select_department_first'))
+                  return
+                }
+                setNewPosName('')
+                setShowAddPosModal(true)
+              }}
+              className="shrink-0 flex items-center justify-center w-10 h-10 rounded-md border border-gray-200 bg-gray-50 hover:bg-primary-50 hover:border-primary-200 text-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!formData.department_id}
+              title={t('employees.form.add_position')}
+              aria-label={t('employees.form.add_position')}
+            >
+              <IoAdd size={22} />
+            </button>
+          </div>
         </FormRow>
       </div>
 
@@ -425,11 +551,11 @@ const Employees = () => {
         </FormRow>
         <FormRow label={t('employees.form.language')}>
           <FormSelect value={formData.language} onChange={(e) => setFormData({ ...formData, language: e.target.value })}>
-            <option value="en">{t('auto.auto_78463a38') || 'English'}</option>
-            <option value="de">{t('common.german')}</option>
-            <option value="fr">Français</option>
-            <option value="it">{t('common.italian')}</option>
-            <option value="es">Español</option>
+            <option value="en">{t('employees.form.lang_en')}</option>
+            <option value="de">{t('employees.form.lang_de')}</option>
+            <option value="fr">{t('employees.form.lang_fr')}</option>
+            <option value="it">{t('employees.form.lang_it')}</option>
+            <option value="es">{t('employees.form.lang_es')}</option>
           </FormSelect>
         </FormRow>
       </div>
@@ -459,10 +585,18 @@ const Employees = () => {
             <option value="Inactive">{t('employees.values.no')}</option>
           </FormSelect>
         </FormRow>
-        <div className="flex items-center gap-2 mt-8">
-          <input type="checkbox" id="email_notif" checked={formData.email_notifications === 1} onChange={(e) => setFormData({ ...formData, email_notifications: e.target.checked ? 1 : 0 })} className="w-4 h-4" />
-          <label htmlFor="email_notif" className="text-sm font-medium">{t('employees.form.email_notifications')}</label>
-        </div>
+        <FormRow label={t('employees.form.email_notifications')}>
+          <label htmlFor="email_notif" className="flex items-center gap-2 cursor-pointer pt-1">
+            <input
+              type="checkbox"
+              id="email_notif"
+              checked={formData.email_notifications === 1}
+              onChange={(e) => setFormData({ ...formData, email_notifications: e.target.checked ? 1 : 0 })}
+              className="w-4 h-4"
+            />
+            <span className="text-sm text-gray-700">{t('employees.values.yes')}</span>
+          </label>
+        </FormRow>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -478,19 +612,22 @@ const Employees = () => {
       </FormRow>
 
       <FormRow label={t('employees.form.skills')}>
-        <FormInput value={formData.skills} onChange={(e) => setFormData({ ...formData, skills: e.target.value })} placeholder="e.g. React, Node.js, Design" />
+        <FormInput value={formData.skills} onChange={(e) => setFormData({ ...formData, skills: e.target.value })} placeholder={t('employees.form.skills_placeholder')} />
       </FormRow>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <FormRow label={t('employees.form.probation_end')} className="flex-col !items-stretch">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">{t('employees.form.probation_end')}</label>
           <FormInput type="date" value={formData.probation_end_date} onChange={(e) => setFormData({ ...formData, probation_end_date: e.target.value })} />
-        </FormRow>
-        <FormRow label={t('employees.form.notice_start')} className="flex-col !items-stretch">
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">{t('employees.form.notice_start')}</label>
           <FormInput type="date" value={formData.notice_period_start_date} onChange={(e) => setFormData({ ...formData, notice_period_start_date: e.target.value })} />
-        </FormRow>
-        <FormRow label={t('employees.form.notice_end')} className="flex-col !items-stretch">
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">{t('employees.form.notice_end')}</label>
           <FormInput type="date" value={formData.notice_period_end_date} onChange={(e) => setFormData({ ...formData, notice_period_end_date: e.target.value })} />
-        </FormRow>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -555,6 +692,57 @@ const Employees = () => {
         className="w-full max-w-5xl"
       >
         {renderModalContent()}
+      </RightSideModal>
+
+      <RightSideModal
+        isOpen={showAddDeptModal}
+        onClose={() => { setShowAddDeptModal(false); setNewDeptName('') }}
+        title={t('employees.form.quick_add_dept_title')}
+        className="!max-w-md w-full"
+      >
+        <div className="space-y-4 p-1">
+          <div>
+            <label className="block text-sm font-medium text-primary-text mb-1">{t('employees.form.new_department_name')}</label>
+            <FormInput
+              value={newDeptName}
+              onChange={(e) => setNewDeptName(e.target.value)}
+              autoFocus
+              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleQuickAddDepartment())}
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" size="sm" onClick={() => { setShowAddDeptModal(false); setNewDeptName('') }}>{t('common.cancel')}</Button>
+            <Button variant="primary" size="sm" onClick={handleQuickAddDepartment} disabled={quickAddSaving}>
+              {quickAddSaving ? `${t('common.save')}...` : t('common.save')}
+            </Button>
+          </div>
+        </div>
+      </RightSideModal>
+
+      <RightSideModal
+        isOpen={showAddPosModal}
+        onClose={() => { setShowAddPosModal(false); setNewPosName('') }}
+        title={t('employees.form.quick_add_pos_title')}
+        className="!max-w-md w-full"
+      >
+        <div className="space-y-4 p-1">
+          <p className="text-xs text-secondary-text">{t('employees.form.department')}: {departments.find((d) => String(d.id) === String(formData.department_id))?.name || '—'}</p>
+          <div>
+            <label className="block text-sm font-medium text-primary-text mb-1">{t('employees.form.new_position_name')}</label>
+            <FormInput
+              value={newPosName}
+              onChange={(e) => setNewPosName(e.target.value)}
+              autoFocus
+              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleQuickAddPosition())}
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" size="sm" onClick={() => { setShowAddPosModal(false); setNewPosName('') }}>{t('common.cancel')}</Button>
+            <Button variant="primary" size="sm" onClick={handleQuickAddPosition} disabled={quickAddSaving}>
+              {quickAddSaving ? `${t('common.save')}...` : t('common.save')}
+            </Button>
+          </div>
+        </div>
       </RightSideModal>
     </div>
   )

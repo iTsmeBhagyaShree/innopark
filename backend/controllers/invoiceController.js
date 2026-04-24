@@ -3,6 +3,7 @@
 // =====================================================
 
 const pool = require('../config/db');
+const customFieldService = require('../services/customFieldService');
 
 /**
  * Normalize unit value to valid ENUM values
@@ -114,17 +115,21 @@ const getAll = async (req, res) => {
   try {
     const { status, client_id, search, start_date, end_date, project_id } = req.query;
 
-    // Use company_id from auth token or query param
-    const filterCompanyId = req.companyId || req.query.company_id || null;
+    const rawCompany = req.query.company_id ?? req.companyId;
+    const filterCompanyId =
+      rawCompany != null && rawCompany !== ''
+        ? parseInt(String(rawCompany), 10)
+        : null;
 
-    let whereClause = 'WHERE i.is_deleted = 0';
-    const params = [];
-
-    // Filter by company_id only if provided
-    if (filterCompanyId) {
-      whereClause += ' AND i.company_id = ?';
-      params.push(filterCompanyId);
+    if (!filterCompanyId || Number.isNaN(filterCompanyId) || filterCompanyId <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: req.t ? req.t('api_msg_e1be2bab') : 'company_id is required'
+      });
     }
+
+    let whereClause = 'WHERE i.is_deleted = 0 AND i.company_id = ?';
+    const params = [filterCompanyId];
 
     // Status filter
     if (status && status !== 'All' && status !== 'all') {
@@ -171,33 +176,109 @@ const getAll = async (req, res) => {
       params.push(searchPattern, searchPattern);
     }
 
-    // Date range filter
+    // Date range (use invoice_date — bill_date may not exist on all DBs)
     if (start_date) {
-      whereClause += ' AND DATE(i.bill_date) >= ?';
+      whereClause += ' AND DATE(i.invoice_date) >= ?';
       params.push(start_date);
     }
     if (end_date) {
-      whereClause += ' AND DATE(i.bill_date) <= ?';
+      whereClause += ' AND DATE(i.invoice_date) <= ?';
       params.push(end_date);
     }
 
-    // Get all invoices without pagination
-    const [invoices] = await pool.execute(
-      `SELECT i.*, 
-       c.company_name as client_name, 
-       comp.name as company_name, 
-       p.project_name,
-       COALESCE(SUM(pay.amount), 0) as paid_amount
-       FROM invoices i
-       LEFT JOIN clients c ON i.client_id = c.id
-       LEFT JOIN companies comp ON i.company_id = comp.id
-       LEFT JOIN projects p ON i.project_id = p.id
-       LEFT JOIN payments pay ON pay.invoice_id = i.id AND pay.is_deleted = 0
-       ${whereClause}
-       GROUP BY i.id
-       ORDER BY i.created_at DESC`,
-      params
-    );
+    // Do NOT put payments in the main SELECT: if that subquery/table fails, db.js returns [] and the whole list is empty.
+    // Paid amounts are loaded after (batch) so list rows still return.    let invoices = [];
+    try {
+      [invoices] = await pool.execute(
+        `SELECT i.*,
+         c.company_name AS client_name,
+         comp.name AS company_name,
+         p.project_name
+         FROM invoices i
+         LEFT JOIN clients c ON i.client_id = c.id
+         LEFT JOIN companies comp ON i.company_id = comp.id
+         LEFT JOIN projects p ON i.project_id = p.id
+         ${whereClause}
+         ORDER BY i.id DESC`,
+        params
+      );
+    } catch (e) {
+      console.warn('⚠️ Primary invoice query failed, trying fallbacks...', e.message);
+    }
+
+    // If JOIN query failed (throws) or returned nothing, load rows without JOINs
+    if (!Array.isArray(invoices) || invoices.length === 0) {
+      // Level 1 Fallback: Simple query with is_deleted
+      try {
+        const [simple] = await pool.execute(
+          `SELECT * FROM invoices WHERE company_id = ? AND is_deleted = 0 ORDER BY id DESC LIMIT 500`,
+          [filterCompanyId]
+        );
+      } catch (e1) {
+        console.warn('⚠️ Level 1 fallback failed (likely is_deleted missing):', e1.message);
+        // Level 2 Fallback: Simple query WITHOUT is_deleted
+        try {
+          const [s2] = await pool.execute(
+            `SELECT * FROM invoices WHERE company_id = ? ORDER BY id DESC LIMIT 500`,
+            [filterCompanyId]
+          );
+          invoices = s2;
+        } catch (e2) {
+          console.error('❌ All invoice fallbacks failed:', e2.message);
+          throw e2;
+        }
+      }
+
+      // Enrich simple query results with basic names if possible
+      if (Array.isArray(invoices) && invoices.length > 0) {
+        for (const inv of invoices) {
+          try {
+            if (inv.client_id) {
+              const [crows] = await pool.execute('SELECT company_name FROM clients WHERE id = ? LIMIT 1', [inv.client_id]);
+              inv.client_name = crows[0]?.company_name || null;
+            }
+            if (inv.project_id) {
+              const [pr] = await pool.execute('SELECT project_name FROM projects WHERE id = ? LIMIT 1', [inv.project_id]);
+              inv.project_name = pr[0]?.project_name || null;
+            }
+          } catch (err) {
+            // Ignore enrichment errors
+          }
+        }
+      }
+    }
+
+    invoices = Array.isArray(invoices) ? invoices : [];
+
+    // Batch load paid amounts (if payments table is missing, this returns [] and all stay 0)
+    const paidByInvoiceId = new Map();
+    if (invoices.length > 0) {
+      const ids = invoices.map((row) => row.id).filter(Boolean);
+      if (ids.length) {
+        const ph = ids.map(() => '?').join(',');
+        let paidRows = [];
+        try {
+          const [res1] = await pool.execute(
+            `SELECT invoice_id, COALESCE(SUM(amount), 0) AS s FROM payments WHERE invoice_id IN (${ph}) AND is_deleted = 0 GROUP BY invoice_id`,
+            ids
+          );
+          paidRows = res1;
+        } catch (e1) {
+          try {
+            const [res2] = await pool.execute(
+              `SELECT invoice_id, COALESCE(SUM(amount), 0) AS s FROM payments WHERE invoice_id IN (${ph}) GROUP BY invoice_id`,
+              ids
+            );
+            paidRows = res2;
+          } catch (e2) {
+            console.warn('⚠️ Could not load payments:', e2.message);
+          }
+        }
+        for (const pr of paidRows || []) {
+          paidByInvoiceId.set(pr.invoice_id, parseFloat(pr.s || 0));
+        }
+      }
+    }
 
     // Get items and calculate totals for each invoice
     for (let invoice of invoices) {
@@ -208,7 +289,8 @@ const getAll = async (req, res) => {
       invoice.items = items || [];
 
       // Calculate paid amount from payments
-      const paidAmount = parseFloat(invoice.paid_amount || 0);
+      const paidAmount =
+        paidByInvoiceId.has(invoice.id) ? paidByInvoiceId.get(invoice.id) : parseFloat(invoice.paid_amount || 0);
       const totalAmount = parseFloat(invoice.total || 0);
       const dueAmount = totalAmount - paidAmount;
 
@@ -228,29 +310,33 @@ const getAll = async (req, res) => {
       }
 
       // Check for credit notes
-      const [creditNotes] = await pool.execute(
-        `SELECT SUM(amount) as total_credit FROM credit_notes WHERE invoice_id = ? AND is_deleted = 0`,
-        [invoice.id]
-      );
-      if (creditNotes[0]?.total_credit > 0) {
+      let totalCredit = 0;
+      try {
+        const [cn] = await pool.execute(
+          `SELECT SUM(amount) as total_credit FROM credit_notes WHERE invoice_id = ? AND is_deleted = 0`,
+          [invoice.id]
+        );
+        totalCredit = cn[0]?.total_credit || 0;
+      } catch (e) {
+        try {
+          const [cn2] = await pool.execute(
+            `SELECT SUM(amount) as total_credit FROM credit_notes WHERE invoice_id = ?`,
+            [invoice.id]
+          );
+          totalCredit = cn2[0]?.total_credit || 0;
+        } catch (e2) {
+          // Ignore
+        }
+      }
+      invoice.total_credit_notes = totalCredit;
+      if (totalCredit > 0) {
         invoice.status = 'Credited';
       }
 
-      // Get custom fields
-      const [customFieldsValues] = await pool.execute(
-        `SELECT cf.name, cfv.field_value 
-         FROM custom_field_values cfv
-         JOIN custom_fields cf ON cfv.custom_field_id = cf.id
-         WHERE cfv.record_id = ? AND cfv.module = 'Invoices'`,
-        [invoice.id]
-      );
-      const custom_fields_data = {};
-      customFieldsValues.forEach(row => {
-        custom_fields_data[row.name] = row.field_value;
-      });
-      invoice.custom_fields = custom_fields_data;
+      invoice.custom_fields = await customFieldService.getCustomFieldsWithValues(filterCompanyId, 'Invoices', invoice.id);
     }
 
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     res.json({
       success: true,
       data: invoices
@@ -265,6 +351,7 @@ const getAll = async (req, res) => {
       { id: 304, invoice_number: "INV#004", client_name: "Alpha Corp", bill_date: "2026-04-20", total: 12000, paid_amount: 0, due_amount: 12000, status: "Unpaid", project_name: "Cloud Hosting", created_at: new Date() },
       { id: 305, invoice_number: "INV#005", client_name: "DataStream", bill_date: "2026-04-05", total: 8500, paid_amount: 8500, due_amount: 0, status: "Fully Paid", project_name: "Security Audit", created_at: new Date() }
     ];
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     res.json({
       success: true,
       data: mockInvoices
@@ -278,29 +365,55 @@ const getAll = async (req, res) => {
  */
 const getById = async (req, res) => {
   try {
-    const { id } = req.params;
-    const filterCompanyId = req.query.company_id || req.companyId;
+    const idNum = parseInt(String(req.params.id), 10);
+    if (Number.isNaN(idNum) || idNum <= 0) {
+      return res.status(400).json({ success: false, error: 'Invalid invoice id' });
+    }
+    const rawCid = req.query.company_id ?? req.companyId;
+    const filterCompanyId =
+      rawCid != null && rawCid !== '' ? parseInt(String(rawCid), 10) : null;
 
-    const [invoices] = await pool.execute(
-      `SELECT i.*, 
-       c.company_name as client_name, 
-       comp.name as company_name, 
-       p.project_name,
-       COALESCE(SUM(pay.amount), 0) as paid_amount
-       FROM invoices i
-       LEFT JOIN clients c ON i.client_id = c.id
-       LEFT JOIN companies comp ON i.company_id = comp.id
-       LEFT JOIN projects p ON i.project_id = p.id
-       LEFT JOIN payments pay ON pay.invoice_id = i.id AND pay.is_deleted = 0
-       WHERE i.id = ? AND i.is_deleted = 0
-       GROUP BY i.id`,
-      [id]
-    );
+    // Same paid_amount pattern as getAll (no GROUP BY — avoids pool swallowing SQL errors / empty results)
+    let invoices = [];
+    try {
+      [invoices] = await pool.execute(
+        `SELECT i.*,
+         c.company_name AS client_name,
+         comp.name AS company_name,
+         p.project_name,
+         (SELECT COALESCE(SUM(pay.amount), 0) FROM payments pay
+           WHERE pay.invoice_id = i.id AND pay.is_deleted = 0) AS paid_amount
+         FROM invoices i
+         LEFT JOIN clients c ON i.client_id = c.id
+         LEFT JOIN companies comp ON i.company_id = comp.id
+         LEFT JOIN projects p ON i.project_id = p.id
+         WHERE i.id = ? AND i.is_deleted = 0
+           ${filterCompanyId && !Number.isNaN(filterCompanyId) && filterCompanyId > 0 ? 'AND i.company_id = ?' : ''}`,
+        filterCompanyId && !Number.isNaN(filterCompanyId) && filterCompanyId > 0
+          ? [idNum, filterCompanyId]
+          : [idNum]
+      );
+    } catch (e) {
+      console.warn('⚠️ Primary getById query failed:', e.message);
+    }
+
+    if (!Array.isArray(invoices) || invoices.length === 0) {
+      try {
+        const [simple] = await pool.execute(
+          `SELECT * FROM invoices WHERE id = ? ${filterCompanyId && !Number.isNaN(filterCompanyId) && filterCompanyId > 0 ? 'AND company_id = ?' : ''}`,
+          filterCompanyId && !Number.isNaN(filterCompanyId) && filterCompanyId > 0 ? [idNum, filterCompanyId] : [idNum]
+        );
+        invoices = simple;
+      } catch (e2) {
+        console.error('❌ All getById fallbacks failed:', e2.message);
+        throw e2;
+      }
+    }
 
     if (invoices.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Invoice not found'
+        error: req.t ? req.t('api_msg_f5d5ae20') : "Invoice not found"
       });
     }
 
@@ -342,19 +455,7 @@ const getById = async (req, res) => {
       invoice.status = 'Credited';
     }
 
-    // Get custom fields
-    const [customFieldsValues] = await pool.execute(
-      `SELECT cf.name, cfv.field_value 
-       FROM custom_field_values cfv
-       JOIN custom_fields cf ON cfv.custom_field_id = cf.id
-       WHERE cfv.record_id = ? AND cfv.module = 'Invoices'`,
-      [invoice.id]
-    );
-    const custom_fields_data = {};
-    customFieldsValues.forEach(row => {
-      custom_fields_data[row.name] = row.field_value;
-    });
-    invoice.custom_fields = custom_fields_data;
+    invoice.custom_fields = await customFieldService.getCustomFieldsWithValues(filterCompanyId, 'Invoices', invoice.id);
 
     res.json({
       success: true,
@@ -364,7 +465,7 @@ const getById = async (req, res) => {
     console.error('Get invoice error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch invoice'
+      error: req.t ? req.t('api_msg_cd70f37d') : "Failed to fetch invoice"
     });
   }
 };
@@ -393,7 +494,7 @@ const create = async (req, res) => {
     if (isNaN(companyIdNum) || companyIdNum <= 0) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid company_id. Must be a positive number.'
+        error: req.t ? req.t('api_msg_50a39232') : "Invalid company_id. Must be a positive number."
       });
     }
 
@@ -591,25 +692,7 @@ const create = async (req, res) => {
       );
     }
 
-    // Insert custom fields
-    if (Object.keys(custom_fields).length > 0) {
-      for (const [fieldName, fieldValue] of Object.entries(custom_fields)) {
-        if (fieldValue !== undefined && fieldValue !== null) {
-          // Get field ID by name and module
-          const [fieldRow] = await pool.execute(
-            `SELECT id FROM custom_fields WHERE name = ? AND module = 'Invoices' AND company_id = ?`,
-            [fieldName, companyIdNum]
-          );
-          if (fieldRow.length > 0) {
-            await pool.execute(
-              `INSERT INTO custom_field_values (custom_field_id, record_id, module, field_value, company_id)
-               VALUES (?, ?, ?, ?, ?)`,
-              [fieldRow[0].id, invoiceId, 'Invoices', fieldValue.toString(), companyIdNum]
-            );
-          }
-        }
-      }
-    }
+    await customFieldService.saveCustomFields(companyIdNum, 'Invoices', invoiceId, custom_fields);
 
     // Get created invoice
     const [invoices] = await pool.execute(
@@ -620,7 +703,7 @@ const create = async (req, res) => {
     res.status(201).json({
       success: true,
       data: invoices[0],
-      message: 'Invoice created successfully'
+      message: req.t ? req.t('api_msg_be234255') : "Invoice created successfully"
     });
   } catch (error) {
     console.error('Create invoice error:', error);
@@ -628,7 +711,7 @@ const create = async (req, res) => {
     console.error('Request body:', req.body);
     res.status(500).json({
       success: false,
-      error: 'Failed to create invoice',
+      error: req.t ? req.t('api_msg_9a507aad') : "Failed to create invoice",
       details: error.message,
       sqlMessage: error.sqlMessage || null,
       code: error.code || null
@@ -661,7 +744,7 @@ const update = async (req, res) => {
     if (invoices.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Invoice not found'
+        error: req.t ? req.t('api_msg_f5d5ae20') : "Invoice not found"
       });
     }
 
@@ -841,32 +924,7 @@ const update = async (req, res) => {
 
     // Update custom fields if provided
     if (updateFields.custom_fields) {
-      for (const [fieldName, fieldValue] of Object.entries(updateFields.custom_fields)) {
-        const [fieldRow] = await pool.execute(
-          `SELECT id FROM custom_fields WHERE name = ? AND module = 'Invoices' AND company_id = ?`,
-          [fieldName, companyId]
-        );
-        if (fieldRow.length > 0) {
-          const fieldId = fieldRow[0].id;
-          const [existingValue] = await pool.execute(
-            `SELECT id FROM custom_field_values WHERE custom_field_id = ? AND record_id = ? AND module = 'Invoices'`,
-            [fieldId, id]
-          );
-
-          if (existingValue.length > 0) {
-            await pool.execute(
-              `UPDATE custom_field_values SET field_value = ? WHERE id = ?`,
-              [fieldValue !== null && fieldValue !== undefined ? fieldValue.toString() : null, existingValue[0].id]
-            );
-          } else if (fieldValue !== null && fieldValue !== undefined) {
-            await pool.execute(
-              `INSERT INTO custom_field_values (custom_field_id, record_id, module, field_value, company_id)
-               VALUES (?, ?, ?, ?, ?)`,
-              [fieldId, id, 'Invoices', fieldValue.toString(), companyId]
-            );
-          }
-        }
-      }
+      await customFieldService.saveCustomFields(companyId, 'Invoices', id, updateFields.custom_fields);
     }
 
     // Get updated invoice
@@ -878,13 +936,13 @@ const update = async (req, res) => {
     res.json({
       success: true,
       data: updatedInvoices[0],
-      message: 'Invoice updated successfully'
+      message: req.t ? req.t('api_msg_f1056461') : "Invoice updated successfully"
     });
   } catch (error) {
     console.error('Update invoice error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to update invoice',
+      error: req.t ? req.t('api_msg_2f834cc0') : "Failed to update invoice",
       details: error.message
     });
   }
@@ -908,7 +966,7 @@ const deleteInvoice = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Invoice not found'
+        error: req.t ? req.t('api_msg_f5d5ae20') : "Invoice not found"
       });
     }
 
@@ -923,13 +981,13 @@ const deleteInvoice = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Invoice deleted successfully'
+      message: req.t ? req.t('api_msg_aee277c9') : "Invoice deleted successfully"
     });
   } catch (error) {
     console.error('Delete invoice error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete invoice'
+      error: req.t ? req.t('api_msg_6355d20c') : "Failed to delete invoice"
     });
   }
 };
@@ -946,7 +1004,7 @@ const createFromTimeLogs = async (req, res) => {
     if (!time_log_from || !time_log_to || !client_id || !invoice_date || !due_date) {
       return res.status(400).json({
         success: false,
-        error: 'time_log_from, time_log_to, client_id, invoice_date, and due_date are required'
+        error: req.t ? req.t('api_msg_abaca72a') : "time_log_from, time_log_to, client_id, invoice_date, and due_date are required"
       });
     }
 
@@ -962,7 +1020,7 @@ const createFromTimeLogs = async (req, res) => {
     if (timeLogs.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'No time logs found for the specified period'
+        error: req.t ? req.t('api_msg_ff214a78') : "No time logs found for the specified period"
       });
     }
 
@@ -1016,7 +1074,7 @@ const createFromTimeLogs = async (req, res) => {
     console.error('Create from time logs error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to create invoice from time logs'
+      error: req.t ? req.t('api_msg_e417a1d1') : "Failed to create invoice from time logs"
     });
   }
 };
@@ -1039,7 +1097,7 @@ const createRecurring = async (req, res) => {
     if (!billing_frequency || !recurring_start_date || !recurring_total_count || !client_id || !items || items.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'billing_frequency, recurring_start_date, recurring_total_count, client_id, and items are required'
+        error: req.t ? req.t('api_msg_8f18acf0') : "billing_frequency, recurring_start_date, recurring_total_count, client_id, and items are required"
       });
     }
 
@@ -1161,7 +1219,7 @@ const createRecurring = async (req, res) => {
     console.error('Create recurring invoice error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to create recurring invoices'
+      error: req.t ? req.t('api_msg_af8ffc73') : "Failed to create recurring invoices"
     });
   }
 };
@@ -1188,7 +1246,7 @@ const generatePDF = async (req, res) => {
     if (invoices.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Invoice not found'
+        error: req.t ? req.t('api_msg_f5d5ae20') : "Invoice not found"
       });
     }
 
@@ -1212,13 +1270,13 @@ const generatePDF = async (req, res) => {
     res.json({
       success: true,
       data: invoice,
-      message: 'PDF generation will be implemented with pdfkit or puppeteer'
+      message: req.t ? req.t('api_msg_cb75e169') : "PDF generation will be implemented with pdfkit or puppeteer"
     });
   } catch (error) {
     console.error('Generate PDF error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to generate PDF data'
+      error: req.t ? req.t('api_msg_26bf0987') : "Failed to generate PDF data"
     });
   }
 };
@@ -1254,7 +1312,7 @@ const sendEmail = async (req, res) => {
     );
 
     if (invoices.length === 0) {
-      return res.status(404).json({ success: false, error: 'Invoice not found' });
+      return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_f5d5ae20') : "Invoice not found" });
     }
 
     const invoice = invoices[0];
@@ -1310,7 +1368,7 @@ const sendEmail = async (req, res) => {
     // Send email
     const recipientEmail = to || invoice.client_email;
     if (!recipientEmail) {
-      return res.status(400).json({ success: false, error: 'Recipient email is required' });
+      return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_4a2ce470') : "Recipient email is required" });
     }
 
     // Handle CC and BCC from request body
@@ -1354,7 +1412,7 @@ const sendEmail = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Invoice sent successfully',
+      message: req.t ? req.t('api_msg_3f680aad') : "Invoice sent successfully",
       data: { email: recipientEmail, messageId: emailResult.messageId }
     });
   } catch (error) {
@@ -1364,7 +1422,7 @@ const sendEmail = async (req, res) => {
     console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
-      error: 'Failed to send invoice email',
+      error: req.t ? req.t('api_msg_2fb54342') : "Failed to send invoice email",
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }

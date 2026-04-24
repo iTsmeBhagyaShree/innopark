@@ -56,7 +56,7 @@ const CustomFieldsSection = ({ module, companyId, values = {}, onChange }) => {
                 <IoList className="text-primary-accent" size={16} />
                 Additional Information
             </h4>
-            <div className="grid grid-cols-1 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {fields.map((field) => (
                     <div key={field.id}>
                         <label className="block text-sm font-medium text-gray-700 mb-1">

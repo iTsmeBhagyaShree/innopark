@@ -32,13 +32,10 @@ import {
   IoNotifications,
   IoCloudUpload,
   IoPeople,
-  IoTime,
-  IoCalendar,
   IoLockClosed,
   IoShieldCheckmark,
   IoCart,
   IoBuild,
-  IoCube,
 } from 'react-icons/io5'
 
 /**
@@ -245,12 +242,10 @@ const EmailTemplatesSettings = () => {
   const [activeSubMenu, setActiveSubMenu] = useState('email-templates')
   const [expandedSections, setExpandedSections] = useState({
     'app-settings': true,
-    'hrm': false,
     'access-permission': false,
     'client-portal': false,
     'sales-prospects': false,
-    'setup': false,
-    'plugins': false
+    'setup': false
   })
 
   const toggleSection = (sectionId) => {
@@ -273,15 +268,6 @@ const EmailTemplatesSettings = () => {
         { id: 'email-templates', label: t('settings.email_templates'), icon: IoDocumentText },
         { id: 'notifications', label: t('settings.notifications'), icon: IoNotifications },
         { id: 'updates', label: t('settings.updates'), icon: IoCloudUpload },
-      ]
-    },
-    {
-      id: 'hrm',
-      label: 'HR Settings',
-      icon: IoPeople,
-      children: [
-        { id: 'hrm-attendance', label: 'Attendance Settings', icon: IoTime },
-        { id: 'hrm-leaves', label: 'Leave Settings', icon: IoCalendar },
       ]
     },
     {
@@ -314,14 +300,6 @@ const EmailTemplatesSettings = () => {
       icon: IoBuild,
       children: [
         { id: 'setup', label: t('settings.system_setup'), icon: IoBuild },
-      ]
-    },
-    {
-      id: 'plugins',
-      label: t('settings.plugins'),
-      icon: IoCube,
-      children: [
-        { id: 'plugins', label: t('settings.manage_plugins'), icon: IoCube },
       ]
     }
   ]

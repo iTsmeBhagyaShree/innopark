@@ -16,9 +16,9 @@ const axiosInstance = axios.create({
 axiosInstance.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token')
-    const companyId = localStorage.getItem('companyId')
+    const companyId =
+      localStorage.getItem('companyId') || localStorage.getItem('company_id')
     const user = JSON.parse(localStorage.getItem('user') || '{}')
-    const userRole = user.role || ''
 
     // Add JWT token to headers
     if (token) {
@@ -30,12 +30,12 @@ axiosInstance.interceptors.request.use(
       delete config.headers['Content-Type']
     }
 
-    // Skip company_id for SuperAdmin routes
+    // Only skip company scoping for global superadmin API paths (not /projects, /leads, etc.)
     const isSuperAdminRoute = config.url?.includes('/superadmin')
 
-    // Auto-add company_id to requests if not already present
-    // Skip for SuperAdmin as they manage ALL companies
-    if (companyId && !isSuperAdminRoute && userRole !== 'SUPERADMIN') {
+    // Auto-add company_id for tenant APIs. Even SUPERADMIN needs company_id when working
+    // in admin pages (interceptor previously skipped SUPERADMIN and broke GET /projects).
+    if (companyId && !isSuperAdminRoute) {
       const parsedCompanyId = parseInt(companyId, 10)
 
       // Only add if valid
@@ -44,7 +44,7 @@ axiosInstance.interceptors.request.use(
         if (config.method === 'get') {
           config.params = {
             ...config.params,
-            company_id: config.params?.company_id || parsedCompanyId
+            company_id: config.params?.company_id ?? parsedCompanyId
           }
         }
         // For POST, PUT, PATCH requests, add to body (only if body exists and company_id not already set)
@@ -56,7 +56,7 @@ axiosInstance.interceptors.request.use(
           } else if (config.data && typeof config.data === 'object') {
             config.data = {
               ...config.data,
-              company_id: config.data.company_id || parsedCompanyId
+              company_id: config.data.company_id ?? parsedCompanyId
             }
           }
         }

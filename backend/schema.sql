@@ -1030,6 +1030,23 @@ CREATE TABLE `custom_field_enabled_in` (
   INDEX `idx_custom_field_enabled_field` (`custom_field_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Custom Field Values
+CREATE TABLE `custom_field_values` (
+  `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `company_id` INT UNSIGNED NOT NULL,
+  `custom_field_id` INT UNSIGNED NOT NULL,
+  `record_id` INT UNSIGNED NOT NULL,
+  `module` VARCHAR(50) NOT NULL,
+  `field_value` TEXT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (`company_id`) REFERENCES `companies`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`custom_field_id`) REFERENCES `custom_fields`(`id`) ON DELETE CASCADE,
+  INDEX `idx_cfv_record` (`record_id`, `module`),
+  INDEX `idx_cfv_field` (`custom_field_id`),
+  INDEX `idx_cfv_company` (`company_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Email Templates
 CREATE TABLE `email_templates` (
   `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

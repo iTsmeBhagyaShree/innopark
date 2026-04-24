@@ -1,4 +1,23 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+
+/** Stable tenant id for admin pages — never guess company `1` (wrong org / empty lists). */
+const resolveCompanyId = (u) => {
+  const candidates = [
+    u?.company_id,
+    u?.companyId,
+  ]
+  for (const c of candidates) {
+    if (c == null || c === '') continue
+    const n = parseInt(String(c).trim(), 10)
+    if (Number.isFinite(n) && n > 0) return n
+  }
+  const ls = localStorage.getItem('companyId') || localStorage.getItem('company_id')
+  if (ls) {
+    const n = parseInt(ls, 10)
+    if (Number.isFinite(n) && n > 0) return n
+  }
+  return null
+}
 import { useNavigate } from 'react-router-dom'
 import { useLanguage } from '../../../context/LanguageContext'
 import AddButton from '../../../components/ui/AddButton'
@@ -52,13 +71,34 @@ import {
 } from '../../../components/ui/FormRow'
 import RichTextEditor from '../../../components/ui/RichTextEditor'
 
+/** Shown in the create/edit form when the API has not returned any project labels yet (same names as list badges). */
+const DEFAULT_PROJECT_PRIORITY_LABELS = [
+  { id: 'fb-urgent', name: 'Urgent' },
+  { id: 'fb-ontrack', name: 'On track' },
+  { id: 'fb-high', name: 'High Priority' },
+]
+
+/** YYYY-MM-DD for table cells; bad API values show as empty to avoid "Invalid Date" */
+const toDateInput = (v) => {
+  if (v == null || v === '') return ''
+  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) return v.split('T')[0].slice(0, 10)
+  const t = new Date(v)
+  if (Number.isNaN(t.getTime()) || t.getFullYear() < 1970) return ''
+  return t.toISOString().split('T')[0]
+}
 
 const Projects = () => {
   const navigate = useNavigate()
   const { user } = useAuth()
   const { t } = useLanguage()
-  // Ensure companyId is always a number
-  const companyId = parseInt(user?.company_id || localStorage.getItem('companyId') || 1, 10)
+  const companyId = useMemo(() => resolveCompanyId(user), [user])
+
+  // Keep localStorage in sync so axios + list calls always send the same company as the session
+  useEffect(() => {
+    if (user?.company_id && !localStorage.getItem('companyId')) {
+      localStorage.setItem('companyId', String(user.company_id))
+    }
+  }, [user?.company_id])
   const [viewMode, setViewMode] = useState('list') // 'list', 'card', 'calendar', 'pin'
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
@@ -133,6 +173,7 @@ const Projects = () => {
 
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
+  const [listError, setListError] = useState(null)
   const [customFields, setCustomFields] = useState([])
   const [cfLoading, setCfLoading] = useState(false)
   const [users, setUsers] = useState([])
@@ -220,6 +261,17 @@ const Projects = () => {
     fetchLabels()
   }, [fetchLabels])
 
+  useEffect(() => {
+    if (isAddModalOpen || isEditModalOpen) {
+      fetchLabels()
+    }
+  }, [isAddModalOpen, isEditModalOpen, fetchLabels])
+
+  const priorityLabelOptions = useMemo(
+    () => (availableLabels.length > 0 ? availableLabels : DEFAULT_PROJECT_PRIORITY_LABELS),
+    [availableLabels]
+  )
+
   const handleAddLabel = async () => {
     if (!newLabel.trim()) return
     try {
@@ -263,28 +315,38 @@ const Projects = () => {
   }, [])
 
   const fetchProjects = useCallback(async () => {
+    let requestParams = { company_id: null }
     try {
-      // Ensure companyId is a valid number
-      const validCompanyId = parseInt(companyId, 10)
-      if (!validCompanyId || isNaN(validCompanyId) || validCompanyId <= 0) {
-        console.error('Invalid companyId for fetchProjects:', companyId, 'parsed:', validCompanyId)
+      const validCompanyId = companyId
+      if (!validCompanyId || validCompanyId <= 0) {
+        console.error('Invalid companyId for fetchProjects — cannot call GET /projects without company_id')
+        setListError(t('projects.errors.missing_company') || 'Company is required. Please sign in again.')
+        setProjects([])
         setLoading(false)
         return
       }
 
       setLoading(true)
+      setListError(null)
       const params = {
-        company_id: validCompanyId // Always include company_id from Admin session
+        company_id: validCompanyId,
       }
+      requestParams = { ...params }
 
       // Search
       if (debouncedSearchQuery) {
         params.search = debouncedSearchQuery
       }
 
-      // Status filter
+      // Status / tab filters: high_priority = label; upcoming = date query; not raw status=high_priority
       if (statusFilter && statusFilter !== 'all') {
-        params.status = statusFilter
+        if (statusFilter === 'high_priority') {
+          params.priority = 'High Priority'
+        } else if (statusFilter === 'upcoming') {
+          params.upcoming = 'true'
+        } else {
+          params.status = statusFilter
+        }
       }
 
       // Priority/Label filter
@@ -324,30 +386,36 @@ const Projects = () => {
       }
 
       const response = await projectsAPI.getAll(params)
-      if (response.data.success) {
-        const fetchedProjects = response.data.data || []
+      const raw = response.data
+      if (raw?.success === false) {
+        setListError(raw?.error || t('projects.errors.load_failed') || 'Could not load projects')
+        setProjects([])
+        return
+      }
+      const fetchedProjects = Array.isArray(raw?.data) ? raw.data : Array.isArray(raw) ? raw : []
+      if (raw?.success !== false) {
         // Transform API data to match component format
-        const transformedProjects = fetchedProjects.map(project => ({
+        const transformedProjects = fetchedProjects.map((project) => ({
           id: project.id,
           code: project.short_code || '',
           name: project.project_name || '',
+          projectType: project.project_type || '',
           company_name: project.company_name || '',
           department_name: project.department_name || '',
           client_name: project.client_name || '',
           project_manager_name: project.project_manager_name || '',
           budget: project.budget || null,
-          members: (project.members || []).map(member => ({
+          members: (project.members || []).map((member) => ({
             id: member.id || member.user_id,
             name: member.name || member.email,
-            avatar: member.name ? member.name.split(' ').map(n => n[0]).join('') : member.email.substring(0, 2).toUpperCase(),
+            avatar: member.name ? member.name.split(' ').map((n) => n[0]).join('') : member.email.substring(0, 2).toUpperCase(),
           })),
-          startDate: project.start_date ? project.start_date.split('T')[0] : '',
-          deadline: project.deadline ? project.deadline.split('T')[0] : null,
+          startDate: toDateInput(project.start_date),
+          deadline: project.deadline == null || project.deadline === '' ? null : toDateInput(project.deadline) || null,
           status: project.status || 'In Bearbeitung',
           progress: project.progress || 0,
           label: project.label || '',
           price: project.budget || project.price || null,
-          // Keep original fields for edit
           company_id: project.company_id,
           department_id: project.department_id,
           project_manager_id: project.project_manager_id,
@@ -359,11 +427,17 @@ const Projects = () => {
     } catch (error) {
       console.error('Error fetching projects:', error)
       console.error('Error response:', error.response?.data)
-      console.error('Request params:', params)
+      console.error('Request params:', requestParams)
+      const msg =
+        error.response?.data?.error ||
+        error.message ||
+        (t('projects.errors.load_failed') || 'Could not load projects')
+      setListError(msg)
+      setProjects([])
     } finally {
       setLoading(false)
     }
-  }, [companyId, debouncedSearchQuery, statusFilter, labelFilter, assignedUserFilter, projectTypeFilter, startDateFilter, endDateFilter, progressFilter, sortColumn, sortDirection])
+  }, [companyId, debouncedSearchQuery, statusFilter, labelFilter, assignedUserFilter, projectTypeFilter, startDateFilter, endDateFilter, progressFilter, sortColumn, sortDirection, t])
 
   // Fetch departments by company
   const fetchDepartmentsByCompany = useCallback(async (companyId) => {
@@ -452,8 +526,14 @@ const Projects = () => {
 
   // Fetch projects on mount and when filters change
   useEffect(() => {
-    if (companyId && !isNaN(companyId) && companyId > 0) {
+    if (companyId && companyId > 0) {
       fetchProjects()
+    } else {
+      setLoading(false)
+      setProjects([])
+      if (!companyId) {
+        setListError(t('projects.errors.missing_company'))
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId, debouncedSearchQuery, statusFilter, labelFilter, assignedUserFilter, projectTypeFilter, startDateFilter, endDateFilter, progressFilter, sortColumn, sortDirection])
@@ -476,12 +556,17 @@ const Projects = () => {
   }
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-')
+    if (dateString == null || dateString === '') return '-'
+    const d = new Date(dateString)
+    if (Number.isNaN(d.getTime())) return '-'
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-')
   }
 
   const isDeadlineOverdue = (deadline) => {
-    return new Date(deadline) < new Date()
+    if (!deadline) return false
+    const d = new Date(deadline)
+    if (Number.isNaN(d.getTime())) return false
+    return d < new Date()
   }
 
 
@@ -560,6 +645,35 @@ const Projects = () => {
     setIsAddModalOpen(true)
   }
 
+  const resetFormAfterSuccessfulSave = () => {
+    setFormData({
+      company_id: companyId,
+      department_id: '',
+      projectManager: '',
+      shortCode: '',
+      projectName: '',
+      description: '',
+      startDate: '',
+      deadline: '',
+      noDeadline: false,
+      budget: '',
+      projectCategory: '',
+      projectSubCategory: '',
+      projectSummary: '',
+      notes: '',
+      publicGanttChart: 'enable',
+      publicTaskBoard: 'enable',
+      taskApproval: 'disable',
+      label: '',
+      projectMembers: [],
+      createPublicProject: false,
+      status: 'In Bearbeitung',
+    })
+    setFilteredEmployees([])
+    setFilteredDepartments([])
+    setEmployeeSearchQuery('')
+  }
+
   const handleSave = async () => {
     // Auto-set company_id from Admin session
     const adminCompanyId = companyId
@@ -630,9 +744,14 @@ const Projects = () => {
         const response = await projectsAPI.update(selectedProject.id, projectData)
         if (response.data.success) {
           alert('Project updated successfully!')
-          await fetchProjects()
           setIsEditModalOpen(false)
           setSelectedProject(null)
+          resetFormAfterSuccessfulSave()
+          try {
+            await fetchProjects()
+          } catch (refreshErr) {
+            console.error('Project list refresh failed (save still succeeded):', refreshErr)
+          }
         } else {
           alert(response.data.error || 'Failed to update project')
         }
@@ -640,40 +759,17 @@ const Projects = () => {
         const response = await projectsAPI.create(projectData)
         if (response.data.success) {
           alert('Project created successfully!')
-          await fetchProjects()
           setIsAddModalOpen(false)
+          resetFormAfterSuccessfulSave()
+          try {
+            await fetchProjects()
+          } catch (refreshErr) {
+            console.error('Project list refresh failed (save still succeeded):', refreshErr)
+          }
         } else {
           alert(response.data.error || 'Failed to create project')
         }
       }
-
-      // Reset form (keep company_id from Admin session)
-      setFormData({
-        company_id: companyId, // Keep Admin's company_id
-        department_id: '',
-        projectManager: '',
-        shortCode: '',
-        projectName: '',
-        description: '',
-        startDate: '',
-        deadline: '',
-        noDeadline: false,
-        budget: '',
-        projectCategory: '',
-        projectSubCategory: '',
-        projectSummary: '',
-        notes: '',
-        publicGanttChart: 'enable',
-        publicTaskBoard: 'enable',
-        taskApproval: 'disable',
-        label: '',
-        projectMembers: [],
-        createPublicProject: false,
-        status: 'In Bearbeitung',
-      })
-      setFilteredEmployees([])
-      setFilteredDepartments([])
-      setEmployeeSearchQuery('')
     } catch (error) {
       console.error('Error saving project:', error)
       alert(error.response?.data?.error || 'Failed to save project')
@@ -952,12 +1048,13 @@ const Projects = () => {
     },
     {
       key: 'name',
-      label: t('projects.columns.title'),
+      label: t('projects.columns.name'),
+      width: '260px',
       render: (value, row) => (
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1 min-w-0">
           <a
             href="#"
-            className="text-gray-900 hover:text-blue-600 hover:underline font-medium text-sm"
+            className="text-gray-900 hover:text-blue-600 hover:underline font-medium text-sm truncate"
             onClick={(e) => {
               e.preventDefault()
               handleView(row)
@@ -965,25 +1062,26 @@ const Projects = () => {
           >
             {value || row.project_name || '-'}
           </a>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-gray-500">
+            {row.code && <span className="font-mono">{row.code}</span>}
+            {row.projectType && <span className="text-gray-400 capitalize">{row.projectType}</span>}
+          </div>
           {row.label && (
             <span
               className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold text-white w-fit shadow-sm uppercase tracking-wide whitespace-nowrap"
-              style={{ backgroundColor: availableLabels.find(l => l.name === row.label)?.color || '#3b82f6' }}
-            >{['urgent'].includes((row.label||'').toLowerCase()) ? 'Dringend' : ['on track'].includes((row.label||'').toLowerCase()) ? 'Auf Kurs' : ['high priority'].includes((row.label||'').toLowerCase()) ? 'Hohe Priorität' : row.label}</span>
+              style={{ backgroundColor: availableLabels.find((l) => l.name === row.label)?.color || '#3b82f6' }}
+            >
+              {['urgent'].includes((row.label || '').toLowerCase())
+                ? 'Dringend'
+                : ['on track'].includes((row.label || '').toLowerCase())
+                  ? 'Auf Kurs'
+                  : ['high priority'].includes((row.label || '').toLowerCase())
+                    ? 'Hohe Priorität'
+                    : row.label}
+            </span>
           )}
         </div>
       ),
-    },
-
-    {
-      label: t('projects.columns.name'),
-      width: '250px',
-      render: (value, row) => (
-        <div className="flex flex-col">
-          <span className="font-semibold text-gray-800">{value}</span>
-          <span className="text-xs text-gray-400 capitalize">{row.projectType}</span>
-        </div>
-      )
     },
     {
       key: 'startDate',
@@ -1078,6 +1176,23 @@ const Projects = () => {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      {listError && (
+        <div
+          role="alert"
+          className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 flex flex-wrap items-center justify-between gap-2"
+        >
+          <span>{listError}</span>
+          {companyId ? (
+            <button
+              type="button"
+              onClick={() => fetchProjects()}
+              className="shrink-0 rounded-md bg-amber-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-900"
+            >
+              {t('projects.retry_load')}
+            </button>
+          ) : null}
+        </div>
+      )}
       {/* Header Section */}
       <div className="bg-white rounded-lg shadow-sm p-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
@@ -1208,6 +1323,9 @@ const Projects = () => {
       {/* Projects Table */}
       {viewMode === 'list' && (
         <Card className="p-0 overflow-hidden">
+          {loading && (
+            <div className="px-4 py-3 text-sm text-gray-600 border-b border-gray-100">{t('common.loading')}</div>
+          )}
           <DataTable
             columns={columns}
             data={filteredProjects}
@@ -1272,19 +1390,19 @@ const Projects = () => {
 
                 <div className="space-y-2 mb-4">
                   <div className="flex items-center justify-between text-xs sm:text-sm">
-                    <span className="text-secondary-text">{t('auto.auto_f2c12ae1') || 'Price:'}</span>
+                    <span className="text-secondary-text">{t('projects.form.budget')} :</span>
                     <span className="text-primary-text font-medium">
                       {project.budget || project.price ? `$${parseFloat(project.budget || project.price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-xs sm:text-sm">
-                    <span className="text-secondary-text">{t('auto.auto_a9e97e87') || 'Start Date:'}</span>
+                    <span className="text-secondary-text">{t('projects.form.start_date')} :</span>
                     <span className="text-primary-text font-medium">
                       {project.startDate ? formatDate(project.startDate) : '-'}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-xs sm:text-sm">
-                    <span className="text-secondary-text">{t('') || ''}</span>
+                    <span className="text-secondary-text">{t('projects.form.deadline')} :</span>
                     <span className={`font-medium ${project.deadline && isDeadlineOverdue(project.deadline) ? 'text-red-600' : 'text-primary-text'
                       }`}>
                       {project.deadline ? formatDate(project.deadline) : '-'}
@@ -1294,7 +1412,7 @@ const Projects = () => {
 
                 <div className="mb-4">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-secondary-text">{t('auto.auto_46b5f8c5') || 'Progress'}</span>
+                    <span className="text-xs text-secondary-text">{t('common.progress')}</span>
                     <span className="text-xs font-semibold text-primary-text">{project.progress || 0}%</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
@@ -1382,7 +1500,7 @@ const Projects = () => {
           setFilteredDepartments([])
           setEmployeeSearchQuery('')
         }}
-        title={isAddModalOpen ? "Create New Project" : "Edit Project Details"}
+        title={isAddModalOpen ? t('projects.form.create_project') : t('projects.form.edit_project')}
         size="full"
       >
         <div className="space-y-8 p-2">
@@ -1390,12 +1508,12 @@ const Projects = () => {
           <div>
             <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
               <IoBriefcase className="text-primary-accent" />
-              Project Information
+              {t('projects.form.project_info')}
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="col-span-2 md:col-span-2">
                 <Input
-                  label="Project Name *"
+                  label={t('projects.form.project_name')}
                   value={formData.projectName}
                   onChange={(e) => setFormData({ ...formData, projectName: e.target.value })}
                 />
@@ -1405,12 +1523,12 @@ const Projects = () => {
           <div>
             <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
               <IoCalendar className="text-primary-accent" />
-              Schedule & Budget
+              {t('projects.form.schedule_budget')}
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <Input
                 type="date"
-                label="Start Date *"
+                label={t('projects.form.start_date')}
                 value={formData.startDate}
                 onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
                 required
@@ -1418,14 +1536,14 @@ const Projects = () => {
               <div className="relative">
                 <Input
                   type="date"
-                  label="Deadline"
+                  label={t('projects.form.deadline')}
                   value={formData.deadline}
                   onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
                   disabled={formData.noDeadline}
                 />
                 <div className="absolute right-0 top-0">
                   <FormCheckbox
-                    label="No Deadline"
+                    label={t('projects.form.no_deadline')}
                     checked={formData.noDeadline}
                     onChange={(e) => setFormData({ ...formData, noDeadline: e.target.checked, deadline: e.target.checked ? '' : formData.deadline })}
                   />
@@ -1433,7 +1551,7 @@ const Projects = () => {
               </div>
               <Input
                 type="number"
-                label="Budget ($)"
+                label={t('projects.form.budget')}
                 value={formData.budget}
                 onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
                 placeholder="0.00"
@@ -1447,11 +1565,11 @@ const Projects = () => {
           <div>
             <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
               <IoPeople className="text-primary-accent" />
-              Team Assignment
+              {t('projects.form.team_assignment')}
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">{t('auto.auto_1d17cb99') || 'Department'}</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">{t('projects.form.department')}</label>
                 <select
                   value={formData.department_id}
                   onChange={(e) => {
@@ -1470,7 +1588,7 @@ const Projects = () => {
                   }}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent outline-none transition-all"
                 >
-                  <option value="">-- All Departments --</option>
+                  <option value="">{t('projects.form.all_departments')}</option>
                   {filteredDepartments.map(dept => (
                     <option key={dept.id} value={dept.id}>{dept.name || dept.department_name}</option>
                   ))}
@@ -1478,7 +1596,7 @@ const Projects = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Project Manager *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">{t('projects.form.project_manager')}</label>
                 <select
                   value={formData.projectManager}
                   onChange={(e) => {
@@ -1494,7 +1612,7 @@ const Projects = () => {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent outline-none transition-all"
                   required
                 >
-                  <option value="">-- Select Manager --</option>
+                  <option value="">{t('projects.form.select_manager')}</option>
                   {filteredEmployees.map(employee => (
                     <option key={employee.user_id || employee.id} value={employee.user_id || employee.id}>
                       {employee.name || employee.email}
@@ -1504,13 +1622,13 @@ const Projects = () => {
               </div>
 
               <div className="col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">{t('') || ''}</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">{t('projects.form.project_members')}</label>
                 <div className="border border-gray-300 rounded-lg p-4 bg-gray-50 max-h-[200px] overflow-y-auto">
                   <div className="mb-3 relative">
                     <IoSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                     <input
                       type="text"
-                      placeholder={t('auto.auto_1956ff5e') || "Search members..."}
+                      placeholder={t('projects.form.search_members')}
                       value={employeeSearchQuery}
                       onChange={(e) => setEmployeeSearchQuery(e.target.value)}
                       className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:border-primary-accent"
@@ -1559,7 +1677,7 @@ const Projects = () => {
                             />
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-gray-800 truncate">{employee.name || employee.email}</p>
-                              {isManager && <p className="text-xs text-primary-accent">{t('auto.auto_ae94be3c') || 'Manager'}</p>}
+                              {isManager && <p className="text-xs text-primary-accent">{t('projects.form.manager')}</p>}
                             </div>
                           </label>
                         )
@@ -1576,44 +1694,45 @@ const Projects = () => {
           <div>
             <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
               <IoDocumentText className="text-primary-accent" />
-              Additional Details
+              {t('projects.form.additional_details')}
             </h3>
             <div className="grid grid-cols-1 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">{t('') || ''}</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">{t('projects.form.project_summary')}</label>
                 <div className="h-40">
                   <RichTextEditor
                     value={formData.projectSummary}
                     onChange={(content) => setFormData({ ...formData, projectSummary: content })}
-                    placeholder={t('auto.auto_556fdcc5') || "Enter project summary..."}
+                    placeholder={t('projects.form.project_summary')}
                   />
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Priority / Label</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">{t('projects.form.priority_label')}</label>
+                  <p className="text-xs text-muted-text mb-2"></p>
                   <select
                     value={formData.label}
                     onChange={(e) => setFormData({ ...formData, label: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent outline-none"
                   >
-                    <option value="">-- None --</option>
-                    {availableLabels.map(label => (
-                      <option key={label.id} value={label.name}>{label.name}</option>
+                    <option value="">{t('projects.form.none')}</option>
+                    {priorityLabelOptions.map((label) => (
+                      <option key={label.id ?? label.name} value={label.name}>{label.name}</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">{t('') || ''}</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">{t('projects.form.status')}</label>
                   <select
                     value={formData.status}
                     onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent outline-none"
                   >
-                    <option value="In Bearbeitung">{t('') || ''}</option>
-                    <option value="on hold">{t('') || ''}</option>
-                    <option value="cancelled">{t('') || ''}</option>
-                    <option value="completed">{t('') || ''}</option>
+                    <option value="In Bearbeitung">{t('projects.form.status_in_bearbeitung')}</option>
+                    <option value="on hold">{t('projects.form.status_on_hold')}</option>
+                    <option value="cancelled">{t('projects.form.status_cancelled')}</option>
+                    <option value="completed">{t('projects.form.status_completed')}</option>
                   </select>
                 </div>
               </div>
@@ -1625,10 +1744,10 @@ const Projects = () => {
             <div className="border-t border-gray-200 pt-6">
               <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                 <IoList className="text-primary-accent" />
-                Additional Information
+                {t('projects.form.additional_information')}
               </h3>
               {cfLoading ? (
-                <p className="text-sm text-gray-400">{t('') || ''}</p>
+                <p className="text-sm text-gray-400">{t('common.loading')}</p>
               ) : (
                 <div className="grid grid-cols-1 gap-4">
                   {customFields.map((field) => (
@@ -1774,7 +1893,7 @@ const Projects = () => {
               }}
               className="px-6 py-2"
             >
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button
               variant="primary"
@@ -1782,7 +1901,7 @@ const Projects = () => {
               className="px-8 py-2 flex items-center gap-2 shadow-lg shadow-primary-accent/20"
             >
               <IoCheckmarkCircle size={20} />
-              {isEditModalOpen ? 'Update Project' : 'Create Project'}
+              {isEditModalOpen ? t('common.save') : t('common.save')}
             </Button>
           </div>
         </div>

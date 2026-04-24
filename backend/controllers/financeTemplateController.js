@@ -83,7 +83,7 @@ const getById = async (req, res) => {
     if (templates.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Finance template not found'
+        error: req.t ? req.t('api_msg_50d788b3') : "Finance template not found"
       });
     }
 
@@ -116,14 +116,14 @@ const create = async (req, res) => {
     if (!name || !name.trim()) {
       return res.status(400).json({
         success: false,
-        error: 'name is required and cannot be empty'
+        error: req.t ? req.t('api_msg_c6cf6b2f') : "name is required and cannot be empty"
       });
     }
 
     if (!type || !type.trim()) {
       return res.status(400).json({
         success: false,
-        error: 'type is required and cannot be empty'
+        error: req.t ? req.t('api_msg_d07c1cce') : "type is required and cannot be empty"
       });
     }
 
@@ -177,7 +177,7 @@ const create = async (req, res) => {
     res.status(201).json({
       success: true,
       data: template,
-      message: 'Finance template created successfully'
+      message: req.t ? req.t('api_msg_b8253652') : "Finance template created successfully"
     });
   } catch (error) {
     console.error('Create finance template error:', error);
@@ -206,7 +206,7 @@ const update = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Finance template not found'
+        error: req.t ? req.t('api_msg_50d788b3') : "Finance template not found"
       });
     }
 
@@ -216,14 +216,14 @@ const update = async (req, res) => {
 
     if (name !== undefined) {
       if (!name || name.trim() === '') {
-        return res.status(400).json({ success: false, error: 'Name cannot be empty' });
+        return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_744bb349') : "Name cannot be empty" });
       }
       updates.push('name = ?');
       values.push(name.trim());
     }
     if (type !== undefined) {
       if (!type || type.trim() === '') {
-        return res.status(400).json({ success: false, error: 'Type cannot be empty' });
+        return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_aa11824b') : "Type cannot be empty" });
       }
       const normalizedType = type.trim().toLowerCase();
       if (!VALID_TYPES.includes(normalizedType)) {
@@ -271,7 +271,7 @@ const update = async (req, res) => {
     res.json({
       success: true,
       data: template,
-      message: 'Finance template updated successfully'
+      message: req.t ? req.t('api_msg_079179eb') : "Finance template updated successfully"
     });
   } catch (error) {
     console.error('Update finance template error:', error);
@@ -296,13 +296,13 @@ const deleteTemplate = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Finance template not found'
+        error: req.t ? req.t('api_msg_50d788b3') : "Finance template not found"
       });
     }
 
     res.json({
       success: true,
-      message: 'Finance template deleted successfully'
+      message: req.t ? req.t('api_msg_56ed5e33') : "Finance template deleted successfully"
     });
   } catch (error) {
     console.error('Delete finance template error:', error);
@@ -331,7 +331,7 @@ const generateReport = async (req, res) => {
     if (templates.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Finance template not found'
+        error: req.t ? req.t('api_msg_50d788b3') : "Finance template not found"
       });
     }
 
@@ -348,7 +348,7 @@ const generateReport = async (req, res) => {
           template: templateData,
           document: data,
           format: 'pdf',
-          message: 'PDF report generated successfully. In production, this would return a PDF file.'
+          message: req.t ? req.t('api_msg_85a9ed4d') : "PDF report generated successfully. In production, this would return a PDF file."
         }
       });
     } else if (format === 'excel') {
@@ -359,7 +359,7 @@ const generateReport = async (req, res) => {
           template: templateData,
           document: data,
           format: 'excel',
-          message: 'Excel report generated successfully. In production, this would return an Excel file.'
+          message: req.t ? req.t('api_msg_23f14ee2') : "Excel report generated successfully. In production, this would return an Excel file."
         }
       });
     } else {

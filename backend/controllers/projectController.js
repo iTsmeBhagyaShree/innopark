@@ -3,6 +3,64 @@
 // =====================================================
 
 const pool = require('../config/db');
+const customFieldService = require('../services/customFieldService');
+
+/** YYYY-MM-DD for MySQL DATE; invalid input falls back to today */
+const toMysqlDate = (val) => {
+  if (val == null || val === '') {
+    return new Date().toISOString().slice(0, 10);
+  }
+  if (val instanceof Date && !Number.isNaN(val.getTime())) {
+    return val.toISOString().slice(0, 10);
+  }
+  const s = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    return s.slice(0, 10);
+  }
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) {
+    return new Date().toISOString().slice(0, 10);
+  }
+  return d.toISOString().slice(0, 10);
+};
+
+/** Map UI / legacy status strings to projects.status ENUM */
+const normalizeProjectStatus = (input) => {
+  if (input == null || input === '') return 'in progress';
+  const s = String(input).toLowerCase().trim();
+  const map = {
+    'in bearbeitung': 'in progress',
+    'in progress': 'in progress',
+    'not started': 'in progress',
+    'open': 'in progress',
+    'completed': 'completed',
+    'finished': 'completed',
+    'on hold': 'on hold',
+    'on_hold': 'on hold',
+    'cancelled': 'cancelled',
+    'canceled': 'cancelled',
+  };
+  if (map[s]) return map[s];
+  if (['in progress', 'completed', 'on hold', 'cancelled'].includes(s)) return s;
+  return 'in progress';
+};
+
+const serializeProjectRow = (project) => {
+  if (!project) return project;
+  const d = (v) => {
+    if (v == null || v === '') return v;
+    if (v instanceof Date) return v.toISOString().split('T')[0];
+    const str = String(v);
+    if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.split('T')[0].slice(0, 10);
+    const t = new Date(str);
+    return Number.isNaN(t.getTime()) ? null : t.toISOString().split('T')[0];
+  };
+  return {
+    ...project,
+    start_date: d(project.start_date),
+    deadline: project.deadline == null || project.deadline === '' ? null : d(project.deadline),
+  };
+};
 
 /**
  * Get all projects
@@ -32,30 +90,37 @@ const getAll = async (req, res) => {
       progress_max
     } = req.query;
 
-    // Use company_id from auth token (req.companyId), query param, or body
-    const filterCompanyId = req.companyId || company_id || null;
+    // company_id from query/body (string or number from Express)
+    const rawCompany = company_id ?? req.companyId ?? req.body?.company_id;
+    const filterCompanyId =
+      rawCompany != null && rawCompany !== ''
+        ? parseInt(String(rawCompany), 10)
+        : null;
 
-    if (!filterCompanyId) {
+    if (!filterCompanyId || Number.isNaN(filterCompanyId) || filterCompanyId <= 0) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
     let whereClause = 'WHERE p.company_id = ? AND p.is_deleted = 0';
     const params = [filterCompanyId];
 
-    // Status filter
+    // Status filter (UI also sends open, completed, upcoming; high_priority uses `priority` param)
     if (status && status !== 'All Projects' && status !== 'all') {
-      if (status === 'Open Projects') {
-        whereClause += ' AND (p.status = ? OR p.status = ?)';
-        params.push('in progress', 'open');
-      } else if (status === 'Completed') {
-        whereClause += ' AND p.status = ?';
+      const st = String(status).toLowerCase();
+      if (st === 'open' || st === 'open projects') {
+        whereClause += ` AND (
+          LOWER(TRIM(p.status)) IN ('in progress','open','not started')
+          OR p.status IS NULL
+        )`;
+      } else if (st === 'completed') {
+        whereClause += ' AND LOWER(TRIM(p.status)) = ?';
         params.push('completed');
-      } else {
-        whereClause += ' AND p.status = ?';
-        params.push(status.toLowerCase());
+      } else if (st !== 'high_priority') {
+        whereClause += ' AND LOWER(TRIM(p.status)) = ?';
+        params.push(normalizeProjectStatus(status));
       }
     }
 
@@ -194,16 +259,6 @@ const getAll = async (req, res) => {
       params
     );
 
-    // Permanent Dummy Fallback: If DB is empty, show high-quality demo projects
-    if (projects.length === 0) {
-      const demoProjects = [
-        { id: 101, project_name: "Innopark Mobile CRM", short_code: "DEMO-01", client_name: "Innopark Global", status: "in progress", progress: 65, deadline: "2026-12-31", budget: 25000, project_type: "Client Project", created_at: new Date() },
-        { id: 102, project_name: "Lead Generation Portal", short_code: "DEMO-02", client_name: "Kiaan Tech", status: "open", progress: 30, deadline: "2026-11-15", budget: 15000, project_type: "Client Project", created_at: new Date() },
-        { id: 103, project_name: "Security Audit 2025", short_code: "DEMO-03", client_name: "Nexus Solutions", status: "completed", progress: 100, deadline: "2025-05-10", budget: 8500, project_type: "Internal Project", created_at: new Date() }
-      ];
-      return res.json({ success: true, data: demoProjects });
-    }
-
     // Get members and custom fields for each project
     for (let project of projects) {
       const [members] = await pool.execute(
@@ -214,21 +269,11 @@ const getAll = async (req, res) => {
       );
       project.members = members;
 
-      // Get custom fields
-      const [customFieldsValues] = await pool.execute(
-        `SELECT cf.name, cfv.field_value 
-         FROM custom_field_values cfv
-         JOIN custom_fields cf ON cfv.custom_field_id = cf.id
-         WHERE cfv.record_id = ? AND cfv.module = 'Projects'`,
-        [project.id]
-      );
-      const custom_fields_data = {};
-      customFieldsValues.forEach(row => {
-        custom_fields_data[row.name] = row.field_value;
-      });
-      project.custom_fields = custom_fields_data;
+      project.custom_fields = await customFieldService.getCustomFieldsWithValues(filterCompanyId, 'Projects', project.id);
+      Object.assign(project, serializeProjectRow(project));
     }
 
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     res.json({
       success: true,
       data: projects
@@ -262,7 +307,7 @@ const getById = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
@@ -287,7 +332,7 @@ const getById = async (req, res) => {
     if (projects.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Project not found'
+        error: req.t ? req.t('api_msg_1badba1e') : "Project not found"
       });
     }
 
@@ -302,19 +347,7 @@ const getById = async (req, res) => {
     );
     project.members = members;
 
-    // Get custom fields
-    const [customFieldsValues] = await pool.execute(
-      `SELECT cf.name, cfv.field_value 
-       FROM custom_field_values cfv
-       JOIN custom_fields cf ON cfv.custom_field_id = cf.id
-       WHERE cfv.record_id = ? AND cfv.module = 'Projects'`,
-      [project.id]
-    );
-    const custom_fields_data = {};
-    customFieldsValues.forEach(row => {
-      custom_fields_data[row.name] = row.field_value;
-    });
-    project.custom_fields = custom_fields_data;
+    project.custom_fields = await customFieldService.getCustomFieldsWithValues(companyId, 'Projects', project.id);
 
     res.json({
       success: true,
@@ -324,7 +357,7 @@ const getById = async (req, res) => {
     console.error('Get project error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch project'
+      error: req.t ? req.t('api_msg_d73aad46') : "Failed to fetch project"
     });
   }
 };
@@ -372,7 +405,7 @@ const create = async (req, res) => {
     if (!company_id) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
@@ -380,7 +413,7 @@ const create = async (req, res) => {
     if (!project_name || !project_name.trim()) {
       return res.status(400).json({
         success: false,
-        error: 'project_name is required'
+        error: req.t ? req.t('api_msg_d8aa73ce') : "project_name is required"
       });
     }
 
@@ -429,8 +462,9 @@ const create = async (req, res) => {
     // Generate short_code if not provided
     const projectShortCode = short_code || await generateShortCode(company_id);
 
-    // Get default start date if not provided
-    const projectStartDate = start_date || new Date().toISOString().split('T')[0];
+    const projectStartDate = toMysqlDate(start_date);
+    const deadlineValue = (no_deadline || !deadline) ? null : toMysqlDate(deadline);
+    const statusValue = normalizeProjectStatus(status);
 
     // Insert project
     const [result] = await pool.execute(
@@ -441,11 +475,11 @@ const create = async (req, res) => {
         task_approval, label, status, progress, created_by, price
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        company_id ?? null, projectShortCode, project_name || null, description || null, projectStartDate, deadline || null,
+        company_id ?? null, projectShortCode, project_name || null, description || null, projectStartDate, deadlineValue,
         no_deadline || 0, budget || null, project_category || null, project_sub_category || null,
         department_id || null, validClientId || null, validManagerId || null, project_summary || null, notes || null,
         public_gantt_chart || 'enable', public_task_board || 'enable',
-        task_approval || 'disable', label || null, status || 'not started',
+        task_approval || 'disable', label || null, statusValue,
         progress || 0, createdByUserId || req.userId || req.user?.id || validManagerId || 1, price || budget || 0
       ]
     );
@@ -461,25 +495,7 @@ const create = async (req, res) => {
       );
     }
 
-    // Insert custom fields
-    if (Object.keys(custom_fields).length > 0) {
-      for (const [fieldName, fieldValue] of Object.entries(custom_fields)) {
-        if (fieldValue !== undefined && fieldValue !== null) {
-          // Get field ID by name and module
-          const [fieldRow] = await pool.execute(
-            `SELECT id FROM custom_fields WHERE name = ? AND module = 'Projects' AND company_id = ?`,
-            [fieldName, company_id]
-          );
-          if (fieldRow.length > 0) {
-            await pool.execute(
-              `INSERT INTO custom_field_values (custom_field_id, record_id, module, field_value, company_id)
-               VALUES (?, ?, ?, ?, ?)`,
-              [fieldRow[0].id, projectId, 'Projects', fieldValue.toString(), company_id]
-            );
-          }
-        }
-      }
-    }
+    await customFieldService.saveCustomFields(company_id, 'Projects', projectId, custom_fields);
 
     // Get created project with joins
     const [projects] = await pool.execute(
@@ -501,14 +517,14 @@ const create = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      data: projects[0],
-      message: 'Project created successfully'
+      data: projects[0] ? serializeProjectRow(projects[0]) : null,
+      message: req.t ? req.t('api_msg_5c15a40e') : "Project created successfully"
     });
   } catch (error) {
     console.error('Create project error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to create project',
+      error: req.t ? req.t('api_msg_0bf5159b') : "Failed to create project",
       details: error.message
     });
   }
@@ -532,7 +548,7 @@ const update = async (req, res) => {
     if (projects.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Project not found'
+        error: req.t ? req.t('api_msg_1badba1e') : "Project not found"
       });
     }
 
@@ -573,7 +589,7 @@ const update = async (req, res) => {
       return res.json({
         success: true,
         data: projects[0],
-        message: 'Project updated successfully'
+        message: req.t ? req.t('api_msg_b9c02310') : "Project updated successfully"
       });
     }
 
@@ -589,35 +605,9 @@ const update = async (req, res) => {
       }
     }
 
-    // Update custom fields if provided
     if (updateFields.custom_fields) {
-      const companyId = req.companyId || req.query.company_id || req.body.company_id || 1; // Need companyId here
-      for (const [fieldName, fieldValue] of Object.entries(updateFields.custom_fields)) {
-        const [fieldRow] = await pool.execute(
-          `SELECT id FROM custom_fields WHERE name = ? AND module = 'Projects' AND company_id = ?`,
-          [fieldName, companyId]
-        );
-        if (fieldRow.length > 0) {
-          const fieldId = fieldRow[0].id;
-          const [existingValue] = await pool.execute(
-            `SELECT id FROM custom_field_values WHERE custom_field_id = ? AND record_id = ? AND module = 'Projects'`,
-            [fieldId, id]
-          );
-
-          if (existingValue.length > 0) {
-            await pool.execute(
-              `UPDATE custom_field_values SET field_value = ? WHERE id = ?`,
-              [fieldValue !== null && fieldValue !== undefined ? fieldValue.toString() : null, existingValue[0].id]
-            );
-          } else if (fieldValue !== null && fieldValue !== undefined) {
-            await pool.execute(
-              `INSERT INTO custom_field_values (custom_field_id, record_id, module, field_value, company_id)
-               VALUES (?, ?, ?, ?, ?)`,
-              [fieldId, id, 'Projects', fieldValue.toString(), companyId]
-            );
-          }
-        }
-      }
+      const companyId = req.companyId || req.query.company_id || req.body.company_id || 1;
+      await customFieldService.saveCustomFields(companyId, 'Projects', id, updateFields.custom_fields);
     }
 
     // Get updated project with joins
@@ -639,13 +629,13 @@ const update = async (req, res) => {
     res.json({
       success: true,
       data: updatedProjects[0],
-      message: 'Project updated successfully'
+      message: req.t ? req.t('api_msg_b9c02310') : "Project updated successfully"
     });
   } catch (error) {
     console.error('Update project error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to update project'
+      error: req.t ? req.t('api_msg_a269c039') : "Failed to update project"
     });
   }
 };
@@ -668,7 +658,7 @@ const deleteProject = async (req, res) => {
     if (projects.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Project not found'
+        error: req.t ? req.t('api_msg_1badba1e') : "Project not found"
       });
     }
 
@@ -681,13 +671,13 @@ const deleteProject = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Project deleted successfully'
+      message: req.t ? req.t('api_msg_8ceea049') : "Project deleted successfully"
     });
   } catch (error) {
     console.error('Delete project error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete project'
+      error: req.t ? req.t('api_msg_15dbdac0') : "Failed to delete project"
     });
   }
 };
@@ -768,7 +758,7 @@ const getFilters = async (req, res) => {
     console.error('Get filters error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch filter options'
+      error: req.t ? req.t('api_msg_833a7d25') : "Failed to fetch filter options"
     });
   }
 };
@@ -786,7 +776,7 @@ const uploadFile = async (req, res) => {
     if (!file) {
       return res.status(400).json({
         success: false,
-        error: 'File is required'
+        error: req.t ? req.t('api_msg_a6e960c7') : "File is required"
       });
     }
 
@@ -799,7 +789,7 @@ const uploadFile = async (req, res) => {
     if (projects.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Project not found'
+        error: req.t ? req.t('api_msg_1badba1e') : "Project not found"
       });
     }
 
@@ -829,13 +819,13 @@ const uploadFile = async (req, res) => {
         file_type: fileType,
         project_id: id
       },
-      message: 'File uploaded successfully'
+      message: req.t ? req.t('api_msg_40070e1f') : "File uploaded successfully"
     });
   } catch (error) {
     console.error('Upload project file error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to upload file',
+      error: req.t ? req.t('api_msg_d831d180') : "Failed to upload file",
       details: error.message
     });
   }
@@ -853,7 +843,7 @@ const getMembers = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
@@ -866,7 +856,7 @@ const getMembers = async (req, res) => {
     if (projects.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Project not found'
+        error: req.t ? req.t('api_msg_1badba1e') : "Project not found"
       });
     }
 
@@ -888,7 +878,7 @@ const getMembers = async (req, res) => {
     console.error('Get project members error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch project members'
+      error: req.t ? req.t('api_msg_ac709d09') : "Failed to fetch project members"
     });
   }
 };
@@ -906,7 +896,7 @@ const getTasks = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
@@ -919,7 +909,7 @@ const getTasks = async (req, res) => {
     if (projects.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Project not found'
+        error: req.t ? req.t('api_msg_1badba1e') : "Project not found"
       });
     }
 
@@ -968,7 +958,7 @@ const getTasks = async (req, res) => {
     console.error('Get project tasks error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch project tasks'
+      error: req.t ? req.t('api_msg_83a96fd5') : "Failed to fetch project tasks"
     });
   }
 };
@@ -985,7 +975,7 @@ const getFiles = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
@@ -998,7 +988,7 @@ const getFiles = async (req, res) => {
     if (projects.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Project not found'
+        error: req.t ? req.t('api_msg_1badba1e') : "Project not found"
       });
     }
 
@@ -1041,7 +1031,7 @@ const getFiles = async (req, res) => {
     console.error('Get project files error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch project files'
+      error: req.t ? req.t('api_msg_e58cb7c6') : "Failed to fetch project files"
     });
   }
 };
@@ -1057,7 +1047,7 @@ const getAllLabels = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
@@ -1074,7 +1064,7 @@ const getAllLabels = async (req, res) => {
     console.error('Get project labels error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch project labels'
+      error: req.t ? req.t('api_msg_3428aac3') : "Failed to fetch project labels"
     });
   }
 };
@@ -1091,7 +1081,7 @@ const createLabel = async (req, res) => {
     if (!name || !companyId) {
       return res.status(400).json({
         success: false,
-        error: 'Label name and company_id are required'
+        error: req.t ? req.t('api_msg_60803904') : "Label name and company_id are required"
       });
     }
 
@@ -1104,7 +1094,7 @@ const createLabel = async (req, res) => {
     if (existing.length > 0) {
       return res.status(400).json({
         success: false,
-        error: 'Label already exists'
+        error: req.t ? req.t('api_msg_84cc3505') : "Label already exists"
       });
     }
 
@@ -1115,7 +1105,7 @@ const createLabel = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Label created successfully',
+      message: req.t ? req.t('api_msg_8b9d9abf') : "Label created successfully",
       data: {
         id: result.insertId,
         name,
@@ -1126,7 +1116,7 @@ const createLabel = async (req, res) => {
     console.error('Create project label error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to create project label',
+      error: req.t ? req.t('api_msg_406c883e') : "Failed to create project label",
       details: error.sqlMessage || error.message
     });
   }
@@ -1148,13 +1138,13 @@ const deleteLabel = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Label deleted successfully'
+      message: req.t ? req.t('api_msg_d5e91ba5') : "Label deleted successfully"
     });
   } catch (error) {
     console.error('Delete project label error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete project label'
+      error: req.t ? req.t('api_msg_3cadd9c0') : "Failed to delete project label"
     });
   }
 };

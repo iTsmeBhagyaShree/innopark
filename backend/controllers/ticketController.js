@@ -233,7 +233,7 @@ const create = async (req, res) => {
       res.status(201).json({
         success: true,
         data: tickets[0],
-        message: 'Ticket created successfully'
+        message: req.t ? req.t('api_msg_c8750543') : "Ticket created successfully"
       });
       return; // Success, exit retry loop
     } catch (error) {
@@ -245,7 +245,7 @@ const create = async (req, res) => {
           console.error('Max retries reached for ticket creation');
           res.status(500).json({
             success: false,
-            error: 'Failed to create ticket',
+            error: req.t ? req.t('api_msg_ee13ca2f') : "Failed to create ticket",
             details: 'Unable to generate unique ticket ID after multiple attempts. Please try again.'
           });
           return;
@@ -262,7 +262,7 @@ const create = async (req, res) => {
           sqlMessage: error.sqlMessage,
           stack: error.stack
         });
-        res.status(500).json({ success: false, error: 'Failed to create ticket', details: error.message });
+        res.status(500).json({ success: false, error: req.t ? req.t('api_msg_ee13ca2f') : "Failed to create ticket", details: error.message });
         return;
       }
     }
@@ -332,7 +332,7 @@ const getById = async (req, res) => {
     if (tickets.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Ticket not found'
+        error: req.t ? req.t('api_msg_e8796276') : "Ticket not found"
       });
     }
 
@@ -357,7 +357,7 @@ const getById = async (req, res) => {
     console.error('Get ticket error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch ticket'
+      error: req.t ? req.t('api_msg_51c386b6') : "Failed to fetch ticket"
     });
   }
 };
@@ -381,7 +381,7 @@ const update = async (req, res) => {
     if (tickets.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Ticket not found'
+        error: req.t ? req.t('api_msg_e8796276') : "Ticket not found"
       });
     }
 
@@ -417,7 +417,7 @@ const update = async (req, res) => {
     if (updates.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'No fields to update'
+        error: req.t ? req.t('api_msg_003199ed') : "No fields to update"
       });
     }
 
@@ -438,13 +438,13 @@ const update = async (req, res) => {
     res.json({
       success: true,
       data: updatedTickets[0],
-      message: 'Ticket updated successfully'
+      message: req.t ? req.t('api_msg_efb833a4') : "Ticket updated successfully"
     });
   } catch (error) {
     console.error('Update ticket error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to update ticket'
+      error: req.t ? req.t('api_msg_b666d2c7') : "Failed to update ticket"
     });
   }
 };
@@ -467,19 +467,19 @@ const deleteTicket = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Ticket not found'
+        error: req.t ? req.t('api_msg_e8796276') : "Ticket not found"
       });
     }
 
     res.json({
       success: true,
-      message: 'Ticket deleted successfully'
+      message: req.t ? req.t('api_msg_01066c7e') : "Ticket deleted successfully"
     });
   } catch (error) {
     console.error('Delete ticket error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete ticket'
+      error: req.t ? req.t('api_msg_ddc8db74') : "Failed to delete ticket"
     });
   }
 };
@@ -500,7 +500,7 @@ const addComment = async (req, res) => {
     if (tickets.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Ticket not found'
+        error: req.t ? req.t('api_msg_e8796276') : "Ticket not found"
       });
     }
 
@@ -520,13 +520,13 @@ const addComment = async (req, res) => {
     res.status(201).json({
       success: true,
       data: comments[0],
-      message: 'Comment added successfully'
+      message: req.t ? req.t('api_msg_eb493b39') : "Comment added successfully"
     });
   } catch (error) {
     console.error('Add ticket comment error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to add comment'
+      error: req.t ? req.t('api_msg_736e8666') : "Failed to add comment"
     });
   }
 };

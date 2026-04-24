@@ -152,7 +152,7 @@ const getAll = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
@@ -213,7 +213,7 @@ const getAll = async (req, res) => {
     console.error('Get notification settings error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to get notification settings'
+      error: req.t ? req.t('api_msg_a77ec532') : "Failed to get notification settings"
     });
   }
 };
@@ -235,7 +235,7 @@ const getById = async (req, res) => {
     if (rows.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Notification setting not found'
+        error: req.t ? req.t('api_msg_058f1d6c') : "Notification setting not found"
       });
     }
 
@@ -256,7 +256,7 @@ const getById = async (req, res) => {
     console.error('Get notification setting error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to get notification setting'
+      error: req.t ? req.t('api_msg_498b765b') : "Failed to get notification setting"
     });
   }
 };
@@ -280,7 +280,7 @@ const update = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Notification setting not found'
+        error: req.t ? req.t('api_msg_058f1d6c') : "Notification setting not found"
       });
     }
 
@@ -312,7 +312,7 @@ const update = async (req, res) => {
     if (updateFields.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'No fields to update'
+        error: req.t ? req.t('api_msg_003199ed') : "No fields to update"
       });
     }
 
@@ -341,13 +341,13 @@ const update = async (req, res) => {
     res.json({
       success: true,
       data: notification,
-      message: 'Notification setting updated successfully'
+      message: req.t ? req.t('api_msg_1bc8e848') : "Notification setting updated successfully"
     });
   } catch (error) {
     console.error('Update notification setting error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to update notification setting'
+      error: req.t ? req.t('api_msg_8f597a12') : "Failed to update notification setting"
     });
   }
 };
@@ -377,7 +377,7 @@ const getCategories = async (req, res) => {
     console.error('Get categories error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to get categories'
+      error: req.t ? req.t('api_msg_5ec59b4e') : "Failed to get categories"
     });
   }
 };

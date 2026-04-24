@@ -118,6 +118,7 @@ import OfflineRequests from '../app/superadmin/pages/OfflineRequests'
 import SupportTickets from '../app/superadmin/pages/SupportTickets'
 import FrontSettings from '../app/superadmin/pages/FrontSettings'
 import SuperAdminSettings from '../app/superadmin/pages/Settings'
+import UpdateManager from '../app/superadmin/pages/UpdateManager'
 import PwaSettings from '../app/superadmin/pages/PwaSettings'
 
 // Protected Route Component
@@ -253,6 +254,7 @@ function AppRoutes() {
         <Route path="superadmin/support-tickets" element={<RoleGuard allowedRoles={['SUPERADMIN']}><SupportTickets /></RoleGuard>} />
         <Route path="superadmin/settings" element={<RoleGuard allowedRoles={['SUPERADMIN']}><SuperAdminSettings /></RoleGuard>} />
         <Route path="superadmin/pwa-settings" element={<RoleGuard allowedRoles={['SUPERADMIN']}><PwaSettings /></RoleGuard>} />
+        <Route path="superadmin/updates" element={<RoleGuard allowedRoles={['SUPERADMIN']}><UpdateManager /></RoleGuard>} />
 
         {/* Admin Routes – SUPERADMIN + ADMIN */}
         <Route path="admin/dashboard" element={<RoleGuard allowedRoles={['SUPERADMIN', 'ADMIN']}><AdminDashboard /></RoleGuard>} />

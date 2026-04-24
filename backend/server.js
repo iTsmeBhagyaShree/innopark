@@ -74,13 +74,21 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 
-// CORS - Maximally tolerant for Bearer Token auth (Mobile friendly)
+// CORS: reflect request Origin (works with browser + proxies; '*' can fail in some edge cases)
 app.use(cors({
-  origin: '*', // Allow all origins unconditionally
+  origin: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
-  exposedHeaders: ['Content-Range', 'X-Content-Range'],
-  maxAge: 86400 // Cache preflight request for 24 hours
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'Cache-Control',
+    'Pragma',
+  ],
+  exposedHeaders: ['Content-Range', 'X-Content-Range', 'Cache-Control'],
+  maxAge: 86400,
 }));
 
 // Handle preflight requests
@@ -180,9 +188,11 @@ app.use(`${apiBase}/pwa`, pwaRoutes);
 const notificationSettingsRoutes = require('./routes/notificationSettingsRoutes');
 const attendanceSettingsRoutes = require('./routes/attendanceSettingsRoutes');
 const leaveSettingsRoutes = require('./routes/leaveSettingsRoutes');
+const moduleSettingsRoutes = require('./routes/moduleSettingsRoutes');
 app.use(`${apiBase}/notification-settings`, notificationSettingsRoutes);
 app.use(`${apiBase}/attendance-settings`, attendanceSettingsRoutes);
 app.use(`${apiBase}/leave-settings`, leaveSettingsRoutes);
+app.use(`${apiBase}/module-settings`, moduleSettingsRoutes);
 
 // 404 handler
 app.use((req, res) => {
@@ -220,6 +230,10 @@ process.on('uncaughtException', (err) => {
   console.error('❌ Uncaught Exception:', err);
   // Don't exit immediately, log and continue
 });
+
+// Import and run migrations
+const migrationService = require('./services/migrationService');
+migrationService.run().catch(err => console.error('Migration startup error:', err));
 
 const server = app.listen(PORT, () => {
   console.log(`🚀 Worksuite CRM Backend Server running on port ${PORT}`);

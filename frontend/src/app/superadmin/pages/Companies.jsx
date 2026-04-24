@@ -13,7 +13,7 @@ import { IoCreate, IoTrash, IoEye, IoSearch } from 'react-icons/io5'
 
 const Companies = () => {
   const navigate = useNavigate()
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isViewModalOpen, setIsViewModalOpen] = useState(false)

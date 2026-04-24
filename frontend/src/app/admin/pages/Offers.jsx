@@ -255,11 +255,12 @@ const Offers = () => {
             onChange={(e) => setStatusFilter(e.target.value)}
             className="px-3 sm:px-4 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-accent outline-none bg-input-bg"
           >
-            <option value="All">{t('auto.auto_bcec0a9d') || 'Alle Status'}</option>
-            <option value="draft">{t('') || ''}</option>
-            <option value="sent">{t('') || ''}</option>
-            <option value="accepted">{t('') || ''}</option>
-            <option value="declined">{t('') || ''}</option>
+            <option value="All">{t('common.all_status')}</option>
+            <option value="draft">{t('offersForm.offerStatus.draft')}</option>
+            <option value="sent">{t('offersForm.offerStatus.sent')}</option>
+            <option value="accepted">{t('offersForm.offerStatus.accepted')}</option>
+            <option value="declined">{t('offersForm.offerStatus.declined')}</option>
+            <option value="expired">{t('offersForm.offerStatus.expired')}</option>
           </select>
         </div>
       </Card>
@@ -305,7 +306,7 @@ const Offers = () => {
                 </div>
                 <div className="space-y-2 mb-4">
                   <div className="flex items-center justify-between text-xs sm:text-sm">
-                    <span className="text-gray-500">{t('auto.auto_8a2e38c7') || 'Wert:'}</span>
+                    <span className="text-gray-500">{t('leads.columns.value')}:</span>
                     <span className="font-semibold text-gray-900">
                       {formatCurrency(offer.total)}
                     </span>
@@ -369,7 +370,7 @@ const Offers = () => {
           company_id: companyId,
         })
       }}
-      title={<span className="notranslate">{t('') || ''}</span>}
+      title={<span className="notranslate">{t('offersForm.addOffer')}</span>}
       >
         <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
           <Input
@@ -411,49 +412,56 @@ const Offers = () => {
           />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
-              label="Rabatt"
+              label={<span className="notranslate">{t('invoices.discount')}</span>}
               type="number"
               value={formData.discount}
               onChange={(e) => setFormData({ ...formData, discount: e.target.value })}
               placeholder="0"
             />
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">{t('') || ''}</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">{t('offersForm.discountType')}</label>
               <select
                 value={formData.discount_type}
                 onChange={(e) => setFormData({ ...formData, discount_type: e.target.value })}
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
               >
                 <option value="%">Prozent (%)</option>
-                <option value="flat">{t('') || ''}</option>
+                <option value="flat">{t('offersForm.fixedAmount')}</option>
               </select>
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">{t('') || ''}</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">{t('offersForm.status')}</label>
             <select
               value={formData.status}
               onChange={(e) => setFormData({ ...formData, status: e.target.value })}
               className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
             >
-              <option value="draft">{t('') || ''}</option>
-              <option value="sent">{t('') || ''}</option>
-              <option value="accepted">{t('') || ''}</option>
-              <option value="declined">{t('') || ''}</option>
-              <option value="expired">{t('') || ''}</option>
+              <option value="draft">{t('offersForm.offerStatus.draft')}</option>
+              <option value="sent">{t('offersForm.offerStatus.sent')}</option>
+              <option value="accepted">{t('offersForm.offerStatus.accepted')}</option>
+              <option value="declined">{t('offersForm.offerStatus.declined')}</option>
+              <option value="expired">{t('offersForm.offerStatus.expired')}</option>
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">{t('') || ''}</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">{t('common.description')}</label>
             <textarea
               value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })} />
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              rows={4}
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+              placeholder={t('offersForm.descriptionPlaceholder')}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">{t('offersForm.noteForRecipient')}</label>
             <textarea
               value={formData.note}
               onChange={(e) => setFormData({ ...formData, note: e.target.value })}
               rows={2}
               className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-              placeholder="Notiz für den Empfänger"
+              placeholder={t('offersForm.notePlaceholder')}
             />
           </div>
           <div>

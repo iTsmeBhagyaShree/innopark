@@ -7,6 +7,6 @@
 const BaseUrl = 
   import.meta.env.VITE_API_BASE_URL || 
   import.meta.env.VITE_API_URL?.replace('/api/v1', '') || 
-  'http://localhost:8000'
+  'http://localhost:8010'
 
 export default BaseUrl

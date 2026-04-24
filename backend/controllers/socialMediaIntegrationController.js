@@ -127,7 +127,7 @@ const getById = async (req, res) => {
     if (integrations.length === 0) {
       return res.status(404).json({ 
         success: false, 
-        error: 'Social media integration not found' 
+        error: req.t ? req.t('api_msg_63f6c703') : "Social media integration not found" 
       });
     }
 
@@ -170,7 +170,7 @@ const create = async (req, res) => {
     if (!company_id || !platform || !name) {
       return res.status(400).json({
         success: false,
-        error: 'company_id, platform, and name are required'
+        error: req.t ? req.t('api_msg_b7af99d9') : "company_id, platform, and name are required"
       });
     }
 
@@ -178,7 +178,7 @@ const create = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: "company_id is required"
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
@@ -246,7 +246,7 @@ const create = async (req, res) => {
     res.status(201).json({ 
       success: true, 
       data: integration,
-      message: 'Social media integration created successfully' 
+      message: req.t ? req.t('api_msg_13766e05') : "Social media integration created successfully" 
     });
   } catch (error) {
     console.error('Create social media integration error:', error);
@@ -282,7 +282,7 @@ const update = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Social media integration not found'
+        error: req.t ? req.t('api_msg_63f6c703') : "Social media integration not found"
       });
     }
 
@@ -362,7 +362,7 @@ const update = async (req, res) => {
     res.json({
       success: true,
       data: integration,
-      message: 'Social media integration updated successfully'
+      message: req.t ? req.t('api_msg_2b7499cd') : "Social media integration updated successfully"
     });
   } catch (error) {
     console.error('Update social media integration error:', error);
@@ -387,13 +387,13 @@ const deleteIntegration = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Social media integration not found'
+        error: req.t ? req.t('api_msg_63f6c703') : "Social media integration not found"
       });
     }
     
     res.json({ 
       success: true, 
-      message: 'Social media integration deleted successfully' 
+      message: req.t ? req.t('api_msg_8d9fbb25') : "Social media integration deleted successfully" 
     });
   } catch (error) {
     console.error('Delete social media integration error:', error);
@@ -420,13 +420,13 @@ const connect = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Social media integration not found'
+        error: req.t ? req.t('api_msg_63f6c703') : "Social media integration not found"
       });
     }
     
     res.json({ 
       success: true, 
-      message: 'Integration connected successfully' 
+      message: req.t ? req.t('api_msg_68204ec9') : "Integration connected successfully" 
     });
   } catch (error) {
     console.error('Connect integration error:', error);
@@ -452,13 +452,13 @@ const disconnect = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Social media integration not found'
+        error: req.t ? req.t('api_msg_63f6c703') : "Social media integration not found"
       });
     }
     
     res.json({ 
       success: true, 
-      message: 'Integration disconnected successfully' 
+      message: req.t ? req.t('api_msg_cb92ad5c') : "Integration disconnected successfully" 
     });
   } catch (error) {
     console.error('Disconnect integration error:', error);

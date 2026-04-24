@@ -67,7 +67,7 @@ const getAll = async (req, res) => {
     console.error('Error message:', error.message);
     res.status(500).json({ 
       success: false, 
-      error: 'Failed to fetch subscriptions',
+      error: req.t ? req.t('api_msg_9191ac91') : "Failed to fetch subscriptions",
       details: error.message,
       stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
@@ -159,20 +159,20 @@ const create = async (req, res) => {
       console.error('Error: Subscription was not found after creation');
       return res.status(500).json({
         success: false,
-        error: 'Subscription created but could not be retrieved'
+        error: req.t ? req.t('api_msg_cf8801dc') : "Subscription created but could not be retrieved"
       });
     }
 
     res.status(201).json({ 
       success: true, 
       data: createdSubscription,
-      message: 'Subscription created successfully'
+      message: req.t ? req.t('api_msg_a11176ba') : "Subscription created successfully"
     });
   } catch (error) {
     console.error('Create subscription error:', error);
     res.status(500).json({ 
       success: false, 
-      error: 'Failed to create subscription'
+      error: req.t ? req.t('api_msg_94729ce4') : "Failed to create subscription"
     });
   }
 };
@@ -198,7 +198,7 @@ const update = async (req, res) => {
     if (subscriptions.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Subscription not found'
+        error: req.t ? req.t('api_msg_7c53de50') : "Subscription not found"
       });
     }
 
@@ -224,7 +224,7 @@ const update = async (req, res) => {
     if (updates.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'No valid fields to update'
+        error: req.t ? req.t('api_msg_e9f00744') : "No valid fields to update"
       });
     }
 
@@ -245,14 +245,14 @@ const update = async (req, res) => {
     res.json({
       success: true,
       data: updatedSubscriptions[0],
-      message: 'Subscription updated successfully'
+      message: req.t ? req.t('api_msg_80536771') : "Subscription updated successfully"
     });
   } catch (error) {
     console.error('Update subscription error:', error);
     console.error('Error details:', error.message);
     res.status(500).json({
       success: false,
-      error: 'Failed to update subscription',
+      error: req.t ? req.t('api_msg_a577c1dc') : "Failed to update subscription",
       details: error.message
     });
   }
@@ -275,7 +275,7 @@ const cancel = async (req, res) => {
     if (subscriptions.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Subscription not found'
+        error: req.t ? req.t('api_msg_7c53de50') : "Subscription not found"
       });
     }
 
@@ -285,7 +285,7 @@ const cancel = async (req, res) => {
     if (subscription.status === 'Cancelled') {
       return res.status(400).json({
         success: false,
-        error: 'Subscription is already cancelled'
+        error: req.t ? req.t('api_msg_f31f67bf') : "Subscription is already cancelled"
       });
     }
 
@@ -306,13 +306,13 @@ const cancel = async (req, res) => {
     res.json({
       success: true,
       data: updatedSubscriptions[0],
-      message: 'Subscription cancelled successfully'
+      message: req.t ? req.t('api_msg_3b73c07c') : "Subscription cancelled successfully"
     });
   } catch (error) {
     console.error('Cancel subscription error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to cancel subscription'
+      error: req.t ? req.t('api_msg_0e1248f1') : "Failed to cancel subscription"
     });
   }
 };
@@ -335,7 +335,7 @@ const deleteSubscription = async (req, res) => {
     if (subscriptions.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Subscription not found'
+        error: req.t ? req.t('api_msg_7c53de50') : "Subscription not found"
       });
     }
 
@@ -347,13 +347,13 @@ const deleteSubscription = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Subscription deleted successfully'
+      message: req.t ? req.t('api_msg_a3eb72c4') : "Subscription deleted successfully"
     });
   } catch (error) {
     console.error('Delete subscription error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete subscription'
+      error: req.t ? req.t('api_msg_f721a811') : "Failed to delete subscription"
     });
   }
 };

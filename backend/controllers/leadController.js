@@ -4,6 +4,7 @@
 
 const pool = require('../config/db');
 const bcrypt = require('bcryptjs');
+const customFieldService = require('../services/customFieldService');
 
 /**
  * Helper function to convert ISO 8601 date string to MySQL DATE format (YYYY-MM-DD)
@@ -220,18 +221,8 @@ const getAll = async (req, res) => {
         price: s.item_price || 0
       }));
 
-      // Get custom fields
-      const [customFieldsValues] = await pool.execute(
-        `SELECT cf.name, cfv.field_value 
-         FROM custom_field_values cfv
-         JOIN custom_fields cf ON cfv.custom_field_id = cf.id
-         WHERE cfv.record_id = ? AND cfv.module = 'Leads'`,
-        [lead.id]
-      );
-      const custom_fields = {};
-      customFieldsValues.forEach(row => {
-        custom_fields[row.name] = row.field_value;
-      });
+      // Get custom fields using service
+      const custom_fields = await customFieldService.getCustomFieldsWithValues(companyId, 'Leads', lead.id);
 
       return sanitizeLead({ ...lead, labels: leadLabels, services: leadServices, custom_fields });
     }));
@@ -269,7 +260,7 @@ const getById = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
     let query = `SELECT l.*, 
@@ -295,7 +286,7 @@ const getById = async (req, res) => {
     if (leads.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Lead not found'
+        error: req.t ? req.t('api_msg_27feb92d') : "Lead not found"
       });
     }
 
@@ -322,19 +313,8 @@ const getById = async (req, res) => {
       price: s.item_price || 0
     }));
 
-    // Get custom fields
-    const [customFieldsValues] = await pool.execute(
-      `SELECT cf.name, cfv.field_value 
-       FROM custom_field_values cfv
-       JOIN custom_fields cf ON cfv.custom_field_id = cf.id
-       WHERE cfv.record_id = ? AND cfv.module = 'Leads'`,
-      [lead.id]
-    );
-    const custom_fields = {};
-    customFieldsValues.forEach(row => {
-      custom_fields[row.name] = row.field_value;
-    });
-    lead.custom_fields = custom_fields;
+    // Get custom fields using service
+    lead.custom_fields = await customFieldService.getCustomFieldsWithValues(companyId, 'Leads', lead.id);
 
     res.json({
       success: true,
@@ -344,7 +324,7 @@ const getById = async (req, res) => {
     console.error('Get lead error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch lead'
+      error: req.t ? req.t('api_msg_4b3b82d8') : "Failed to fetch lead"
     });
   }
 };
@@ -483,26 +463,8 @@ const create = async (req, res) => {
       console.log('No services to insert or services array is empty');
     }
 
-    // Insert custom fields
-    if (Object.keys(custom_fields).length > 0) {
-      console.log('Inserting custom fields:', custom_fields);
-      for (const [fieldName, fieldValue] of Object.entries(custom_fields)) {
-        if (fieldValue !== undefined && fieldValue !== null) {
-          // Get field ID by name and module
-          const [fieldRow] = await pool.execute(
-            `SELECT id FROM custom_fields WHERE name = ? AND module = 'Leads' AND company_id = ?`,
-            [fieldName, companyId]
-          );
-          if (fieldRow.length > 0) {
-            await pool.execute(
-              `INSERT INTO custom_field_values (custom_field_id, record_id, module, field_value, company_id)
-               VALUES (?, ?, ?, ?, ?)`,
-              [fieldRow[0].id, leadId, 'Leads', fieldValue.toString(), companyId]
-            );
-          }
-        }
-      }
-    }
+    // Save custom fields using service
+    await customFieldService.saveCustomFields(companyId, 'Leads', leadId, custom_fields);
 
     // Get created lead with company name and owner details
     const [leads] = await pool.execute(
@@ -540,7 +502,7 @@ const create = async (req, res) => {
     res.status(201).json({
       success: true,
       data: sanitizeLead(createdLead),
-      message: 'Lead created successfully'
+      message: req.t ? req.t('api_msg_896bd7c4') : "Lead created successfully"
     });
   } catch (error) {
     console.error('Create lead error:', error);
@@ -585,7 +547,7 @@ const update = async (req, res) => {
     if (leads.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Lead not found or access denied'
+        error: req.t ? req.t('api_msg_566a61c7') : "Lead not found or access denied"
       });
     }
 
@@ -671,35 +633,9 @@ const update = async (req, res) => {
       }
     }
 
-    // Update custom fields if provided
+    // Update custom fields using service
     if (updateFields.custom_fields) {
-      console.log('Updating custom fields:', updateFields.custom_fields);
-      for (const [fieldName, fieldValue] of Object.entries(updateFields.custom_fields)) {
-        const [fieldRow] = await pool.execute(
-          `SELECT id FROM custom_fields WHERE name = ? AND module = 'Leads' AND company_id = ?`,
-          [fieldName, companyId]
-        );
-        if (fieldRow.length > 0) {
-          const fieldId = fieldRow[0].id;
-          const [existingValue] = await pool.execute(
-            `SELECT id FROM custom_field_values WHERE custom_field_id = ? AND record_id = ? AND module = 'Leads'`,
-            [fieldId, id]
-          );
-
-          if (existingValue.length > 0) {
-            await pool.execute(
-              `UPDATE custom_field_values SET field_value = ? WHERE id = ?`,
-              [fieldValue !== null && fieldValue !== undefined ? fieldValue.toString() : null, existingValue[0].id]
-            );
-          } else if (fieldValue !== null && fieldValue !== undefined) {
-            await pool.execute(
-              `INSERT INTO custom_field_values (custom_field_id, record_id, module, field_value, company_id)
-               VALUES (?, ?, ?, ?, ?)`,
-              [fieldId, id, 'Leads', fieldValue.toString(), companyId]
-            );
-          }
-        }
-      }
+      await customFieldService.saveCustomFields(companyId, 'Leads', id, updateFields.custom_fields);
     }
 
     // Get updated lead with company name
@@ -736,25 +672,14 @@ const update = async (req, res) => {
         price: s.item_price || 0
       }));
 
-      // Get custom fields
-      const [customFieldsValues] = await pool.execute(
-        `SELECT cf.name, cfv.field_value 
-         FROM custom_field_values cfv
-         JOIN custom_fields cf ON cfv.custom_field_id = cf.id
-         WHERE cfv.record_id = ? AND cfv.module = 'Leads'`,
-        [id]
-      );
-      const custom_fields_data = {};
-      customFieldsValues.forEach(row => {
-        custom_fields_data[row.name] = row.field_value;
-      });
-      updatedLead.custom_fields = custom_fields_data;
+      // Get custom fields using service
+      updatedLead.custom_fields = await customFieldService.getCustomFieldsWithValues(companyId, 'Leads', id);
     }
 
     res.json({
       success: true,
       data: sanitizeLead(updatedLead),
-      message: 'Lead updated successfully'
+      message: req.t ? req.t('api_msg_79655a8b') : "Lead updated successfully"
     });
   } catch (error) {
     console.error('Update lead error:', error);
@@ -777,7 +702,7 @@ const deleteLead = async (req, res) => {
     if (req.user && req.user.role === 'EMPLOYEE') {
       return res.status(403).json({
         success: false,
-        error: 'Access denied. Employees cannot delete leads.'
+        error: req.t ? req.t('api_msg_6511318c') : "Access denied. Employees cannot delete leads."
       });
     }
 
@@ -791,19 +716,19 @@ const deleteLead = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Lead not found'
+        error: req.t ? req.t('api_msg_27feb92d') : "Lead not found"
       });
     }
 
     res.json({
       success: true,
-      message: 'Lead deleted successfully'
+      message: req.t ? req.t('api_msg_96f44da2') : "Lead deleted successfully"
     });
   } catch (error) {
     console.error('Delete lead error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete lead'
+      error: req.t ? req.t('api_msg_37cdcca0') : "Failed to delete lead"
     });
   }
 };
@@ -830,7 +755,7 @@ const getOverview = async (req, res) => {
     if (!companyId || isNaN(companyId) || companyId <= 0) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required and must be a valid positive number'
+        error: req.t ? req.t('api_msg_6e973484') : "company_id is required and must be a valid positive number"
       });
     }
 
@@ -988,7 +913,7 @@ const getOverview = async (req, res) => {
     console.error('Get leads overview error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch leads overview',
+      error: req.t ? req.t('api_msg_d41d4f9e') : "Failed to fetch leads overview",
     });
   }
 };
@@ -1007,7 +932,7 @@ const updateStatus = async (req, res) => {
     if (!status) {
       return res.status(400).json({
         success: false,
-        error: 'Status is required',
+        error: req.t ? req.t('api_msg_89883263') : "Status is required",
       });
     }
 
@@ -1020,7 +945,7 @@ const updateStatus = async (req, res) => {
     if (leads.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Lead not found',
+        error: req.t ? req.t('api_msg_27feb92d') : "Lead not found",
       });
     }
 
@@ -1053,13 +978,13 @@ const updateStatus = async (req, res) => {
     res.json({
       success: true,
       data: updatedLeads[0],
-      message: 'Lead status updated successfully',
+      message: req.t ? req.t('api_msg_430cfa95') : "Lead status updated successfully",
     });
   } catch (error) {
     console.error('Update lead status error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to update lead status',
+      error: req.t ? req.t('api_msg_8189912f') : "Failed to update lead status",
       details: error.sqlMessage || error.message
     });
   }
@@ -1077,14 +1002,14 @@ const bulkAction = async (req, res) => {
     if (!lead_ids || !Array.isArray(lead_ids) || lead_ids.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'lead_ids array is required',
+        error: req.t ? req.t('api_msg_ff5ab484') : "lead_ids array is required",
       });
     }
 
     if (!action) {
       return res.status(400).json({
         success: false,
-        error: 'action is required',
+        error: req.t ? req.t('api_msg_f1fd1025') : "action is required",
       });
     }
 
@@ -1103,7 +1028,7 @@ const bulkAction = async (req, res) => {
         if (!data || !data.owner_id) {
           return res.status(400).json({
             success: false,
-            error: 'owner_id is required for assign action',
+            error: req.t ? req.t('api_msg_77f3a9ab') : "owner_id is required for assign action",
           });
         }
         query = `UPDATE leads SET owner_id = ?, updated_at = CURRENT_TIMESTAMP 
@@ -1115,7 +1040,7 @@ const bulkAction = async (req, res) => {
         if (!data || !data.status) {
           return res.status(400).json({
             success: false,
-            error: 'status is required for change_status action',
+            error: req.t ? req.t('api_msg_13e875bd') : "status is required for change_status action",
           });
         }
         query = `UPDATE leads SET status = ?, updated_at = CURRENT_TIMESTAMP 
@@ -1126,7 +1051,7 @@ const bulkAction = async (req, res) => {
       default:
         return res.status(400).json({
           success: false,
-          error: 'Invalid action. Supported: delete, assign, change_status',
+          error: req.t ? req.t('api_msg_18ac9c0b') : "Invalid action. Supported: delete, assign, change_status",
         });
     }
 
@@ -1143,7 +1068,7 @@ const bulkAction = async (req, res) => {
     console.error('Bulk action error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to perform bulk action',
+      error: req.t ? req.t('api_msg_e379e559') : "Failed to perform bulk action",
     });
   }
 };
@@ -1160,7 +1085,7 @@ const getAllContacts = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
@@ -1218,7 +1143,7 @@ const getAllContacts = async (req, res) => {
     });
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch contacts',
+      error: req.t ? req.t('api_msg_b4210ea5') : "Failed to fetch contacts",
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
@@ -1250,7 +1175,7 @@ const getContactById = async (req, res) => {
     if (contacts.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Contact not found',
+        error: req.t ? req.t('api_msg_cf2e6f36') : "Contact not found",
       });
     }
 
@@ -1272,7 +1197,7 @@ const getContactById = async (req, res) => {
     console.error('Get contact by ID error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch contact',
+      error: req.t ? req.t('api_msg_fd698b2f') : "Failed to fetch contact",
     });
   }
 };
@@ -1302,14 +1227,14 @@ const createContact = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required',
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required",
       });
     }
 
     if (!name) {
       return res.status(400).json({
         success: false,
-        error: 'Name is required',
+        error: req.t ? req.t('api_msg_ff0f4960') : "Name is required",
       });
     }
 
@@ -1364,7 +1289,7 @@ const createContact = async (req, res) => {
     res.status(201).json({
       success: true,
       data: newContact[0],
-      message: 'Contact created successfully',
+      message: req.t ? req.t('api_msg_934218ea') : "Contact created successfully",
     });
   } catch (error) {
     console.error('Create contact error:', error);
@@ -1401,7 +1326,7 @@ const updateContact = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Contact not found',
+        error: req.t ? req.t('api_msg_cf2e6f36') : "Contact not found",
       });
     }
 
@@ -1430,7 +1355,7 @@ const updateContact = async (req, res) => {
     if (updates.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'No valid fields to update',
+        error: req.t ? req.t('api_msg_e9f00744') : "No valid fields to update",
       });
     }
 
@@ -1450,13 +1375,13 @@ const updateContact = async (req, res) => {
     res.json({
       success: true,
       data: updatedContact[0],
-      message: 'Contact updated successfully',
+      message: req.t ? req.t('api_msg_074ac100') : "Contact updated successfully",
     });
   } catch (error) {
     console.error('Update contact error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to update contact',
+      error: req.t ? req.t('api_msg_43e33276') : "Failed to update contact",
     });
   }
 };
@@ -1479,19 +1404,19 @@ const deleteContact = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Contact not found',
+        error: req.t ? req.t('api_msg_cf2e6f36') : "Contact not found",
       });
     }
 
     res.json({
       success: true,
-      message: 'Contact deleted successfully',
+      message: req.t ? req.t('api_msg_14ac9d19') : "Contact deleted successfully",
     });
   } catch (error) {
     console.error('Delete contact error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete contact',
+      error: req.t ? req.t('api_msg_a26d94b3') : "Failed to delete contact",
     });
   }
 };
@@ -1507,7 +1432,7 @@ const getAllLabels = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
@@ -1562,7 +1487,7 @@ const getAllLabels = async (req, res) => {
     console.error('Get labels error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch labels'
+      error: req.t ? req.t('api_msg_8ae1838a') : "Failed to fetch labels"
     });
   }
 };
@@ -1579,14 +1504,14 @@ const createLabel = async (req, res) => {
     if (!label) {
       return res.status(400).json({
         success: false,
-        error: 'Label name is required'
+        error: req.t ? req.t('api_msg_3558bff8') : "Label name is required"
       });
     }
 
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
@@ -1623,7 +1548,7 @@ const createLabel = async (req, res) => {
       if (leads.length === 0) {
         return res.status(404).json({
           success: false,
-          error: 'Lead not found'
+          error: req.t ? req.t('api_msg_27feb92d') : "Lead not found"
         });
       }
 
@@ -1636,7 +1561,7 @@ const createLabel = async (req, res) => {
       if (existing.length > 0) {
         return res.status(400).json({
           success: false,
-          error: 'Label already exists for this lead'
+          error: req.t ? req.t('api_msg_69e54869') : "Label already exists for this lead"
         });
       }
 
@@ -1660,7 +1585,7 @@ const createLabel = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Label created successfully',
+      message: req.t ? req.t('api_msg_8b9d9abf') : "Label created successfully",
       data: { label, color }
     });
   } catch (error) {
@@ -1684,7 +1609,7 @@ const deleteLabel = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
@@ -1698,13 +1623,13 @@ const deleteLabel = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Label deleted successfully'
+      message: req.t ? req.t('api_msg_d5e91ba5') : "Label deleted successfully"
     });
   } catch (error) {
     console.error('Delete label error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete label'
+      error: req.t ? req.t('api_msg_bcbe1853') : "Failed to delete label"
     });
   }
 };
@@ -1722,14 +1647,14 @@ const updateLeadLabels = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
     if (!Array.isArray(labels)) {
       return res.status(400).json({
         success: false,
-        error: 'Labels must be an array'
+        error: req.t ? req.t('api_msg_646dda6b') : "Labels must be an array"
       });
     }
 
@@ -1742,7 +1667,7 @@ const updateLeadLabels = async (req, res) => {
     if (leads.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Lead not found'
+        error: req.t ? req.t('api_msg_27feb92d') : "Lead not found"
       });
     }
 
@@ -1760,7 +1685,7 @@ const updateLeadLabels = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Lead labels updated successfully',
+      message: req.t ? req.t('api_msg_9246096e') : "Lead labels updated successfully",
       data: { labels }
     });
   } catch (error) {
@@ -1782,11 +1707,11 @@ const importLeads = async (req, res) => {
     const companyId = req.query.company_id || req.body.company_id || req.companyId;
 
     if (!companyId) {
-      return res.status(400).json({ success: false, error: 'company_id is required' });
+      return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required" });
     }
 
     if (!leads || !Array.isArray(leads) || leads.length === 0) {
-      return res.status(400).json({ success: false, error: 'No leads data provided' });
+      return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_7b620c12') : "No leads data provided" });
     }
 
     const importedLeads = [];
@@ -1842,7 +1767,7 @@ const importLeads = async (req, res) => {
     });
   } catch (error) {
     console.error('Import leads error:', error);
-    res.status(500).json({ success: false, error: 'Failed to import leads' });
+    res.status(500).json({ success: false, error: req.t ? req.t('api_msg_78ddc92d') : "Failed to import leads" });
   }
 };
 
@@ -1852,7 +1777,7 @@ const updateStage = async (req, res) => {
     const { stage_id, pipeline_id } = req.body;
 
     if (!stage_id) {
-      return res.status(400).json({ success: false, error: 'stage_id is required' });
+      return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_9dc48842') : "stage_id is required" });
     }
 
     const updates = ['stage_id = ?'];
@@ -1880,10 +1805,10 @@ const updateStage = async (req, res) => {
     );
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({ success: false, error: 'Lead not found' });
+      return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_27feb92d') : "Lead not found" });
     }
 
-    res.json({ success: true, message: 'Lead stage updated successfully' });
+    res.json({ success: true, message: req.t ? req.t('api_msg_bbee6a9c') : "Lead stage updated successfully" });
   } catch (error) {
     console.error('Update lead stage error:', error);
     res.status(500).json({ success: false, error: error.message });

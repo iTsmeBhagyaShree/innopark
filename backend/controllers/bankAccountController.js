@@ -39,7 +39,7 @@ const getAll = async (req, res) => {
     console.error('Get bank accounts error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch bank accounts'
+      error: req.t ? req.t('api_msg_6debbef1') : "Failed to fetch bank accounts"
     });
   }
 };
@@ -73,7 +73,7 @@ const getById = async (req, res) => {
     if (accounts.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Bank account not found'
+        error: req.t ? req.t('api_msg_9b9b7c4f') : "Bank account not found"
       });
     }
 
@@ -85,7 +85,7 @@ const getById = async (req, res) => {
     console.error('Get bank account error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch bank account'
+      error: req.t ? req.t('api_msg_d8e1323f') : "Failed to fetch bank account"
     });
   }
 };
@@ -172,7 +172,7 @@ const create = async (req, res) => {
     res.status(201).json({
       success: true,
       data: newAccount[0],
-      message: 'Bank account created successfully'
+      message: req.t ? req.t('api_msg_910e2448') : "Bank account created successfully"
     });
   } catch (error) {
     console.error('Create bank account error:', error);
@@ -181,7 +181,7 @@ const create = async (req, res) => {
     console.error('Request body:', JSON.stringify(req.body, null, 2));
     res.status(500).json({
       success: false,
-      error: 'Failed to create bank account',
+      error: req.t ? req.t('api_msg_12c36db8') : "Failed to create bank account",
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
@@ -239,7 +239,7 @@ const update = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Bank account not found'
+        error: req.t ? req.t('api_msg_9b9b7c4f') : "Bank account not found"
       });
     }
 
@@ -343,7 +343,7 @@ const update = async (req, res) => {
     if (updates.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'No fields to update'
+        error: req.t ? req.t('api_msg_003199ed') : "No fields to update"
       });
     }
 
@@ -363,13 +363,13 @@ const update = async (req, res) => {
     res.json({
       success: true,
       data: updatedAccount[0],
-      message: 'Bank account updated successfully'
+      message: req.t ? req.t('api_msg_4d4c07dc') : "Bank account updated successfully"
     });
   } catch (error) {
     console.error('Update bank account error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to update bank account'
+      error: req.t ? req.t('api_msg_24ed0cde') : "Failed to update bank account"
     });
   }
 };
@@ -391,7 +391,7 @@ const deleteAccount = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Bank account not found or already deleted'
+        error: req.t ? req.t('api_msg_8db49797') : "Bank account not found or already deleted"
       });
     }
 
@@ -404,19 +404,19 @@ const deleteAccount = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Bank account not found'
+        error: req.t ? req.t('api_msg_9b9b7c4f') : "Bank account not found"
       });
     }
 
     res.json({
       success: true,
-      message: 'Bank account deleted successfully'
+      message: req.t ? req.t('api_msg_1a1c3b08') : "Bank account deleted successfully"
     });
   } catch (error) {
     console.error('Delete bank account error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete bank account'
+      error: req.t ? req.t('api_msg_024a5797') : "Failed to delete bank account"
     });
   }
 };

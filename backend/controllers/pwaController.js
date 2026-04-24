@@ -125,7 +125,7 @@ const getPwaSettings = async (req, res) => {
 
         res.status(500).json({
             success: false,
-            error: 'Failed to fetch PWA settings'
+            error: req.t ? req.t('api_msg_2592cbfa') : "Failed to fetch PWA settings"
         });
     }
 };
@@ -298,13 +298,13 @@ const updatePwaSettings = async (req, res) => {
         res.json({
             success: true,
             data: updated[0],
-            message: 'PWA settings updated successfully'
+            message: req.t ? req.t('api_msg_d4ebf50a') : "PWA settings updated successfully"
         });
     } catch (error) {
         console.error('Update PWA settings error:', error);
         res.status(500).json({
             success: false,
-            error: 'Failed to update PWA settings'
+            error: req.t ? req.t('api_msg_fa6f6278') : "Failed to update PWA settings"
         });
     }
 };

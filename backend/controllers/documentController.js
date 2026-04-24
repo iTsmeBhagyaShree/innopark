@@ -76,7 +76,7 @@ const getAll = async (req, res) => {
     console.error('Get documents error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch documents'
+      error: req.t ? req.t('api_msg_72ae1aaa') : "Failed to fetch documents"
     });
   }
 };
@@ -113,7 +113,7 @@ const getById = async (req, res) => {
     if (documents.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Document not found'
+        error: req.t ? req.t('api_msg_9d4ed206') : "Document not found"
       });
     }
 
@@ -130,7 +130,7 @@ const getById = async (req, res) => {
     console.error('Get document error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch document'
+      error: req.t ? req.t('api_msg_11cd3b01') : "Failed to fetch document"
     });
   }
 };
@@ -147,7 +147,7 @@ const create = async (req, res) => {
     if (!file) {
       return res.status(400).json({
         success: false,
-        error: 'File is required'
+        error: req.t ? req.t('api_msg_a6e960c7') : "File is required"
       });
     }
 
@@ -199,13 +199,13 @@ const create = async (req, res) => {
         size: doc.file_size ? formatFileSize(doc.file_size) : '-',
         date: formatDate(doc.created_at),
       },
-      message: 'Document uploaded successfully'
+      message: req.t ? req.t('api_msg_5bc4799d') : "Document uploaded successfully"
     });
   } catch (error) {
     console.error('Create document error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to upload document'
+      error: req.t ? req.t('api_msg_225bdd87') : "Failed to upload document"
     });
   }
 };
@@ -233,7 +233,7 @@ const deleteDocument = async (req, res) => {
     if (existCheck.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Document not found'
+        error: req.t ? req.t('api_msg_9d4ed206') : "Document not found"
       });
     }
 
@@ -243,7 +243,7 @@ const deleteDocument = async (req, res) => {
     if (docInfo.is_deleted === 1) {
       return res.status(404).json({
         success: false,
-        error: 'Document already deleted'
+        error: req.t ? req.t('api_msg_8094ce08') : "Document already deleted"
       });
     }
 
@@ -271,7 +271,7 @@ const deleteDocument = async (req, res) => {
     if (documents.length === 0) {
       return res.status(403).json({
         success: false,
-        error: 'You do not have permission to delete this document'
+        error: req.t ? req.t('api_msg_bdf4474c') : "You do not have permission to delete this document"
       });
     }
 
@@ -295,13 +295,13 @@ const deleteDocument = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Document deleted successfully'
+      message: req.t ? req.t('api_msg_66da71c6') : "Document deleted successfully"
     });
   } catch (error) {
     console.error('Delete document error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete document'
+      error: req.t ? req.t('api_msg_e162871c') : "Failed to delete document"
     });
   }
 };
@@ -345,7 +345,7 @@ const download = async (req, res) => {
     if (documents.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Document not found'
+        error: req.t ? req.t('api_msg_9d4ed206') : "Document not found"
       });
     }
 
@@ -356,7 +356,7 @@ const download = async (req, res) => {
     if (!filePath) {
       return res.status(404).json({
         success: false,
-        error: 'File path not found'
+        error: req.t ? req.t('api_msg_087d2c35') : "File path not found"
       });
     }
 
@@ -385,7 +385,7 @@ const download = async (req, res) => {
       console.error('File not found at paths:', { absolutePath, filePath, uploadsPath });
       return res.status(404).json({
         success: false,
-        error: 'File not found on server. The file may have been moved or deleted.'
+        error: req.t ? req.t('api_msg_4f5f9cc2') : "File not found on server. The file may have been moved or deleted."
       });
     }
 
@@ -397,7 +397,7 @@ const download = async (req, res) => {
         if (!res.headersSent) {
           res.status(500).json({
             success: false,
-            error: 'Failed to download file'
+            error: req.t ? req.t('api_msg_3a889d38') : "Failed to download file"
           });
         }
       }

@@ -3,6 +3,7 @@
 // =====================================================
 
 const pool = require('../config/db');
+const customFieldService = require('../services/customFieldService');
 
 /**
  * Normalize unit value to valid ENUM values
@@ -89,7 +90,7 @@ const calculateTotals = (items, discount, discountType) => {
 const getAll = async (req, res) => {
     try {
         const filterCompanyId = req.query.company_id || req.body.company_id || req.companyId;
-        if (!filterCompanyId) return res.status(400).json({ success: false, error: 'company_id is required' });
+        if (!filterCompanyId) return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required" });
 
         let whereClause = 'WHERE e.company_id = ? AND e.is_deleted = 0';
         const params = [filterCompanyId];
@@ -166,6 +167,8 @@ const getAll = async (req, res) => {
         for (let deal of deals) {
             const [items] = await pool.execute('SELECT * FROM deal_items WHERE deal_id = ?', [deal.id]);
             deal.items = items || [];
+            // Get custom fields using service
+            deal.custom_fields = await customFieldService.getCustomFieldsWithValues(filterCompanyId, 'Deals', deal.id);
         }
 
         res.json({ success: true, data: deals });
@@ -199,10 +202,14 @@ const getById = async (req, res) => {
             [req.params.id]
         );
 
-        if (deals.length === 0) return res.status(404).json({ success: false, error: 'Deal not found' });
+        if (deals.length === 0) return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_f85a8ec8') : "Deal not found" });
 
         const [items] = await pool.execute('SELECT * FROM deal_items WHERE deal_id = ?', [req.params.id]);
         deals[0].items = items;
+
+        // Get custom fields using service
+        const companyId = deals[0].company_id;
+        deals[0].custom_fields = await customFieldService.getCustomFieldsWithValues(companyId, 'Deals', deals[0].id);
 
         // Linked contacts (from deal_contacts: references master contacts table only)
         try {
@@ -241,7 +248,7 @@ const getDealContacts = async (req, res) => {
     try {
         const dealId = req.params.id;
         const [exists] = await pool.execute('SELECT id FROM deals WHERE id = ? AND is_deleted = 0', [dealId]);
-        if (exists.length === 0) return res.status(404).json({ success: false, error: 'Deal not found' });
+        if (exists.length === 0) return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_f85a8ec8') : "Deal not found" });
 
         const [rows] = await pool.execute(
             `SELECT dc.id, dc.contact_id, dc.is_primary, dc.role, ct.name, ct.email, ct.phone, ct.job_title, ct.company as contact_company
@@ -265,18 +272,18 @@ const addContactToDeal = async (req, res) => {
     try {
         const dealId = req.params.id;
         const { contact_id, is_primary, role } = req.body || {};
-        if (!contact_id) return res.status(400).json({ success: false, error: 'contact_id is required' });
+        if (!contact_id) return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_e83e01ec') : "contact_id is required" });
 
         const [dealExists] = await pool.execute('SELECT id FROM deals WHERE id = ? AND is_deleted = 0', [dealId]);
-        if (dealExists.length === 0) return res.status(404).json({ success: false, error: 'Deal not found' });
+        if (dealExists.length === 0) return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_f85a8ec8') : "Deal not found" });
 
         const [contactExists] = await pool.execute('SELECT id FROM contacts WHERE id = ? AND is_deleted = 0', [contact_id]);
-        if (contactExists.length === 0) return res.status(404).json({ success: false, error: 'Contact not found' });
+        if (contactExists.length === 0) return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_cf2e6f36') : "Contact not found" });
 
         const [tableExists] = await pool.execute(
             "SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'deal_contacts'"
         );
-        if (tableExists.length === 0) return res.status(400).json({ success: false, error: 'deal_contacts table not found' });
+        if (tableExists.length === 0) return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_b7e23989') : "deal_contacts table not found" });
 
         if (is_primary) {
             await pool.execute('UPDATE deal_contacts SET is_primary = 0 WHERE deal_id = ?', [dealId]);
@@ -306,10 +313,10 @@ const removeContactFromDeal = async (req, res) => {
         const [tableExists] = await pool.execute(
             "SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'deal_contacts'"
         );
-        if (tableExists.length === 0) return res.status(400).json({ success: false, error: 'deal_contacts table not found' });
+        if (tableExists.length === 0) return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_b7e23989') : "deal_contacts table not found" });
 
         const [result] = await pool.execute('DELETE FROM deal_contacts WHERE deal_id = ? AND contact_id = ?', [dealId, contactId]);
-        if (result.affectedRows === 0) return res.status(404).json({ success: false, error: 'Link not found' });
+        if (result.affectedRows === 0) return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_6fe73780') : "Link not found" });
         res.json({ success: true, data: { unlinked: true } });
     } catch (error) {
         console.error('Remove contact from deal error:', error);
@@ -322,8 +329,12 @@ const create = async (req, res) => {
         const {
             deal_date, valid_till, currency, client_id, project_id, lead_id, title,
             calculate_tax, description, note, terms, tax, second_tax,
-            discount, discount_type, items = [], status, total, sub_total, assigned_to
+            discount, discount_type, status, total, sub_total, assigned_to,
+            custom_fields = {}
         } = req.body;
+
+        // req.body may include `items: undefined` which bypasses default `[]` and breaks .length / .map
+        const items = Array.isArray(req.body.items) ? req.body.items : [];
 
         const companyId = req.body.company_id || req.query.company_id || 1;
         const deal_number = await generateDealNumber(companyId);
@@ -405,11 +416,22 @@ const create = async (req, res) => {
             );
         }
 
-        const [newDeal] = await pool.execute('SELECT * FROM deals WHERE id = ?', [dealId]);
-        const [newItems] = await pool.execute('SELECT * FROM deal_items WHERE deal_id = ?', [dealId]);
-        newDeal[0].items = newItems;
+        // Save custom fields using service
+        await customFieldService.saveCustomFields(companyId, 'Deals', dealId, custom_fields);
 
-        res.status(201).json({ success: true, data: newDeal[0] });
+        const idNum = Number(dealId);
+        const [newDeal] = await pool.execute('SELECT * FROM deals WHERE id = ?', [idNum]);
+        const [newItems] = await pool.execute('SELECT * FROM deal_items WHERE deal_id = ?', [idNum]);
+        const row = newDeal && newDeal[0];
+        if (!row) {
+            return res.status(201).json({
+                success: true,
+                data: { id: idNum, items: newItems || [], message: 'Deal created; re-fetch recommended' }
+            });
+        }
+        row.items = newItems || [];
+
+        res.status(201).json({ success: true, data: row });
     } catch (error) {
         console.error('Create deal error:', error);
         res.status(500).json({ success: false, error: error.message });
@@ -419,10 +441,10 @@ const create = async (req, res) => {
 const update = async (req, res) => {
     try {
         const { id } = req.params;
-        const { items, ...fields } = req.body;
+        const { items, custom_fields, ...fields } = req.body;
 
         const [exists] = await pool.execute('SELECT id FROM deals WHERE id = ?', [id]);
-        if (exists.length === 0) return res.status(404).json({ success: false, error: 'Deal not found' });
+        if (exists.length === 0) return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_f85a8ec8') : "Deal not found" });
 
         // Whitelist of actual DB columns — prevents unknown column errors from extra frontend fields
         const ALLOWED_DEAL_COLUMNS = new Set([
@@ -471,11 +493,21 @@ const update = async (req, res) => {
             }
         }
 
+        // Save custom fields using service
+        const companyId = exists[0].company_id || req.body.company_id || req.companyId || 1;
+        if (custom_fields) {
+            await customFieldService.saveCustomFields(companyId, 'Deals', id, custom_fields);
+        }
+
         const [updated] = await pool.execute('SELECT * FROM deals WHERE id = ?', [id]);
         const [updatedItems] = await pool.execute('SELECT * FROM deal_items WHERE deal_id = ?', [id]);
-        updated[0].items = updatedItems;
+        const updatedRow = updated && updated[0];
+        if (!updatedRow) {
+            return res.json({ success: true, data: { id: Number(id), items: updatedItems || [] } });
+        }
+        updatedRow.items = updatedItems || [];
 
-        res.json({ success: true, data: updated[0] });
+        res.json({ success: true, data: updatedRow });
 
     } catch (error) {
         console.error('Update deal error:', error);
@@ -486,7 +518,7 @@ const update = async (req, res) => {
 const deleteDeal = async (req, res) => {
     try {
         await pool.execute('UPDATE deals SET is_deleted = 1 WHERE id = ?', [req.params.id]);
-        res.json({ success: true, message: 'Deal deleted successfully' });
+        res.json({ success: true, message: req.t ? req.t('api_msg_d8e271a4') : "Deal deleted successfully" });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -507,7 +539,7 @@ const updateStage = async (req, res) => {
         const { stage_id, pipeline_id } = req.body;
 
         if (!stage_id) {
-            return res.status(400).json({ success: false, error: 'stage_id is required' });
+            return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_9dc48842') : "stage_id is required" });
         }
 
         const updates = ['stage_id = ?'];
@@ -527,10 +559,10 @@ const updateStage = async (req, res) => {
         );
 
         if (result.affectedRows === 0) {
-            return res.status(404).json({ success: false, error: 'Deal not found' });
+            return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_f85a8ec8') : "Deal not found" });
         }
 
-        res.json({ success: true, message: 'Deal stage updated successfully' });
+        res.json({ success: true, message: req.t ? req.t('api_msg_0189282e') : "Deal stage updated successfully" });
     } catch (error) {
         console.error('Update deal stage error:', error);
         res.status(500).json({ success: false, error: error.message });
@@ -544,7 +576,7 @@ const updateStage = async (req, res) => {
 const getKanbanStats = async (req, res) => {
     try {
         const { company_id, pipeline_id } = req.query;
-        if (!company_id) return res.status(400).json({ success: false, error: 'company_id is required' });
+        if (!company_id) return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required" });
 
         let whereClause = 'WHERE d.company_id = ? AND d.is_deleted = 0';
         const params = [company_id];
@@ -611,7 +643,7 @@ const getDealActivities = async (req, res) => {
         console.error('Get deal activities error:', error);
         res.status(500).json({
             success: false,
-            error: 'Failed to fetch activities'
+            error: req.t ? req.t('api_msg_b2bb6964') : "Failed to fetch activities"
         });
     }
 };
@@ -630,7 +662,7 @@ const addDealActivity = async (req, res) => {
         if (!type || !description) {
             return res.status(400).json({
                 success: false,
-                error: 'type and description are required'
+                error: req.t ? req.t('api_msg_93c21665') : "type and description are required"
             });
         }
 
@@ -649,13 +681,13 @@ const addDealActivity = async (req, res) => {
         res.status(201).json({
             success: true,
             data: { id: result.insertId },
-            message: 'Activity added successfully'
+            message: req.t ? req.t('api_msg_cdef6d1c') : "Activity added successfully"
         });
     } catch (error) {
         console.error('Add deal activity error:', error);
         res.status(500).json({
             success: false,
-            error: 'Failed to add activity'
+            error: req.t ? req.t('api_msg_c761316c') : "Failed to add activity"
         });
     }
 };

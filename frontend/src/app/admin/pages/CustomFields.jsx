@@ -92,7 +92,7 @@ const CustomFields = () => {
     { value: 'reports', label: t('custom_fields.enabled_in.reports') },
   ]
 
-  const modules = ['Leads', 'Clients', 'Projects', 'Tasks', 'Finance', 'Invoices', 'Proposals', 'Estimates', 'Contracts']
+  const modules = ['Leads', 'Deals', 'Contacts', 'Clients', 'Projects', 'Tasks', 'Finance', 'Invoices', 'Proposals', 'Estimates', 'Contracts']
 
   const columns = [
     { key: 'label', label: t('custom_fields.columns.field_label') },
@@ -155,15 +155,16 @@ const CustomFields = () => {
       }
     }
 
+    const enabledSource = field.enabled_in != null ? field.enabled_in : field.enabledIn
     let enabledIn = ['create', 'edit', 'table', 'filters']
-    if (field.enabledIn) {
-      if (Array.isArray(field.enabledIn)) {
-        enabledIn = field.enabledIn
-      } else if (typeof field.enabledIn === 'string') {
+    if (enabledSource) {
+      if (Array.isArray(enabledSource)) {
+        enabledIn = enabledSource
+      } else if (typeof enabledSource === 'string') {
         try {
-          enabledIn = JSON.parse(field.enabledIn)
+          enabledIn = JSON.parse(enabledSource)
         } catch {
-          enabledIn = [field.enabledIn]
+          enabledIn = [enabledSource]
         }
       }
     }
@@ -173,11 +174,11 @@ const CustomFields = () => {
       label: field.label,
       type: field.type,
       module: field.module,
-      required: field.required || false,
+      required: !!field.required,
       options: Array.isArray(field.options) ? [...field.options] : [],
       defaultValue: field.defaultValue || '',
       placeholder: field.placeholder || '',
-      helpText: field.helpText || '',
+      helpText: field.help_text || field.helpText || '',
       visibility: visibility,
       enabledIn: enabledIn,
     })
@@ -207,14 +208,29 @@ const CustomFields = () => {
       }
 
       if (isEditModalOpen && selectedField) {
-        // Note: customFieldsAPI might not have update method
-        alert('Update functionality needs backend API endpoint')
-        setIsEditModalOpen(false)
-        setSelectedField(null)
+        const response = await customFieldsAPI.update(selectedField.id, {
+          label: formData.label,
+          type: formData.type,
+          module: formData.module,
+          required: formData.required || false,
+          placeholder: formData.placeholder || '',
+          help_text: formData.helpText || '',
+          options: formData.options || [],
+          visibility: formData.visibility || ['all'],
+          enabled_in: formData.enabledIn || ['create', 'edit', 'table', 'filters'],
+        })
+        if (response.data && response.data.success) {
+          alert(t('custom_fields.save_success') || 'Saved successfully')
+          setIsEditModalOpen(false)
+          setSelectedField(null)
+          await fetchCustomFields()
+        } else {
+          alert(response.data?.error || t('custom_fields.errors.save_failed'))
+        }
       } else {
         const response = await customFieldsAPI.create(fieldData)
         if (response.data && response.data.success) {
-          alert('Custom field created successfully!')
+          alert(t('custom_fields.create_success') || 'Custom field created successfully!')
           setIsAddModalOpen(false)
           // Reset form
           setFormData({
@@ -233,7 +249,7 @@ const CustomFields = () => {
           // Refresh the list
           await fetchCustomFields()
         } else {
-          alert(response.data?.error || 'Failed to create custom field')
+          alert(response.data?.error || t('custom_fields.errors.create_failed'))
         }
       }
     } catch (error) {
@@ -278,15 +294,20 @@ const CustomFields = () => {
         onClick={(e) => {
           e.stopPropagation()
           if (window.confirm(`Delete field "${row.label}"?`)) {
-            try {
-              // Note: customFieldsAPI might not have delete method
-              alert('Delete functionality needs backend API endpoint')
-              // await customFieldsAPI.delete(row.id)
-              // await fetchCustomFields()
-            } catch (error) {
-              console.error('Failed to delete custom field:', error)
-              alert(error.response?.data?.error || 'Failed to delete custom field')
-            }
+            (async () => {
+              try {
+                const companyId = user?.company_id || parseInt(localStorage.getItem('companyId') || '0', 10)
+                const res = await customFieldsAPI.delete(row.id, companyId ? { company_id: companyId } : {})
+                if (res.data?.success) {
+                  await fetchCustomFields()
+                } else {
+                  alert(res.data?.error || t('custom_fields.errors.delete_failed'))
+                }
+              } catch (error) {
+                console.error('Failed to delete custom field:', error)
+                alert(error.response?.data?.error || t('custom_fields.errors.delete_failed'))
+              }
+            })()
           }
         }}
         className="p-1.5 sm:p-2 text-danger hover:bg-danger hover:bg-opacity-10 rounded transition-colors"
@@ -297,7 +318,7 @@ const CustomFields = () => {
     </div>
   )
 
-  const needsOptions = ['dropdown', 'radio', 'checkbox'].includes(formData.type)
+  const needsOptions = ['dropdown', 'radio', 'multiselect'].includes(formData.type)
 
   if (loading && customFields.length === 0) {
     return (

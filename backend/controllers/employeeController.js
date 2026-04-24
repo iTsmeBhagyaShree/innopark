@@ -11,7 +11,7 @@ const getAll = async (req, res) => {
     if (!filterCompanyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
 
@@ -34,21 +34,27 @@ const getAll = async (req, res) => {
     console.log('Where clause:', whereClause);
     console.log('Params:', params);
 
-    // Get all employees without pagination
+    // Get all employees + admin accounts (LEFT JOIN so admins without employee record still show)
     const [employees] = await pool.execute(
-      `SELECT e.*, 
-              u.name, u.email, u.phone, u.address, u.country, u.email_notifications, u.role as user_role, u.status,
+      `SELECT e.id, e.user_id, e.employee_number, e.department_id, e.position_id, e.role,
+              e.joining_date, e.salary, e.salutation, e.date_of_birth, e.gender,
+              e.reporting_to, e.language, e.about, e.hourly_rate, e.slack_member_id,
+              e.skills, e.probation_end_date, e.notice_period_start_date,
+              e.notice_period_end_date, e.employment_type, e.marital_status,
+              e.business_address, e.created_at, e.updated_at,
+              u.id as uid, u.name, u.email, u.phone, u.address, u.country,
+              u.email_notifications, u.role as user_role, u.status,
               u.company_id,
               c.name as company_name,
               d.name as department_name, 
               p.name as position_name
-       FROM employees e
-       JOIN users u ON e.user_id = u.id
+       FROM users u
+       LEFT JOIN employees e ON e.user_id = u.id
        LEFT JOIN companies c ON u.company_id = c.id
        LEFT JOIN departments d ON e.department_id = d.id
        LEFT JOIN positions p ON e.position_id = p.id
        ${whereClause}
-       ORDER BY e.created_at DESC`,
+       ORDER BY u.created_at DESC`,
       params
     );
 
@@ -95,7 +101,7 @@ const create = async (req, res) => {
     if (!name || !email) {
       return res.status(400).json({
         success: false,
-        error: 'Name and Email are required'
+        error: req.t ? req.t('api_msg_5f88fd24') : "Name and Email are required"
       });
     }
 
@@ -105,7 +111,7 @@ const create = async (req, res) => {
     if (!finalCompanyId) {
       return res.status(400).json({
         success: false,
-        error: 'Company is required'
+        error: req.t ? req.t('api_msg_21b48d8a') : "Company is required"
       });
     }
 
@@ -118,7 +124,7 @@ const create = async (req, res) => {
     if (existingUsers.length > 0) {
       return res.status(400).json({
         success: false,
-        error: 'User with this email already exists'
+        error: req.t ? req.t('api_msg_26c4a934') : "User with this email already exists"
       });
     }
 
@@ -222,7 +228,7 @@ const create = async (req, res) => {
       res.status(201).json({
         success: true,
         data: employees[0],
-        message: 'Employee created successfully'
+        message: req.t ? req.t('api_msg_cdca517e') : "Employee created successfully"
       });
     } catch (error) {
       await connection.rollback();
@@ -248,8 +254,10 @@ const getById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const [employees] = await pool.execute(
-      `SELECT e.*,
+    const isUserId = req.query.is_user_id === 'true';
+
+    // If we're looking up by user_id directly because it's a fallback admin record without an employees row
+    let query = `SELECT e.*,
               u.name, u.email, u.phone, u.address, u.country, u.email_notifications, u.role as user_role, u.status, u.avatar,
               u.company_id,
               c.name as company_name,
@@ -257,21 +265,23 @@ const getById = async (req, res) => {
               p.name as position_name,
               s.name as shift_name,
               u2.name as reporting_to_name
-       FROM employees e
-       JOIN users u ON e.user_id = u.id
+       FROM users u
+       LEFT JOIN employees e ON e.user_id = u.id
        LEFT JOIN companies c ON u.company_id = c.id
        LEFT JOIN departments d ON e.department_id = d.id
        LEFT JOIN positions p ON e.position_id = p.id
        LEFT JOIN shifts s ON e.shift_id = s.id
        LEFT JOIN users u2 ON e.reporting_to = u2.id
-       WHERE e.id = ? AND u.is_deleted = 0`,
-      [id]
-    );
+       WHERE `;
+    
+    query += isUserId ? `u.id = ? AND u.is_deleted = 0` : `e.id = ? AND u.is_deleted = 0`;
+
+    const [employees] = await pool.execute(query, [id]);
 
     if (employees.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Employee not found'
+        error: req.t ? req.t('api_msg_ff92a48d') : "Employee not found"
       });
     }
 
@@ -283,7 +293,7 @@ const getById = async (req, res) => {
     console.error('Get employee by ID error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch employee'
+      error: req.t ? req.t('api_msg_3324dde5') : "Failed to fetch employee"
     });
   }
 };
@@ -305,18 +315,28 @@ const update = async (req, res) => {
     console.log('Employee ID:', id);
     console.log('Request body:', JSON.stringify(req.body, null, 2));
 
-    // Get employee to find user_id
-    const [existingEmployees] = await pool.execute(
-      `SELECT e.user_id, u.company_id FROM employees e
-       JOIN users u ON e.user_id = u.id
-       WHERE e.id = ? AND u.is_deleted = 0`,
-      [id]
-    );
+    const isUserId = req.query.is_user_id === 'true';
+
+    // Get user_id to apply the update
+    let existingEmployees;
+    if (isUserId) {
+      [existingEmployees] = await pool.execute(
+        `SELECT u.id as user_id, u.company_id FROM users u WHERE u.id = ? AND u.is_deleted = 0`,
+        [id]
+      );
+    } else {
+      [existingEmployees] = await pool.execute(
+        `SELECT e.user_id, u.company_id FROM employees e
+         JOIN users u ON e.user_id = u.id
+         WHERE e.id = ? AND u.is_deleted = 0`,
+        [id]
+      );
+    }
 
     if (existingEmployees.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Employee not found'
+        error: req.t ? req.t('api_msg_ff92a48d') : "Employee not found"
       });
     }
 
@@ -346,7 +366,7 @@ const update = async (req, res) => {
           await connection.rollback();
           return res.status(400).json({
             success: false,
-            error: 'Email already exists for another user'
+            error: req.t ? req.t('api_msg_7a67006c') : "Email already exists for another user"
           });
         }
         userUpdateFields.push('email = ?');
@@ -439,36 +459,43 @@ const update = async (req, res) => {
       });
 
       if (empUpdateFields.length > 0) {
-        empUpdateValues.push(id);
-        await connection.execute(
-          `UPDATE employees SET ${empUpdateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-          empUpdateValues
-        );
+        if (!isUserId) {
+          empUpdateValues.push(id);
+          await connection.execute(
+            `UPDATE employees SET ${empUpdateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+            empUpdateValues
+          );
+        } else {
+          // It's an admin without an employee record, and we received employee-specific fields.
+          // In a full implementation, you would INSERT a new employee record here.
+          // For now, we skip updating the employees table since they don't have a record.
+          console.warn("Attempted to update employee-specific fields for a user without an employee record. Skipping employees table update.");
+        }
       }
 
       await connection.commit();
 
       // Get updated employee
-      const [updatedEmployees] = await pool.execute(
-        `SELECT e.*, 
+      let fetchQuery = `SELECT e.*, 
                 u.name, u.email, u.phone, u.address, u.role as user_role, u.status,
                 u.company_id,
                 c.name as company_name,
                 d.name as department_name, 
                 p.name as position_name
-         FROM employees e
-         JOIN users u ON e.user_id = u.id
+         FROM users u
+         LEFT JOIN employees e ON e.user_id = u.id
          LEFT JOIN companies c ON u.company_id = c.id
          LEFT JOIN departments d ON e.department_id = d.id
          LEFT JOIN positions p ON e.position_id = p.id
-         WHERE e.id = ?`,
-        [id]
-      );
+         WHERE `;
+      fetchQuery += isUserId ? `u.id = ?` : `e.id = ?`;
+
+      const [updatedEmployees] = await pool.execute(fetchQuery, [id]);
 
       res.json({
         success: true,
         data: updatedEmployees[0],
-        message: 'Employee updated successfully'
+        message: req.t ? req.t('api_msg_dad105fb') : "Employee updated successfully"
       });
     } catch (error) {
       await connection.rollback();
@@ -493,18 +520,27 @@ const deleteEmployee = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Get user_id from employee
-    const [employees] = await pool.execute(
-      `SELECT e.user_id FROM employees e
-       JOIN users u ON e.user_id = u.id
-       WHERE e.id = ? AND u.is_deleted = 0`,
-      [id]
-    );
+    const isUserId = req.query.is_user_id === 'true';
+
+    let employees;
+    if (isUserId) {
+      [employees] = await pool.execute(
+        `SELECT u.id as user_id FROM users u WHERE u.id = ? AND u.is_deleted = 0`,
+        [id]
+      );
+    } else {
+      [employees] = await pool.execute(
+        `SELECT e.user_id FROM employees e
+         JOIN users u ON e.user_id = u.id
+         WHERE e.id = ? AND u.is_deleted = 0`,
+        [id]
+      );
+    }
 
     if (employees.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Employee not found'
+        error: req.t ? req.t('api_msg_ff92a48d') : "Employee not found"
       });
     }
 
@@ -518,13 +554,13 @@ const deleteEmployee = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Employee deleted successfully'
+      message: req.t ? req.t('api_msg_81215900') : "Employee deleted successfully"
     });
   } catch (error) {
     console.error('Delete employee error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete employee'
+      error: req.t ? req.t('api_msg_24240959') : "Failed to delete employee"
     });
   }
 };
@@ -543,7 +579,7 @@ const getProfile = async (req, res) => {
     if (!userId) {
       return res.status(400).json({
         success: false,
-        error: 'user_id is required'
+        error: req.t ? req.t('api_msg_99a26527') : "user_id is required"
       });
     }
 
@@ -578,7 +614,7 @@ const getProfile = async (req, res) => {
       if (users.length === 0) {
         return res.status(404).json({
           success: false,
-          error: 'User not found'
+          error: req.t ? req.t('api_msg_b846d114') : "User not found"
         });
       }
 
@@ -596,7 +632,7 @@ const getProfile = async (req, res) => {
     console.error('Get employee profile error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch employee profile'
+      error: req.t ? req.t('api_msg_8882cf72') : "Failed to fetch employee profile"
     });
   }
 };
@@ -618,7 +654,7 @@ const updateProfile = async (req, res) => {
     if (!userId) {
       return res.status(400).json({
         success: false,
-        error: 'user_id is required'
+        error: req.t ? req.t('api_msg_99a26527') : "user_id is required"
       });
     }
 
@@ -631,7 +667,7 @@ const updateProfile = async (req, res) => {
     if (users.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'User not found'
+        error: req.t ? req.t('api_msg_b846d114') : "User not found"
       });
     }
 
@@ -652,7 +688,7 @@ const updateProfile = async (req, res) => {
       if (emailCheck.length > 0) {
         return res.status(400).json({
           success: false,
-          error: 'Email already exists for another user'
+          error: req.t ? req.t('api_msg_7a67006c') : "Email already exists for another user"
         });
       }
       userUpdateFields.push('email = ?');
@@ -747,7 +783,7 @@ const updateProfile = async (req, res) => {
     res.json({
       success: true,
       data: responseData,
-      message: 'Profile updated successfully'
+      message: req.t ? req.t('api_msg_efa0ee10') : "Profile updated successfully"
     });
   } catch (error) {
     console.error('Update employee profile error:', error);
@@ -772,7 +808,7 @@ const getDashboardStats = async (req, res) => {
     if (!userId || !companyId) {
       return res.status(400).json({
         success: false,
-        error: 'user_id and company_id are required'
+        error: req.t ? req.t('api_msg_a2192a92') : "user_id and company_id are required"
       });
     }
 
@@ -997,7 +1033,7 @@ const getDashboardStats = async (req, res) => {
     console.error('Error details:', error.sqlMessage || error.message);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch dashboard statistics',
+      error: req.t ? req.t('api_msg_117f9ea2') : "Failed to fetch dashboard statistics",
       details: process.env.NODE_ENV === 'development' ? error.sqlMessage || error.message : undefined
     });
   }

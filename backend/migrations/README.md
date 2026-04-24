@@ -1,20 +1,37 @@
 # Database Migrations
 
-This directory contains SQL migration files for database schema changes.
+This directory contains SQL and JS migration files for database schema changes.
 
-## How to Run Migrations
+## Run all migrations (recommended — local or Railway)
 
-### Option 1: Using MySQL Command Line
+From the `backend` folder, with the same environment variables the app uses (`DATABASE_URL` / `MYSQL_URL`, or `MYSQLHOST`, `MYSQLUSER`, etc.):
+
+```bash
+cd backend
+npm run migrate
+# or: node run-all-migrations.js
+```
+
+Already-applied files are stored in the `schema_migrations` table, so the command is safe to run again on the same database.
+
+**Railway (live database):** open your Railway project, copy the **MySQL** `DATABASE_URL` / connection variables, then either:
+
+- Add them to `backend/.env` locally and run `npm run migrate`, or
+- Use Railway’s shell: `railway run --service <mysql-or-app> npm run migrate` (from `backend` with `DATABASE_URL` linked), depending on your Railway layout.
+
+## How to Run a Single Migration
+
+### Option 1: MySQL command line
 ```bash
 mysql -u root -p worksuite_db < migrations/001_add_package_id_to_companies.sql
 ```
 
-### Option 2: Using MySQL Workbench or phpMyAdmin
+### Option 2: MySQL Workbench or phpMyAdmin
 1. Open the migration file
 2. Copy the SQL statements
 3. Execute them in your database
 
-### Option 3: Using Node.js Script
+### Option 3: Node (single file)
 ```bash
 node run-migration.js migrations/001_add_package_id_to_companies.sql
 ```

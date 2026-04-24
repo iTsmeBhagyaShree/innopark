@@ -48,6 +48,7 @@ const adminSidebarData = [
     icon: IoLayers,
     path: '/app/admin/projects',
     section: 'sidebar.teamOperations',
+    moduleKey: 'projects',
   },
 
   {
@@ -55,6 +56,7 @@ const adminSidebarData = [
     icon: IoCheckboxOutline,
     path: '/app/admin/tasks',
     section: 'sidebar.teamOperations',
+    moduleKey: 'tasks',
   },
 
   {
@@ -65,10 +67,11 @@ const adminSidebarData = [
   },
 
   {
-    label: 'sidebar.employees',
+    label: 'sidebar.team',
     icon: IoShieldCheckmark,
     path: '/app/admin/employees',
     section: 'sidebar.teamOperations',
+    moduleKey: 'employees',
   },
 
   {

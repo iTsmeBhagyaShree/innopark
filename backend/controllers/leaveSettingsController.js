@@ -128,7 +128,7 @@ exports.getAllLeaveTypes = async (req, res) => {
     if (!company_id) {
       return res.status(400).json({
         success: false,
-        error: 'Company ID is required'
+        error: req.t ? req.t('api_msg_c9d0dab7') : "Company ID is required"
       });
     }
 
@@ -215,7 +215,7 @@ exports.getAllLeaveTypes = async (req, res) => {
     console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch leave types',
+      error: req.t ? req.t('api_msg_36ca3f00') : "Failed to fetch leave types",
       details: error.message
     });
   }
@@ -235,7 +235,7 @@ exports.getLeaveTypeById = async (req, res) => {
     if (!company_id) {
       return res.status(400).json({
         success: false,
-        error: 'Company ID is required'
+        error: req.t ? req.t('api_msg_c9d0dab7') : "Company ID is required"
       });
     }
 
@@ -247,7 +247,7 @@ exports.getLeaveTypeById = async (req, res) => {
     if (leaveTypes.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Leave type not found'
+        error: req.t ? req.t('api_msg_5144118e') : "Leave type not found"
       });
     }
 
@@ -281,7 +281,7 @@ exports.getLeaveTypeById = async (req, res) => {
     console.error('Error fetching leave type:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch leave type',
+      error: req.t ? req.t('api_msg_589f1f64') : "Failed to fetch leave type",
       details: error.message
     });
   }
@@ -309,7 +309,7 @@ exports.createLeaveType = async (req, res) => {
     if (!company_id) {
       return res.status(400).json({
         success: false,
-        error: 'Company ID is required'
+        error: req.t ? req.t('api_msg_c9d0dab7') : "Company ID is required"
       });
     }
 
@@ -317,14 +317,14 @@ exports.createLeaveType = async (req, res) => {
     if (!leaveTypeData.name || !leaveTypeData.name.trim()) {
       return res.status(400).json({
         success: false,
-        error: 'Leave type name is required'
+        error: req.t ? req.t('api_msg_79349eee') : "Leave type name is required"
       });
     }
 
     if (!leaveTypeData.allotment_type) {
       return res.status(400).json({
         success: false,
-        error: 'Leave allotment type is required'
+        error: req.t ? req.t('api_msg_a71607e8') : "Leave allotment type is required"
       });
     }
 
@@ -486,14 +486,14 @@ exports.createLeaveType = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Leave type created successfully',
+      message: req.t ? req.t('api_msg_f372ee5c') : "Leave type created successfully",
       data: createdLeaveType
     });
   } catch (error) {
     console.error('Error creating leave type:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to create leave type',
+      error: req.t ? req.t('api_msg_5f657c29') : "Failed to create leave type",
       details: error.message
     });
   }
@@ -514,7 +514,7 @@ exports.updateLeaveType = async (req, res) => {
     if (!company_id) {
       return res.status(400).json({
         success: false,
-        error: 'Company ID is required'
+        error: req.t ? req.t('api_msg_c9d0dab7') : "Company ID is required"
       });
     }
 
@@ -527,7 +527,7 @@ exports.updateLeaveType = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Leave type not found'
+        error: req.t ? req.t('api_msg_5144118e') : "Leave type not found"
       });
     }
 
@@ -620,14 +620,14 @@ exports.updateLeaveType = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Leave type updated successfully',
+      message: req.t ? req.t('api_msg_4ab0e70d') : "Leave type updated successfully",
       data: updatedLeaveType[0]
     });
   } catch (error) {
     console.error('Error updating leave type:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to update leave type',
+      error: req.t ? req.t('api_msg_6008da08') : "Failed to update leave type",
       details: error.message
     });
   }
@@ -647,7 +647,7 @@ exports.deleteLeaveType = async (req, res) => {
     if (!company_id) {
       return res.status(400).json({
         success: false,
-        error: 'Company ID is required'
+        error: req.t ? req.t('api_msg_c9d0dab7') : "Company ID is required"
       });
     }
 
@@ -660,7 +660,7 @@ exports.deleteLeaveType = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Leave type not found'
+        error: req.t ? req.t('api_msg_5144118e') : "Leave type not found"
       });
     }
 
@@ -671,13 +671,13 @@ exports.deleteLeaveType = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Leave type deleted successfully'
+      message: req.t ? req.t('api_msg_c78c8776') : "Leave type deleted successfully"
     });
   } catch (error) {
     console.error('Error deleting leave type:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete leave type',
+      error: req.t ? req.t('api_msg_c92a6e53') : "Failed to delete leave type",
       details: error.message
     });
   }
@@ -697,7 +697,7 @@ exports.archiveLeaveType = async (req, res) => {
     if (!company_id) {
       return res.status(400).json({
         success: false,
-        error: 'Company ID is required'
+        error: req.t ? req.t('api_msg_c9d0dab7') : "Company ID is required"
       });
     }
 
@@ -709,7 +709,7 @@ exports.archiveLeaveType = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Leave type not found'
+        error: req.t ? req.t('api_msg_5144118e') : "Leave type not found"
       });
     }
 
@@ -720,13 +720,13 @@ exports.archiveLeaveType = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Leave type archived successfully'
+      message: req.t ? req.t('api_msg_30d4e15d') : "Leave type archived successfully"
     });
   } catch (error) {
     console.error('Error archiving leave type:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to archive leave type',
+      error: req.t ? req.t('api_msg_6fd3f2e5') : "Failed to archive leave type",
       details: error.message
     });
   }
@@ -746,7 +746,7 @@ exports.restoreLeaveType = async (req, res) => {
     if (!company_id) {
       return res.status(400).json({
         success: false,
-        error: 'Company ID is required'
+        error: req.t ? req.t('api_msg_c9d0dab7') : "Company ID is required"
       });
     }
 
@@ -758,7 +758,7 @@ exports.restoreLeaveType = async (req, res) => {
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Leave type not found'
+        error: req.t ? req.t('api_msg_5144118e') : "Leave type not found"
       });
     }
 
@@ -769,13 +769,13 @@ exports.restoreLeaveType = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Leave type restored successfully'
+      message: req.t ? req.t('api_msg_8f797275') : "Leave type restored successfully"
     });
   } catch (error) {
     console.error('Error restoring leave type:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to restore leave type',
+      error: req.t ? req.t('api_msg_5b4b8a62') : "Failed to restore leave type",
       details: error.message
     });
   }
@@ -798,7 +798,7 @@ exports.getGeneralSettings = async (req, res) => {
     if (!company_id) {
       return res.status(400).json({
         success: false,
-        error: 'Company ID is required'
+        error: req.t ? req.t('api_msg_c9d0dab7') : "Company ID is required"
       });
     }
 
@@ -837,7 +837,7 @@ exports.getGeneralSettings = async (req, res) => {
     console.error('Error fetching leave general settings:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch leave general settings',
+      error: req.t ? req.t('api_msg_daa95839') : "Failed to fetch leave general settings",
       details: error.message
     });
   }
@@ -857,7 +857,7 @@ exports.updateGeneralSettings = async (req, res) => {
     if (!company_id) {
       return res.status(400).json({
         success: false,
-        error: 'Company ID is required'
+        error: req.t ? req.t('api_msg_c9d0dab7') : "Company ID is required"
       });
     }
 
@@ -896,14 +896,14 @@ exports.updateGeneralSettings = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Leave general settings updated successfully',
+      message: req.t ? req.t('api_msg_581f8a8e') : "Leave general settings updated successfully",
       data: updatedSettings[0]
     });
   } catch (error) {
     console.error('Error updating leave general settings:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to update leave general settings',
+      error: req.t ? req.t('api_msg_3e976fad') : "Failed to update leave general settings",
       details: error.message
     });
   }

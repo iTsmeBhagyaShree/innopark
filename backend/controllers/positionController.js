@@ -8,7 +8,7 @@ const getAll = async (req, res) => {
     if (!filterCompanyId) {
       return res.status(400).json({
         success: false,
-        error: 'company_id is required'
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required"
       });
     }
     
@@ -37,7 +37,7 @@ const getAll = async (req, res) => {
     console.error('Get positions error:', error);
     res.status(500).json({ 
       success: false, 
-      error: 'Failed to fetch positions',
+      error: req.t ? req.t('api_msg_27573372') : "Failed to fetch positions",
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
@@ -51,7 +51,7 @@ const getById = async (req, res) => {
     const companyId = req.query.company_id || req.body.company_id || req.companyId;
     
     if (!companyId) {
-      return res.status(400).json({ success: false, error: 'company_id is required' });
+      return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required" });
     }
 
     const [positions] = await pool.execute(
@@ -67,7 +67,7 @@ const getById = async (req, res) => {
     );
     
     if (positions.length === 0) {
-      return res.status(404).json({ success: false, error: 'Position not found' });
+      return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_fb17bb43') : "Position not found" });
     }
     
     res.json({ success: true, data: positions[0] });
@@ -75,7 +75,7 @@ const getById = async (req, res) => {
     console.error('Get position error:', error);
     res.status(500).json({ 
       success: false, 
-      error: 'Failed to fetch position',
+      error: req.t ? req.t('api_msg_52b67cdd') : "Failed to fetch position",
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
@@ -90,14 +90,14 @@ const create = async (req, res) => {
     console.log('req.companyId:', req.companyId);
     
     if (!name || !name.trim()) {
-      return res.status(400).json({ success: false, error: 'Position name is required' });
+      return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_a659fd82') : "Position name is required" });
     }
     
     // Use company_id from request body, fallback to req.companyId if not provided
     const finalCompanyId = company_id || req.companyId;
     
     if (!finalCompanyId) {
-      return res.status(400).json({ success: false, error: 'Company is required' });
+      return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_21b48d8a') : "Company is required" });
     }
     
     console.log('Final company_id to use:', finalCompanyId);
@@ -128,7 +128,7 @@ const create = async (req, res) => {
     res.status(201).json({ 
       success: true, 
       data: newPosition[0],
-      message: 'Position created successfully'
+      message: req.t ? req.t('api_msg_10db1f90') : "Position created successfully"
     });
   } catch (error) {
     console.error('Create position error:', error);
@@ -157,14 +157,14 @@ const update = async (req, res) => {
     console.log('Query params:', req.query);
     
     if (!name || !name.trim()) {
-      return res.status(400).json({ success: false, error: 'Position name is required' });
+      return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_a659fd82') : "Position name is required" });
     }
 
     // Get company_id from multiple sources
     const finalCompanyId = req.query.company_id || company_id || req.companyId;
     
     if (!finalCompanyId) {
-      return res.status(400).json({ success: false, error: 'company_id is required' });
+      return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required" });
     }
     
     console.log('Final company_id to use:', finalCompanyId);
@@ -187,7 +187,7 @@ const update = async (req, res) => {
     console.log('Update result:', { affectedRows: result.affectedRows, changedRows: result.changedRows });
     
     if (result.affectedRows === 0) {
-      return res.status(404).json({ success: false, error: 'Position not found or no changes made' });
+      return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_32d2dc8c') : "Position not found or no changes made" });
     }
     
     // Fetch updated position with company and department names
@@ -206,7 +206,7 @@ const update = async (req, res) => {
     res.json({ 
       success: true, 
       data: updatedPosition[0],
-      message: 'Position updated successfully' 
+      message: req.t ? req.t('api_msg_a83b274f') : "Position updated successfully" 
     });
   } catch (error) {
     console.error('Update position error:', error);
@@ -232,7 +232,7 @@ const deletePosition = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({ 
         success: false, 
-        error: 'company_id is required' 
+        error: req.t ? req.t('api_msg_e1be2bab') : "company_id is required" 
       });
     }
     
@@ -248,11 +248,11 @@ const deletePosition = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({ 
         success: false, 
-        error: 'Position not found or already deleted' 
+        error: req.t ? req.t('api_msg_961df1dd') : "Position not found or already deleted" 
       });
     }
     
-    res.json({ success: true, message: 'Position deleted successfully' });
+    res.json({ success: true, message: req.t ? req.t('api_msg_cf387ffa') : "Position deleted successfully" });
   } catch (error) {
     console.error('Delete position error:', error);
     console.error('Error details:', {
