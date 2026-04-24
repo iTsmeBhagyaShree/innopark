@@ -11,7 +11,7 @@ async function checkLeadsSchema() {
   });
 
   try {
-    const [rows] = await pool.execute("DESCRIBE leads 'status'");
+    const [rows] = await pool.execute("DESCRIBE deals 'status'");
     console.log(JSON.stringify(rows, null, 2));
   } catch (error) {
     console.error('Error:', error);

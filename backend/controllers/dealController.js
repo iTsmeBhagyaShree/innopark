@@ -29,7 +29,22 @@ const normalizeDealStatus = (status) => {
     if (!s) return 'Draft';
     const lower = s.toLowerCase();
     const found = DEAL_STATUS_ALLOWED.find((v) => v.toLowerCase() === lower);
-    return found || 'Draft';
+    if (found) return found;
+
+    const map = {
+        'won': 'Accepted',
+        'gewonnen': 'Accepted',
+        'accepted': 'Accepted',
+        'sent': 'Sent',
+        'gesendet': 'Sent',
+        'draft': 'Draft',
+        'entwurf': 'Draft',
+        'declined': 'Declined',
+        'abgelehnt': 'Declined',
+        'expired': 'Expired',
+        'abgelaufen': 'Expired'
+    };
+    return map[lower] || 'Draft';
 };
 
 const generateDealNumber = async (companyId) => {
