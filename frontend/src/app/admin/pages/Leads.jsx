@@ -2875,7 +2875,7 @@ const Leads = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-primary-text mb-2">
-                        {t('leads.lead_type')} <span className="text-danger">*</span>
+                        {t('leads.lead_type_label')} <span className="text-danger">*</span>
                       </label>
                       <select
                         value={formData.leadType}
@@ -3113,7 +3113,7 @@ const Leads = () => {
 
               {/* Lead Details Section */}
               <div className="border-b border-gray-200 pb-4">
-                <h3 className="text-lg font-semibold text-primary-text mb-3">{t('leads.lead_details') || 'Lead Details'}</h3>
+                <h3 className="text-lg font-semibold text-primary-text mb-3">{t('leads.lead_details_label')}</h3>
                 <div className="space-y-4">
                   <div>
                     <div className="flex items-center justify-between mb-2">
@@ -3156,16 +3156,18 @@ const Leads = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-primary-text mb-2">
-                      {t('offline_requests.type')}
+                      {t('leads.columns.source')}
                     </label>
                     <select
                       value={formData.source}
                       onChange={(e) => setFormData({ ...formData, source: e.target.value })}
                       className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
                     >
-                      <option value="">{t('leads.select_source') || 'Select Source'}</option>
+                      <option value="">{t('leads.select_source')}</option>
                       {sources.map(source => (
-                        <option key={source} value={source}>{source}</option>
+                        <option key={source} value={source}>
+                          {t(source.toLowerCase().replace(' ', '_')) || source}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -3192,12 +3194,12 @@ const Leads = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-primary-text mb-2">
-                      {t('common.address') || 'Address'}
+                      {t('leads.address_label')}
                     </label>
                     <RichTextEditor
                       value={formData.address}
                       onChange={(content) => setFormData({ ...formData, address: content })}
-                      placeholder={t('common.placeholder_address') || 'Enter address'}
+                      placeholder={t('common.placeholder_address')}
                     />
                   </div>
                   <Input

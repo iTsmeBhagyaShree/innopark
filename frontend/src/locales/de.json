@@ -725,9 +725,11 @@
     "add_new_lead": "Neuen Lead hinzufügen",
     "edit_lead": "Lead bearbeiten",
     "lead_type": {
+      "title": "Lead-Typ",
       "organization": "Organisation",
       "person": "Person"
     },
+    "lead_type_label": "Lead-Typ",
     "stages": {
       "new": "Neu",
       "contacted": "Kontaktiert",
@@ -832,6 +834,8 @@
     "enter_organization_name": "Geben Sie den Namen der Organisation ein",
     "enter_phone": "Geben Sie die Telefonnummer ein",
     "additional_info": "Weitere Informationen",
+    "lead_details_label": "Lead-Details",
+    "address_label": "Adresse",
     "select_template": "Vorlage wählen…",
     "offer_email": "Angebots-E-Mail",
     "enter_subject": "E-Mail-Betreff eingeben",
