@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { proposalsAPI, projectsAPI, itemsAPI, tasksAPI, notificationsAPI, emailTemplatesAPI, contactsAPI, customFieldsAPI } from '../../../api'
+import { useSettings } from '../../../context/SettingsContext.jsx'
 import Card from '../../../components/ui/Card'
 import Button from '../../../components/ui/Button'
 import Input from '../../../components/ui/Input'
@@ -74,6 +75,7 @@ const ProposalDetail = () => {
   const [customFields, setCustomFields] = useState([])
   const companyId = parseInt(localStorage.getItem('companyId') || 1, 10)
   const userId = parseInt(localStorage.getItem('userId') || 1, 10)
+  const { formatCurrency } = useSettings()
 
   useEffect(() => {
     fetchProposal()
@@ -260,13 +262,6 @@ const ProposalDetail = () => {
     if (!dateString) return '-'
     const date = new Date(dateString)
     return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-')
-  }
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: proposal?.currency || 'USD'
-    }).format(amount || 0)
   }
 
   const isExpired = () => {

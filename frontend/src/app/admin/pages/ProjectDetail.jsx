@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { projectsAPI, tasksAPI, documentsAPI, timeTrackingAPI, expensesAPI, employeesAPI, notesAPI, notificationsAPI, invoicesAPI, paymentsAPI, contractsAPI, usersAPI, eventsAPI } from '../../../api'
+import { projectsAPI, tasksAPI, documentsAPI, timeTrackingAPI, expensesAPI, employeesAPI, notesAPI, notificationsAPI, invoicesAPI, paymentsAPI, contractsAPI, usersAPI, eventsAPI, companiesAPI } from '../../../api'
 import EventsSection from '../../../components/shared/EventsSection'
 import Timer from '../../../components/ui/Timer'
 import Card from '../../../components/ui/Card'
@@ -67,11 +67,146 @@ import {
   IoPricetag
 } from 'react-icons/io5'
 
+/** Tasks API returns assigned_to as a user id; some legacy rows stored employees.id — resolve names via API. */
+function taskAssigneesList(task) {
+  if (!task) return []
+  const raw = task.assigned_to
+  if (Array.isArray(raw)) return raw.filter(Boolean)
+  if (raw != null && typeof raw === 'object') return [raw]
+  if (task.assigned_to_name || task.assigned_to_avatar) {
+    return [{ name: task.assigned_to_name, email: task.assigned_to_email, avatar: task.assigned_to_avatar }]
+  }
+  // Avoid showing raw numeric ids as initials when join/name resolution failed
+  return []
+}
+
+function getTaskAssignedUserId(task) {
+  if (!task) return ''
+  const raw = task.assigned_to
+  if (Array.isArray(raw) && raw.length > 0) {
+    const first = raw[0]
+    if (first != null && typeof first === 'object' && first.id != null) return String(first.id)
+    if (first != null && typeof first !== 'object') return String(first)
+  }
+  if (raw != null && typeof raw === 'object' && raw.id != null) return String(raw.id)
+  if (typeof raw === 'number' && Number.isFinite(raw)) return String(raw)
+  if (typeof raw === 'string' && raw !== '' && !raw.startsWith('[')) return raw.trim()
+  return ''
+}
+
+function localeTag(language) {
+  const l = String(language || 'de').toLowerCase()
+  if (l.startsWith('de')) return 'de-DE'
+  return 'en-GB'
+}
+
+/** Maps API / DB project status strings to localized labels */
+function translateProjectStatus(status, t) {
+  const raw = status == null ? '' : String(status).trim()
+  if (!raw) return t('projects.form.status_in_bearbeitung')
+  const key = raw.toLowerCase()
+  if (
+    key === 'in progress' ||
+    key === 'in_progress' ||
+    key === 'doing' ||
+    key === 'open' ||
+    key === 'not started'
+  ) {
+    return t('projects.form.status_in_bearbeitung')
+  }
+  if (key === 'in bearbeitung') return t('projects.form.status_in_bearbeitung')
+  if (key === 'completed' || key === 'finished') return t('projects.form.status_completed')
+  if (key === 'on hold' || key === 'on_hold') return t('projects.form.status_on_hold')
+  if (key === 'cancelled' || key === 'canceled') return t('projects.form.status_cancelled')
+  return raw.charAt(0).toUpperCase() + raw.slice(1)
+}
+
+function translateTaskBoardStatus(status, t) {
+  const s = String(status || '')
+  if (s === 'Incomplete') return t('projects.kanban.todo')
+  if (s === 'Doing') return t('projects.kanban.in_progress')
+  if (s === 'Done') return t('projects.kanban.done')
+  return s
+}
+
+function projectStatusTone(status) {
+  const ps = String(status || '').toLowerCase()
+  if (ps === 'completed' || ps === 'finished') return 'completed'
+  if (
+    ps === 'in bearbeitung' ||
+    ps === 'in progress' ||
+    ps === 'in_progress' ||
+    ps === 'doing' ||
+    ps === 'open' ||
+    ps === 'not started'
+  ) {
+    return 'progress'
+  }
+  if (ps === 'on hold' || ps === 'on_hold') return 'hold'
+  if (ps === 'cancelled' || ps === 'canceled') return 'cancelled'
+  return 'default'
+}
+
+function projectStatusBadgeClass(status) {
+  const tone = projectStatusTone(status)
+  if (tone === 'completed') return 'bg-green-100 text-green-800'
+  if (tone === 'progress') return 'bg-blue-100 text-blue-800'
+  if (tone === 'hold') return 'bg-yellow-100 text-yellow-800'
+  if (tone === 'cancelled') return 'bg-red-100 text-red-800'
+  return 'bg-gray-100 text-gray-800'
+}
+
+function localizeCodeText(value) {
+  return String(value || '')
+    .replace(/\bTASK\b/gi, 'AUFGABE')
+    .replace(/\bTSK\b/gi, 'AUFGABE')
+    .replace(/\bWMS\b/gi, 'PROJEKT')
+}
+
 const ProjectDetail = () => {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { settings } = useSettings() // Get settings for primary color
+  const { settings, formatCurrency } = useSettings() // Get settings for primary color
   const { t, language } = useLanguage()
+  const dateLocale = localeTag(language)
+
+  const formatPaymentMethodLabel = useCallback((value) => {
+    if (!value) return '-'
+    const slug = String(value).trim().toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_')
+    const methodKeyMap = {
+      cash: 'method_cash',
+      credit_card: 'method_credit_card',
+      debit_card: 'method_debit_card',
+      bank_transfer: 'method_bank_transfer',
+      paypal: 'method_paypal',
+      stripe: 'method_stripe',
+      upi: 'method_upi',
+      cheque: 'method_cheque',
+      check: 'method_cheque',
+    }
+    const sub = methodKeyMap[slug]
+    if (sub) return t(`projects.activity.payments.${sub}`)
+    return String(value).replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
+  }, [t])
+
+  const formatPaymentStatusLabel = useCallback((value) => {
+    if (!value) return t('projects.activity.payments.status_pending')
+    const s = String(value).toLowerCase().trim()
+    if (s === 'completed' || s === 'complete') return t('projects.activity.payments.status_completed')
+    if (s === 'failed') return t('projects.activity.payments.status_failed')
+    if (s === 'pending') return t('projects.activity.payments.status_pending')
+    return String(value)
+  }, [t])
+
+  const formatExpenseStatusLabel = useCallback((value) => {
+    if (!value) return t('projects.activity.expenses.status_pending')
+    const s = String(value).toLowerCase().trim()
+    if (s === 'approved') return t('projects.activity.expenses.status_approved')
+    if (s === 'rejected') return t('projects.activity.expenses.status_rejected')
+    if (s === 'pending') return t('projects.activity.expenses.status_pending')
+    return String(value)
+  }, [t])
+
   const [project, setProject] = useState(null)
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
@@ -118,18 +253,66 @@ const ProjectDetail = () => {
 
   // Kanban Drag State
   const [draggedTask, setDraggedTask] = useState(null)
-  const [kanbanColumns, setKanbanColumns] = useState([
-    { id: 'Incomplete', label: 'To do', color: 'bg-orange-500', count: 0 },
-    { id: 'Doing', label: 'In Bearbeitung', color: 'bg-blue-500', count: 0 },
-    { id: 'Done', label: 'Done', color: 'bg-green-500', count: 0 },
-  ])
-
   // Task Management State
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false)
   const [isEditTaskModalOpen, setIsEditTaskModalOpen] = useState(false)
   const [selectedTask, setSelectedTask] = useState(null)
   const [filteredEmployees, setFilteredEmployees] = useState([])
   const [taskLabels, setTaskLabels] = useState(['Bug', 'Design', 'Enhancement', 'Feedback'])
+
+  const resolveEmployeeNameByAnyId = useCallback((id) => {
+    const n = parseInt(String(id), 10)
+    if (!Number.isFinite(n)) return ''
+    const match = filteredEmployees.find((emp) => (
+      parseInt(String(emp.user_id), 10) === n || parseInt(String(emp.id), 10) === n
+    ))
+    return match?.name || match?.email || ''
+  }, [filteredEmployees])
+
+  const getTaskAssigneesForDisplay = useCallback((task) => {
+    if (!task) return []
+    if (task.assigned_to_name || task.assigned_to_avatar) {
+      return [{ name: task.assigned_to_name, email: task.assigned_to_email, avatar: task.assigned_to_avatar }]
+    }
+
+    const raw = task.assigned_to
+    const rawList = (() => {
+      if (Array.isArray(raw)) return raw
+      if (raw != null && typeof raw === 'object') return [raw]
+      if (typeof raw === 'string') {
+        const trimmed = raw.trim()
+        if (!trimmed) return []
+        if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+          try {
+            const parsed = JSON.parse(trimmed)
+            if (Array.isArray(parsed)) return parsed
+            if (parsed && typeof parsed === 'object') return [parsed]
+          } catch (_) {
+            const first = trimmed.replace(/[\[\]\{\}"']/g, '').split(',')[0]
+            return first ? [first] : []
+          }
+        }
+        return [trimmed]
+      }
+      if (raw != null && raw !== '') return [raw]
+      return []
+    })()
+
+    return rawList
+      .map((item) => {
+        const id = (item && typeof item === 'object') ? (item.user_id ?? item.id ?? '') : item
+        const n = parseInt(String(id), 10)
+        if (!Number.isFinite(n)) return null
+        const resolvedName = resolveEmployeeNameByAnyId(n)
+        return {
+          id: n,
+          name: resolvedName || `User #${n}`,
+          email: '',
+          avatar: ''
+        }
+      })
+      .filter(Boolean)
+  }, [resolveEmployeeNameByAnyId])
 
   // Task Form Data
   const [taskFormData, setTaskFormData] = useState({
@@ -148,79 +331,6 @@ const ProjectDetail = () => {
     uploaded_file: null,
   })
 
-  const taskColumns = [
-    {
-      header: 'Code',
-      accessor: 'code',
-      key: 'code',
-      className: 'font-medium text-gray-900 w-24'
-    },
-    {
-      header: 'Task',
-      accessor: 'title',
-      key: 'title',
-      className: 'font-medium text-gray-900 min-w-[200px]',
-      render: (value, row) => (
-        <div>
-          <div className="font-semibold text-primary-text">{row.title}</div>
-          {row.deadline && (
-            <div className={`text-xs flex items-center gap-1 mt-0.5 ${new Date(row.deadline) < new Date() ? 'text-red-600 font-medium' : 'text-secondary-text'}`}>
-              <IoCalendarOutline size={12} />
-              {new Date(row.deadline) < new Date() ? 'Overdue: ' : 'Due: '}
-              {new Date(row.deadline).toLocaleDateString()}
-            </div>
-          )}
-        </div>
-      )
-    },
-    {
-      header: 'Assigned To',
-      accessor: 'assigned_to',
-      key: 'assigned_to',
-      render: (value, row) => (
-        <div className="flex -space-x-2 overflow-hidden">
-          {row.assigned_to && row.assigned_to.length > 0 ? (
-            row.assigned_to.map((assignee, idx) => (
-              <div key={idx} className="inline-block h-8 w-8 rounded-full ring-2 ring-white bg-gray-200 flex items-center justify-center text-xs font-medium" title={assignee.name || assignee.email}>
-                {assignee.avatar || (assignee.name ? assignee.name.charAt(0).toUpperCase() : 'U')}
-              </div>
-            ))
-          ) : (
-            <span className="text-gray-400 text-xs italic">Unassigned</span>
-          )}
-        </div>
-      )
-    },
-    {
-      header: 'Status',
-      accessor: 'status',
-      key: 'status',
-      render: (value, row) => (
-        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${row.status === 'Done' ? 'bg-green-100 text-green-800' :
-          row.status === 'Doing' ? 'bg-blue-100 text-blue-800' :
-            'bg-orange-100 text-orange-800'
-          }`}>
-          {row.status === 'Incomplete' ? 'To do' : row.status === 'Doing' ? 'In Bearbeitung' : row.status}
-        </span>
-      )
-    },
-    {
-      header: 'Action',
-      accessor: 'id',
-      key: 'id',
-      className: 'text-right',
-      render: (value, row) => (
-        <div className="flex justify-end gap-2">
-          <button onClick={() => { setSelectedTask(row); setIsEditTaskModalOpen(true); }} className="p-1 text-blue-600 hover:bg-blue-50 rounded">
-            <IoCreate size={16} />
-          </button>
-          <button onClick={() => handleDeleteTask(row)} className="p-1 text-red-600 hover:bg-red-50 rounded">
-            <IoTrash size={16} />
-          </button>
-        </div>
-      )
-    }
-  ]
   const [loadingTimesheets, setLoadingTimesheets] = useState(false)
   const [loadingExpenses, setLoadingExpenses] = useState(false)
 
@@ -340,10 +450,12 @@ const ProjectDetail = () => {
     invoice_number: '',
     issue_date: new Date().toISOString().split('T')[0],
     due_date: '',
+    client_id: '',
     amount: '',
     status: 'unpaid',
     note: ''
   })
+  const [invoiceClientOptions, setInvoiceClientOptions] = useState([])
 
   const [paymentFormData, setPaymentFormData] = useState({
     invoice_id: '',
@@ -363,6 +475,14 @@ const ProjectDetail = () => {
     description: ''
   })
 
+  const kanbanColumns = useMemo(
+    () => [
+      { id: 'Incomplete', label: t('projects.kanban.todo'), color: 'bg-orange-500', count: 0 },
+      { id: 'Doing', label: t('projects.kanban.in_progress'), color: 'bg-blue-500', count: 0 },
+      { id: 'Done', label: t('projects.kanban.done'), color: 'bg-green-500', count: 0 },
+    ],
+    [t]
+  )
 
   useEffect(() => {
     if (id) {
@@ -423,6 +543,7 @@ const ProjectDetail = () => {
           status: projectData.status || 'In Bearbeitung',
           progress: projectData.progress || 0,
           budget: projectData.budget || null,
+          currency: projectData.currency || settings?.default_currency || 'EUR',
           label: projectData.label || '',
           clientName: projectData.client_name || '',
           clientId: projectData.client_id || '',
@@ -1002,7 +1123,7 @@ const ProjectDetail = () => {
       title: task.title || '',
       description: task.description || '',
       points: task.points?.toString() || '1',
-      assign_to: task.assigned_to && task.assigned_to.length > 0 ? task.assigned_to[0].id : '',
+      assign_to: getTaskAssignedUserId(task),
       collaborators: task.collaborators ? task.collaborators.map(c => c.id || c.user_id || c) : [],
       status: task.status || 'Incomplete',
       priority: task.priority || 'Medium',
@@ -1032,6 +1153,101 @@ const ProjectDetail = () => {
       }
     }
   }
+
+  const taskColumns = [
+      {
+        header: t('projects.task_table.code'),
+        accessor: 'code',
+        key: 'code',
+        className: 'font-medium text-gray-900 w-24',
+        render: (value, row) => localizeCodeText(value || `#${row.id}`),
+      },
+      {
+        header: t('tasks.columns.task'),
+        accessor: 'title',
+        key: 'title',
+        className: 'font-medium text-gray-900 min-w-[200px]',
+        render: (value, row) => (
+          <div>
+            <div className="font-semibold text-primary-text">{row.title}</div>
+            {row.deadline && (
+              <div
+                className={`text-xs flex items-center gap-1 mt-0.5 ${new Date(row.deadline) < new Date() ? 'text-red-600 font-medium' : 'text-secondary-text'}`}
+              >
+                <IoCalendarOutline size={12} />
+                {new Date(row.deadline) < new Date()
+                  ? t('projects.task_table.overdue_prefix')
+                  : t('projects.task_table.due_prefix')}
+                {new Date(row.deadline).toLocaleDateString(dateLocale)}
+              </div>
+            )}
+          </div>
+        ),
+      },
+      {
+        header: t('tasks.columns.assigned_to'),
+        accessor: 'assigned_to',
+        key: 'assigned_to',
+        render: (value, row) => {
+          const assignees = getTaskAssigneesForDisplay(row)
+          if (assignees.length === 0) {
+            return <span className="text-gray-400 text-xs italic">{t('projects.task_table.unassigned')}</span>
+          }
+          return (
+            <div className="flex flex-col gap-0.5 min-w-0 max-w-[240px]">
+              {assignees.map((assignee, idx) => {
+                const label = assignee.name || assignee.email || ''
+                const display = label || t('projects.task_table.unassigned')
+                return (
+                  <span
+                    key={idx}
+                    className="text-sm text-gray-900 truncate"
+                    title={display}
+                  >
+                    {display}
+                  </span>
+                )
+              })}
+            </div>
+          )
+        },
+      },
+      {
+        header: t('tasks.columns.status'),
+        accessor: 'status',
+        key: 'status',
+        render: (value, row) => (
+          <span
+            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${row.status === 'Done' ? 'bg-green-100 text-green-800' : row.status === 'Doing' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}`}
+          >
+            {translateTaskBoardStatus(row.status, t)}
+          </span>
+        ),
+      },
+      {
+        header: t('tasks.columns.action'),
+        accessor: 'id',
+        key: 'id',
+        className: 'text-right',
+        render: (value, row) => (
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedTask(row)
+                setIsEditTaskModalOpen(true)
+              }}
+              className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+            >
+              <IoCreate size={16} />
+            </button>
+            <button type="button" onClick={() => handleDeleteTask(row)} className="p-1 text-red-600 hover:bg-red-50 rounded">
+              <IoTrash size={16} />
+            </button>
+          </div>
+        ),
+      },
+    ]
 
   const handleSaveTask = async () => {
     const trimmedTitle = taskFormData.title?.trim()
@@ -1860,15 +2076,30 @@ const ProjectDetail = () => {
     }
   }
 
-  const handleOpenAddInvoice = () => {
-    if (project) {
-      setInvoiceFormData(prev => ({
-        ...prev,
-        client_id: project.clientId || '',
-        // You might want to pre-fill other available data here if necessary
-      }));
+  const fetchInvoiceClientOptions = async () => {
+    try {
+      const companyId = parseInt(localStorage.getItem('companyId') || 1, 10)
+      const response = await companiesAPI.getAll({ company_id: companyId })
+      if (response.data.success) {
+        setInvoiceClientOptions(response.data.data || [])
+      } else {
+        setInvoiceClientOptions([])
+      }
+    } catch (e) {
+      console.error('Error fetching clients for invoice:', e)
+      setInvoiceClientOptions([])
     }
-    setIsAddInvoiceModalOpen(true);
+  }
+
+  const handleOpenAddInvoice = async () => {
+    await fetchInvoiceClientOptions()
+    if (project) {
+      setInvoiceFormData((prev) => ({
+        ...prev,
+        client_id: project.clientId != null && project.clientId !== '' ? String(project.clientId) : ''
+      }))
+    }
+    setIsAddInvoiceModalOpen(true)
   }
 
   const handleAddInvoice = async () => {
@@ -2000,7 +2231,7 @@ const ProjectDetail = () => {
               </button>
 
               <div className="flex items-center gap-2 min-w-0 flex-1">
-                <h1 className="text-lg sm:text-xl font-semibold text-gray-900 truncate">{project.name}</h1>
+                <h1 className="text-lg sm:text-xl font-semibold text-gray-900 truncate">{localizeCodeText(project.name)}</h1>
                 <button className="p-1 hover:bg-gray-100 rounded-lg flex-shrink-0">
                   <IoStar size={18} className="text-gray-400" />
                 </button>
@@ -2060,13 +2291,7 @@ const ProjectDetail = () => {
                       <IoCopy size={16} />
                       {t('projects.actions.clone')}
                     </button>
-                    <button
-                      onClick={() => navigate(`/app/admin/projects?edit=${project.id}`)}
-                      className="w-full px-4 py-2 text-left text-sm text-primary-text hover:bg-gray-100 flex items-center gap-2"
-                    >
-                      <IoCreate size={16} />
-                      {t('projects.actions.edit')}
-                    </button>
+
                     <button
                       onClick={handleOpenAddInvoice}
                       className="w-full px-4 py-2 text-left text-sm text-primary-text hover:bg-gray-100 flex items-center gap-2"
@@ -2109,23 +2334,20 @@ const ProjectDetail = () => {
           <div className="flex flex-wrap items-center gap-4 mb-4">
             <div className="flex items-center gap-2">
               <span className="text-sm text-secondary-text">{t('projects.status.start_date')}:</span>
-              <span className="text-sm font-medium text-primary-text">{project.startDate ? new Date(project.startDate).toLocaleDateString() : '-'}</span>
+              <span className="text-sm font-medium text-primary-text">
+                {project.startDate ? new Date(project.startDate).toLocaleDateString(dateLocale) : '-'}
+              </span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm text-secondary-text">{t('projects.status.deadline')}:</span>
               <span className={`text-sm font-medium ${project.deadline && new Date(project.deadline) < new Date() ? 'text-red-600' : 'text-primary-text'}`}>
-                {project.deadline ? new Date(project.deadline).toLocaleDateString() : '-'}
+                {project.deadline ? new Date(project.deadline).toLocaleDateString(dateLocale) : '-'}
               </span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm text-secondary-text">{t('projects.status.status')}:</span>
-              <Badge className={`text-xs ${project.status === 'completed' ? 'bg-green-100 text-green-800' :
-                project.status === 'In Bearbeitung' || project.status === 'open' ? 'bg-blue-100 text-blue-800' :
-                  project.status === 'on hold' ? 'bg-yellow-100 text-yellow-800' :
-                    project.status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                      'bg-gray-100 text-gray-800'
-                }`}>
-                {project.status === 'In Bearbeitung' || project.status === 'doing' ? t('common.status.in_progress') : project.status}
+              <Badge className={`text-xs ${projectStatusBadgeClass(project.status)}`}>
+                {translateProjectStatus(project.status, t)}
               </Badge>
             </div>
             {project.label && (
@@ -2210,20 +2432,30 @@ const ProjectDetail = () => {
                         <div className="flex justify-between">
                           <span className="text-gray-500">{t('projects.status.start_date')}:</span>
                           <span className="font-medium text-gray-900">
-                            {project.startDate ? new Date(project.startDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-') : '-'}
+                            {project.startDate
+                              ? new Date(project.startDate).toLocaleDateString(dateLocale, {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  year: 'numeric',
+                                })
+                              : '-'}
                           </span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-500">{t('projects.status.deadline')}:</span>
                           <span className={`font-medium ${project.deadline && new Date(project.deadline) < new Date() ? 'text-red-600' : 'text-gray-900'}`}>
-                            {project.deadline ? new Date(project.deadline).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-') : '-'}
+                            {project.deadline
+                              ? new Date(project.deadline).toLocaleDateString(dateLocale, {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  year: 'numeric',
+                                })
+                              : '-'}
                           </span>
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-gray-500">{t('projects.status.status')}:</span>
-                          <span className="text-gray-900 font-medium">
-                            {project.status === 'In Bearbeitung' || project.status === 'doing' ? t('common.status.in_progress') : project.status?.charAt(0).toUpperCase() + project.status?.slice(1)}
-                          </span>
+                          <span className="text-gray-900 font-medium">{translateProjectStatus(project.status, t)}</span>
                         </div>
                       </div>
                     </div>
@@ -2249,7 +2481,7 @@ const ProjectDetail = () => {
                             const total = taskStats.todo + taskStats.doing + taskStats.review + taskStats.done || 1
                             const segments = [
                               { value: taskStats.todo, color: '#f97316', label: t('projects.stats.to_do') },
-                              { value: taskStats.doing, color: '#3b82f6', label: t('common.status.in_progress') },
+                              { value: taskStats.doing, color: '#3b82f6', label: t('projects.stats.in_progress') },
                               { value: taskStats.review, color: '#a855f7', label: t('projects.stats.review') },
                               { value: taskStats.done, color: '#22c55e', label: t('projects.stats.done') },
                             ]
@@ -2351,7 +2583,9 @@ const ProjectDetail = () => {
                           {/* Name and Position */}
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-gray-900 truncate">{member.name || member.email}</p>
-                            <p className="text-xs text-gray-500 truncate">{member.position || member.role || member.job_title || 'Team Member'}</p>
+                            <p className="text-xs text-gray-500 truncate">
+                              {member.position || member.role || member.job_title || t('projects.members.role_fallback')}
+                            </p>
                           </div>
 
                           {/* Actions */}
@@ -2360,7 +2594,7 @@ const ProjectDetail = () => {
                               <a
                                 href={`mailto:${member.email}`}
                                 className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                title={`Email ${member.name}`}
+                                title={String(t('projects.members.email_member_title')).replace('{{name}}', member.name || '')}
                               >
                                 <IoMail size={18} />
                               </a>
@@ -2368,7 +2602,7 @@ const ProjectDetail = () => {
                             <button
                               onClick={() => handleRemoveMember && handleRemoveMember(member.id || member.user_id)}
                               className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              title="Remove member"
+                              title={t('projects.members.remove_member_title')}
                             >
                               <IoClose size={18} />
                             </button>
@@ -2384,8 +2618,16 @@ const ProjectDetail = () => {
               <div className="lg:col-span-1">
                 <div className="bg-white rounded-lg border border-gray-200 p-6 sticky top-6">
                   <h3 className="text-base font-semibold text-gray-900 mb-4">{t('projects.activity.title')}</h3>
+                  {(() => {
+                    const localizeActorName = (name) => {
+                      const raw = String(name || '').trim().toLowerCase()
+                      if (!raw) return name
+                      if (raw === 'super admin' || raw === 'superadmin') return t('auth.roles.superadmin')
+                      if (raw === 'admin') return t('auth.roles.admin')
+                      return name
+                    }
 
-                  {tasks.length === 0 && notes.length === 0 ? (
+                    return tasks.length === 0 && notes.length === 0 ? (
                     <div className="text-center py-8 text-gray-500">
                       <IoDocumentText size={40} className="mx-auto mb-2 text-gray-300" />
                       <p className="text-sm">{t('projects.activity.no_activity')}</p>
@@ -2395,16 +2637,19 @@ const ProjectDetail = () => {
                       {/* Generate activity from tasks */}
                       {tasks.slice(0, 10).map((task, idx) => {
                         // Use task creator name, or project client name, or Admin as fallback
-                        const creatorName = task.created_by_name || task.assigned_to?.[0]?.name || project.clientName || 'Admin'
+                        const creatorNameRaw = task.created_by_name || task.assigned_to_name || getTaskAssigneesForDisplay(task)[0]?.name || project.clientName || 'Admin'
+                        const creatorName = localizeActorName(creatorNameRaw)
                         const getInitials = (name) => {
-                          if (!name || name === 'Admin') return 'AD'
+                          if (!name || name === t('auth.roles.admin')) return 'AD'
                           return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
                         }
                         const initials = getInitials(creatorName)
                         const createdDate = task.created_at ? new Date(task.created_at) : new Date()
-                        const formattedDate = createdDate.toLocaleDateString() === new Date().toLocaleDateString()
-                          ? `Today at ${createdDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`
-                          : createdDate.toLocaleDateString()
+                        const timeStr = createdDate.toLocaleTimeString(dateLocale, { hour: '2-digit', minute: '2-digit' })
+                        const formattedDate =
+                          createdDate.toLocaleDateString(dateLocale) === new Date().toLocaleDateString(dateLocale)
+                            ? String(t('projects.activity.today_at')).replace('{{time}}', timeStr)
+                            : createdDate.toLocaleDateString(dateLocale)
 
                         return (
                           <div key={task.id || idx} className="flex gap-3">
@@ -2421,10 +2666,10 @@ const ProjectDetail = () => {
                               </div>
                               <div className="flex items-center gap-2">
                                 <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-500 text-white">
-                                  Added
+                                  {t('projects.activity.badge_added')}
                                 </span>
                                 <span className="text-sm text-gray-700 truncate">
-                                  Task: #{task.code || task.id} - {task.title}
+                                  {t('projects.activity.task_prefix')}: #{localizeCodeText(task.code || task.id)} - {task.title}
                                 </span>
                               </div>
                             </div>
@@ -2435,16 +2680,19 @@ const ProjectDetail = () => {
                       {/* Show notes as activity */}
                       {notes.slice(0, 5).map((note, idx) => {
                         // Use note creator name, or project client name, or Admin as fallback
-                        const creatorName = note.created_by_name || note.user_name || project.clientName || 'Admin'
+                        const creatorNameRaw = note.created_by_name || note.user_name || project.clientName || 'Admin'
+                        const creatorName = localizeActorName(creatorNameRaw)
                         const getInitials = (name) => {
-                          if (!name || name === 'Admin') return 'AD'
+                          if (!name || name === t('auth.roles.admin')) return 'AD'
                           return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
                         }
                         const initials = getInitials(creatorName)
                         const createdDate = note.created_at ? new Date(note.created_at) : new Date()
-                        const formattedDate = createdDate.toLocaleDateString() === new Date().toLocaleDateString()
-                          ? `Today at ${createdDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`
-                          : createdDate.toLocaleDateString()
+                        const timeStrNote = createdDate.toLocaleTimeString(dateLocale, { hour: '2-digit', minute: '2-digit' })
+                        const formattedDate =
+                          createdDate.toLocaleDateString(dateLocale) === new Date().toLocaleDateString(dateLocale)
+                            ? String(t('projects.activity.today_at')).replace('{{time}}', timeStrNote)
+                            : createdDate.toLocaleDateString(dateLocale)
 
                         return (
                           <div key={`note-${note.id || idx}`} className="flex gap-3">
@@ -2458,7 +2706,7 @@ const ProjectDetail = () => {
                               </div>
                               <div className="flex items-center gap-2">
                                 <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-500 text-white">
-                                  Note
+                                  {t('projects.activity.badge_note')}
                                 </span>
                                 <span className="text-sm text-gray-700 truncate">
                                   {note.title || note.content?.substring(0, 50) || t('projects.activity.added_note')}
@@ -2469,7 +2717,8 @@ const ProjectDetail = () => {
                         )
                       })}
                     </div>
-                  )}
+                  )
+                  })()}
                 </div>
               </div>
             </div>
@@ -2487,8 +2736,8 @@ const ProjectDetail = () => {
               {members.length === 0 ? (
                 <div className="text-center py-12 text-secondary-text">
                   <IoPeople size={48} className="mx-auto mb-3 text-gray-300" />
-                  <p className="text-base font-medium text-gray-900">No members assigned</p>
-                  <p className="text-sm mt-1">{t('projects.members.add')}s to this project to start collaborating.</p>
+                  <p className="text-base font-medium text-gray-900">{t('projects.members.no_members')}</p>
+                  <p className="text-sm mt-1">{t('projects.members.empty_collaborate')}</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
@@ -2564,35 +2813,40 @@ const ProjectDetail = () => {
                       </div>
 
                       <div className="space-y-3 min-h-[200px]">
-                        {columnTasks.map(task => (
-                          <div
-                            key={task.id}
-                            draggable
-                            onDragStart={(e) => handleDragStart(e, task)}
-                            onDragEnd={handleDragEnd}
-                            onClick={() => handleEditTaskWrapper(task)}
-                            className={`bg-white p-3 rounded shadow-sm border border-gray-200 cursor-move hover:shadow-md transition-shadow ${draggedTask?.id === task.id ? 'opacity-50' : ''}`}
-                          >
-                            <div className="flex justify-between items-start mb-2">
-                              <span className="text-xs font-mono text-gray-500">{task.code || `#${task.id}`}</span>
-                              <div className={`w-2 h-2 rounded-full ${task.priority === 'High' ? 'bg-red-500' : task.priority === 'Medium' ? 'bg-yellow-500' : 'bg-green-500'}`} title={`Priority: ${task.priority}`} />
-                            </div>
-                            <h5 className="font-medium text-gray-800 text-sm mb-2">{task.title}</h5>
-                            <div className="flex justify-between items-center text-xs text-gray-500">
-                              <div className="flex items-center gap-1">
-                                <IoCalendarOutline />
-                                {task.deadline ? new Date(task.deadline).toLocaleDateString() : '-'}
+                        {columnTasks.map((task) => {
+                          const assigneeNames = getTaskAssigneesForDisplay(task)
+                            .map((u) => u.name || u.email)
+                            .filter(Boolean)
+                            .join(', ')
+                          return (
+                            <div
+                              key={task.id}
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, task)}
+                              onDragEnd={handleDragEnd}
+                              onClick={() => handleEditTaskWrapper(task)}
+                              className={`bg-white p-3 rounded shadow-sm border border-gray-200 cursor-move hover:shadow-md transition-shadow ${draggedTask?.id === task.id ? 'opacity-50' : ''}`}
+                            >
+                              <div className="flex justify-between items-start mb-2">
+                                <span className="text-xs font-mono text-gray-500">{localizeCodeText(task.code || `#${task.id}`)}</span>
+                                <div className={`w-2 h-2 rounded-full ${task.priority === 'High' ? 'bg-red-500' : task.priority === 'Medium' ? 'bg-yellow-500' : 'bg-green-500'}`} title={`Priority: ${task.priority}`} />
                               </div>
-                              <div className="flex -space-x-1">
-                                {task.assigned_to && task.assigned_to.map((u, i) => (
-                                  <div key={i} className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center text-[10px] text-blue-700 ring-1 ring-white">
-                                    {u.name ? u.name[0] : 'U'}
-                                  </div>
-                                ))}
+                              <h5 className="font-medium text-gray-800 text-sm mb-2">{task.title}</h5>
+                              <div className="flex justify-between items-start gap-2 text-xs text-gray-500">
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <IoCalendarOutline />
+                                  {task.deadline ? new Date(task.deadline).toLocaleDateString() : '-'}
+                                </div>
+                                <span
+                                  className="text-xs text-gray-700 text-right font-medium line-clamp-2 min-w-0 flex-1 break-words"
+                                  title={assigneeNames}
+                                >
+                                  {assigneeNames || '—'}
+                                </span>
                               </div>
                             </div>
-                          </div>
-                        ))}
+                          )
+                        })}
                       </div>
                     </div>
                   )
@@ -2648,7 +2902,7 @@ const ProjectDetail = () => {
                 <div className="text-center py-12 text-secondary-text">
                   <IoDocumentText size={48} className="mx-auto mb-3 text-gray-300" />
                   <p className="text-base font-medium text-gray-900">{t('projects.activity.no_notes')}</p>
-                  <p className="text-sm mt-1">Create your first note to get started.</p>
+                  <p className="text-sm mt-1">{t('projects.activity.first_note_hint')}</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -3288,57 +3542,67 @@ const ProjectDetail = () => {
               <DataTable
                 columns={[
                   {
-                    header: 'ID',
+                    header: t('projects.activity.expenses.expense_number'),
                     accessor: 'id',
                     key: 'id',
                     className: 'font-medium w-20',
                     render: (value, row) => `EXP#${String(row.id).padStart(3, '0')}`
                   },
                   {
-                    header: 'Title',
+                    header: t('projects.activity.expenses.title_label'),
                     accessor: 'title',
                     key: 'title',
                     render: (value, row) => row.title || row.description || '-'
                   },
                   {
-                    header: 'Category',
+                    header: t('projects.activity.expenses.category'),
                     accessor: 'category',
                     key: 'category',
                     render: (value) => value || '-'
                   },
                   {
-                    header: 'Amount',
+                    header: t('projects.activity.expenses.amount'),
                     accessor: 'amount',
                     key: 'amount',
-                    render: (value, row) => <span className="font-semibold">${parseFloat(row.total || row.amount || 0).toFixed(2)}</span>
+                    render: (value, row) => <span className="font-semibold">{formatCurrency(row.total || row.amount || 0, row.currency || project?.currency)}</span>
                   },
                   {
-                    header: 'Date',
+                    header: t('projects.activity.expenses.date'),
                     accessor: 'expense_date',
                     key: 'expense_date',
-                    render: (value, row) => row.expense_date ? new Date(row.expense_date).toLocaleDateString() : (row.created_at ? new Date(row.created_at).toLocaleDateString() : '-')
+                    render: (value, row) =>
+                      row.expense_date
+                        ? new Date(row.expense_date).toLocaleDateString(dateLocale)
+                        : row.created_at
+                          ? new Date(row.created_at).toLocaleDateString(dateLocale)
+                          : '-'
                   },
                   {
-                    header: 'Client',
+                    header: t('projects.activity.expenses.client'),
                     accessor: 'client_name',
                     key: 'client_name',
                     render: (value) => value || '-'
                   },
                   {
-                    header: 'Status',
+                    header: t('projects.activity.expenses.status'),
                     accessor: 'status',
                     key: 'status',
-                    render: (value) => (
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${value === 'Approved' ? 'bg-green-100 text-green-800' :
-                        value === 'Rejected' ? 'bg-red-100 text-red-800' :
-                          'bg-yellow-100 text-yellow-800'
-                        }`}>
-                        {value || 'Pending'}
-                      </span>
-                    )
+                    render: (value) => {
+                      const v = String(value || '').toLowerCase()
+                      const isApproved = v === 'approved'
+                      const isRejected = v === 'rejected'
+                      return (
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${isApproved ? 'bg-green-100 text-green-800' :
+                          isRejected ? 'bg-red-100 text-red-800' :
+                            'bg-yellow-100 text-yellow-800'
+                          }`}>
+                          {formatExpenseStatusLabel(value)}
+                        </span>
+                      )
+                    }
                   },
                   {
-                    header: 'Action',
+                    header: t('projects.columns.action'),
                     accessor: 'id',
                     key: 'actions',
                     className: 'text-right',
@@ -3391,7 +3655,7 @@ const ProjectDetail = () => {
                     header: 'Amount',
                     accessor: 'total',
                     key: 'total',
-                    render: (value, row) => <span className="font-semibold">${parseFloat(row.total || row.amount || 0).toFixed(2)}</span>
+                    render: (value, row) => <span className="font-semibold">{formatCurrency(row.total || row.amount || 0, row.currency || project?.currency)}</span>
                   },
                   {
                     header: t('projects.activity.invoices.issue_date'),
@@ -3454,51 +3718,56 @@ const ProjectDetail = () => {
               <DataTable
                 columns={[
                   {
-                    header: 'Payment #',
+                    header: t('projects.activity.payments.payment_number'),
                     accessor: 'id',
                     key: 'id',
                     className: 'font-medium',
                     render: (value) => `PAY-${value}`
                   },
                   {
-                    header: 'Invoice',
+                    header: t('projects.activity.payments.invoice'),
                     accessor: 'invoice_number',
                     key: 'invoice_number',
                     render: (value, row) => value || (row.invoice_id ? `INV-${row.invoice_id}` : '-')
                   },
                   {
-                    header: 'Amount',
+                    header: t('projects.activity.payments.amount'),
                     accessor: 'amount',
                     key: 'amount',
-                    render: (value) => <span className="font-semibold">${parseFloat(value || 0).toFixed(2)}</span>
+                    render: (value, row) => <span className="font-semibold">{formatCurrency(value || 0, row.currency || project?.currency)}</span>
                   },
                   {
-                    header: 'Payment Date',
+                    header: t('projects.activity.payments.payment_date'),
                     accessor: 'payment_date',
                     key: 'payment_date',
-                    render: (value) => value ? new Date(value).toLocaleDateString() : '-'
+                    render: (value) => (value ? new Date(value).toLocaleDateString(dateLocale) : '-')
                   },
                   {
-                    header: 'Method',
+                    header: t('projects.activity.payments.payment_method'),
                     accessor: 'payment_method',
                     key: 'payment_method',
-                    render: (value) => value ? value.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : '-'
+                    render: (value) => formatPaymentMethodLabel(value)
                   },
                   {
-                    header: 'Status',
+                    header: t('projects.activity.payments.status'),
                     accessor: 'status',
                     key: 'status',
-                    render: (value) => (
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${value === 'completed' ? 'bg-green-100 text-green-800' :
-                        value === 'failed' ? 'bg-red-100 text-red-800' :
-                          'bg-yellow-100 text-yellow-800'
-                        }`}>
-                        {value || 'Pending'}
-                      </span>
-                    )
+                    render: (value) => {
+                      const v = (value || '').toLowerCase()
+                      const isDone = v === 'completed' || v === 'complete'
+                      const isFailed = v === 'failed'
+                      return (
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${isDone ? 'bg-green-100 text-green-800' :
+                          isFailed ? 'bg-red-100 text-red-800' :
+                            'bg-yellow-100 text-yellow-800'
+                          }`}>
+                          {formatPaymentStatusLabel(value)}
+                        </span>
+                      )
+                    }
                   },
                   {
-                    header: 'Action',
+                    header: t('projects.columns.action'),
                     accessor: 'id',
                     key: 'actions',
                     className: 'text-right',
@@ -3532,44 +3801,44 @@ const ProjectDetail = () => {
               <DataTable
                 columns={[
                   {
-                    header: '#',
+                    header: t('projects.activity.contracts.contract_number'),
                     accessor: 'id',
                     key: 'id',
                     className: 'font-medium w-16',
                     render: (value) => `#${value}`
                   },
                   {
-                    header: 'Subject',
+                    header: t('projects.activity.contracts.subject'),
                     accessor: 'subject',
                     key: 'subject',
                     render: (value) => value || '-'
                   },
                   {
-                    header: 'Client',
+                    header: t('projects.activity.contracts.client'),
                     accessor: 'client_name',
                     key: 'client_name',
                     render: (value) => value || '-'
                   },
                   {
-                    header: 'Value',
+                    header: t('projects.activity.contracts.value'),
                     accessor: 'contract_value',
                     key: 'contract_value',
-                    render: (value) => value ? <span className="font-semibold">${parseFloat(value).toFixed(2)}</span> : '-'
+                    render: (value, row) => value ? <span className="font-semibold">{formatCurrency(value, row.currency || project?.currency)}</span> : '-'
                   },
                   {
-                    header: 'Start Date',
+                    header: t('projects.activity.contracts.start_date'),
                     accessor: 'start_date',
                     key: 'start_date',
-                    render: (value) => value ? new Date(value).toLocaleDateString() : '-'
+                    render: (value) => (value ? new Date(value).toLocaleDateString(dateLocale) : '-')
                   },
                   {
-                    header: 'End Date',
+                    header: t('projects.activity.contracts.end_date'),
                     accessor: 'end_date',
                     key: 'end_date',
-                    render: (value) => value ? new Date(value).toLocaleDateString() : '-'
+                    render: (value) => (value ? new Date(value).toLocaleDateString(dateLocale) : '-')
                   },
                   {
-                    header: 'Action',
+                    header: t('projects.columns.action'),
                     accessor: 'id',
                     key: 'actions',
                     className: 'text-right',
@@ -3665,27 +3934,27 @@ const ProjectDetail = () => {
         width="600px"
       >
         <div className="space-y-0 pb-4">
-          <FormSection title="Note Details">
-            <FormRow label="Title" required>
+          <FormSection title={t('projects.note_modal.section_details')}>
+            <FormRow label={t('projects.note_modal.title_label')} required>
               <FormInput
                 value={noteFormData.title || ''}
                 onChange={(e) => setNoteFormData({ ...noteFormData, title: e.target.value })}
-                placeholder="Enter note title"
+                placeholder={t('projects.note_modal.title_placeholder')}
               />
             </FormRow>
-            <FormRow label="Description">
+            <FormRow label={t('projects.note_modal.description_label')}>
               <RichTextEditor
                 value={noteFormData.content || ''}
                 onChange={(content) => setNoteFormData({ ...noteFormData, content })}
-                placeholder="Enter note content"
+                placeholder={t('projects.note_modal.description_placeholder')}
               />
             </FormRow>
-            <FormRow label="Category">
+            <FormRow label={t('projects.note_modal.category_label')}>
               <FormSelect
                 value={noteFormData.category || ''}
                 onChange={(e) => setNoteFormData({ ...noteFormData, category: e.target.value })}
               >
-                <option value="">Kategorie auswählen</option>
+                <option value="">{t('projects.note_modal.select_category')}</option>
                 {noteCategories.map(cat => (
                   <option key={cat} value={cat}>{cat}</option>
                 ))}
@@ -3693,8 +3962,8 @@ const ProjectDetail = () => {
             </FormRow>
           </FormSection>
 
-          <FormSection title="Labels & Settings">
-            <FormRow label="Labels">
+          <FormSection title={t('projects.note_modal.section_labels')}>
+            <FormRow label={t('projects.note_modal.labels')}>
               <div className="space-y-2">
                 <div className="flex flex-wrap gap-2 p-3 border border-gray-300 rounded-lg bg-gray-50 min-h-[50px]">
                   {noteFormData.labels && noteFormData.labels.length > 0 ? (
@@ -3722,14 +3991,14 @@ const ProjectDetail = () => {
                     e.target.value = ''
                   }}
                 >
-                  <option value="">+ Add Label</option>
+                  <option value="">{t('projects.note_modal.add_label_option')}</option>
                   {noteLabels.filter(l => !(noteFormData.labels || []).includes(l)).map(l => (
                     <option key={l} value={l}>{l}</option>
                   ))}
                 </FormSelect>
               </div>
             </FormRow>
-            <FormRow label="Color">
+            <FormRow label={t('projects.note_modal.color')}>
               <div className="flex gap-2 flex-wrap">
                 {noteColors.map((color) => (
                   <button
@@ -3768,8 +4037,8 @@ const ProjectDetail = () => {
             </FormRow>
           </FormSection>
 
-          <FormSection title="Attachments" last>
-            <FormRow label="Attach File" last>
+          <FormSection title={t('projects.note_modal.section_attachments')} last>
+            <FormRow label={t('projects.note_modal.attach_file')} last>
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-primary-accent transition-colors">
                 <input
                   type="file"
@@ -3782,7 +4051,7 @@ const ProjectDetail = () => {
                   {noteFormData.file ? (
                     <p className="text-sm text-primary-accent">{noteFormData.file.name}</p>
                   ) : (
-                    <p className="text-sm text-gray-500">Click to upload or drag and drop</p>
+                    <p className="text-sm text-gray-500">{t('projects.note_modal.upload_hint')}</p>
                   )}
                 </label>
               </div>
@@ -3799,7 +4068,7 @@ const ProjectDetail = () => {
             </Button>
             <Button onClick={handleAddNote} className="px-6 flex items-center gap-2">
               <IoCheckmarkCircle size={18} />
-              {selectedNote ? 'Update Note' : 'Add Note'}
+              {selectedNote ? t('projects.note_modal.update_note') : t('projects.note_modal.add_note_submit')}
             </Button>
           </FormActions>
         </div>
@@ -3812,7 +4081,7 @@ const ProjectDetail = () => {
           setIsViewNoteModalOpen(false)
           setViewingNote(null)
         }}
-        title="Note Details"
+        title={t('projects.note_modal.view_title')}
         maxWidth="2xl"
       >
         {viewingNote && (
@@ -3820,33 +4089,33 @@ const ProjectDetail = () => {
             <div className="flex items-center gap-3 pb-3 border-b border-gray-200">
               <div className="w-2 h-12 rounded-full" style={{ backgroundColor: viewingNote.color || '#3b82f6' }}></div>
               <div>
-                <h3 className="text-lg font-semibold text-primary-text">{viewingNote.title || 'Untitled'}</h3>
+                <h3 className="text-lg font-semibold text-primary-text">{viewingNote.title || t('projects.note_modal.untitled')}</h3>
                 <p className="text-sm text-secondary-text">
-                  Created: {viewingNote.created_at ? new Date(viewingNote.created_at).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
+                  {t('projects.note_modal.created')}: {viewingNote.created_at ? new Date(viewingNote.created_at).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
                 </p>
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <p className="text-xs text-secondary-text uppercase">Category</p>
-                <p className="text-sm font-medium">{viewingNote.category || 'General'}</p>
+                <p className="text-xs text-secondary-text uppercase">{t('projects.note_modal.category')}</p>
+                <p className="text-sm font-medium">{viewingNote.category || t('projects.note_modal.general')}</p>
               </div>
               <div>
-                <p className="text-xs text-secondary-text uppercase">Status</p>
+                <p className="text-xs text-secondary-text uppercase">{t('projects.visibility.title')}</p>
                 <Badge className={`text-xs ${viewingNote.is_public ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
                   {viewingNote.is_public ? t('projects.visibility.public') : t('projects.visibility.private')}
                 </Badge>
               </div>
             </div>
             <div className="pt-2">
-              <p className="text-xs text-secondary-text uppercase mb-2">Content</p>
+              <p className="text-xs text-secondary-text uppercase mb-2">{t('projects.note_modal.content')}</p>
               <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 max-h-64 overflow-y-auto">
                 {renderHTMLContent(viewingNote.content || viewingNote.note)}
               </div>
             </div>
             {viewingNote.file_name && (
               <div className="pt-2">
-                <p className="text-xs text-secondary-text uppercase mb-2">Attachment</p>
+                <p className="text-xs text-secondary-text uppercase mb-2">{t('projects.note_modal.attachment')}</p>
                 <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
                   <IoDocumentText className="text-blue-600" size={24} />
                   <div className="flex-1">
@@ -3859,18 +4128,18 @@ const ProjectDetail = () => {
                     className="flex items-center gap-1"
                   >
                     <IoDownload size={14} />
-                    Download
+                    {t('common.download')}
                   </Button>
                 </div>
               </div>
             )}
             <div className="flex gap-3 pt-4 border-t border-gray-200">
               <Button variant="outline" onClick={() => { setIsViewNoteModalOpen(false); setViewingNote(null); }} className="flex-1">
-                Close
+                {t('common.close')}
               </Button>
               <Button onClick={() => { setIsViewNoteModalOpen(false); handleEditNote(viewingNote); }} className="flex-1 flex items-center justify-center gap-2">
                 <IoCreate size={16} />
-                Edit Note
+                {t('projects.note_modal.edit_note')}
               </Button>
             </div>
           </div>
@@ -3884,23 +4153,23 @@ const ProjectDetail = () => {
           setIsAddFileModalOpen(false)
           setFileFormData({ title: '', file: null, description: '', category: '' })
         }}
-        title="{t('common.upload_file')}"
+        title={t('common.upload_file')}
         width="500px"
       >
         <div className="space-y-0 pb-4">
-          <FormSection title="File Upload">
-            <FormRow label="Category">
+          <FormSection title={t('projects.activity.files.form.section_upload')}>
+            <FormRow label={t('projects.activity.files.form.category')}>
               <FormSelect
                 value={fileFormData.category || ''}
                 onChange={(e) => setFileFormData({ ...fileFormData, category: e.target.value })}
               >
-                <option value="">Kategorie auswählen</option>
+                <option value="">{t('projects.activity.files.form.select_category')}</option>
                 {fileCategories.map(cat => (
                   <option key={cat} value={cat}>{cat}</option>
                 ))}
               </FormSelect>
             </FormRow>
-            <FormRow label="File" required last>
+            <FormRow label={t('projects.activity.files.form.file')} required last>
               <div
                 className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer ${fileFormData.file ? 'border-green-400 bg-green-50' : 'border-gray-300 hover:border-primary-accent'}`}
                 onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-primary-accent', 'bg-primary-accent/5'); }}
@@ -3924,13 +4193,13 @@ const ProjectDetail = () => {
                     <>
                       <IoCheckmarkCircle size={48} className="mx-auto mb-3 text-green-500" />
                       <p className="text-sm font-medium text-green-700">{fileFormData.file.name}</p>
-                      <p className="text-xs text-green-600 mt-1">Click or drag to replace</p>
+                      <p className="text-xs text-green-600 mt-1">{t('projects.activity.files.form.replace_hint')}</p>
                     </>
                   ) : (
                     <>
                       <IoDocumentText size={48} className="mx-auto mb-3 text-gray-400" />
-                      <p className="text-sm font-medium text-gray-700">Drag & drop your file here</p>
-                      <p className="text-xs text-gray-500 mt-1">or click to browse</p>
+                      <p className="text-sm font-medium text-gray-700">{t('projects.activity.files.form.drag_drop')}</p>
+                      <p className="text-xs text-gray-500 mt-1">{t('projects.activity.files.form.click_browse')}</p>
                     </>
                   )}
                 </label>
@@ -3938,21 +4207,21 @@ const ProjectDetail = () => {
             </FormRow>
           </FormSection>
 
-          <FormSection title="Optional Details" last>
-            <FormRow label="Title">
+          <FormSection title={t('projects.activity.files.form.section_optional')} last>
+            <FormRow label={t('projects.activity.files.form.title_field')}>
               <FormInput
                 value={fileFormData.title || ''}
                 onChange={(e) => setFileFormData({ ...fileFormData, title: e.target.value })}
-                placeholder="Enter file title (optional)"
+                placeholder={t('projects.activity.files.form.title_placeholder')}
               />
             </FormRow>
-            <FormRow label="Description" last>
+            <FormRow label={t('projects.activity.files.form.description')} last>
               <textarea
                 value={fileFormData.description || ''}
                 onChange={(e) => setFileFormData({ ...fileFormData, description: e.target.value })}
                 rows={3}
                 className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none text-sm"
-                placeholder="Enter file description (optional)"
+                placeholder={t('projects.activity.files.form.description_placeholder')}
               />
             </FormRow>
           </FormSection>
@@ -3979,17 +4248,17 @@ const ProjectDetail = () => {
           setIsAddCommentModalOpen(false)
           setCommentFormData({ content: '' })
         }}
-        title="Add Comment"
+        title={t('projects.activity.comments.modal_title')}
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-primary-text mb-2">Comment *</label>
+            <label className="block text-sm font-medium text-primary-text mb-2">{t('projects.activity.comments.label')} *</label>
             <textarea
               value={commentFormData.content}
               onChange={(e) => setCommentFormData({ content: e.target.value })}
               rows={6}
               className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
-              placeholder="Enter your comment"
+              placeholder={t('projects.activity.comments.placeholder')}
               required
             />
           </div>
@@ -4001,7 +4270,7 @@ const ProjectDetail = () => {
               {t('common.cancel')}
             </Button>
             <Button variant="primary" onClick={handleAddComment} className="flex-1">
-              Add Comment
+              {t('projects.activity.comments.submit')}
             </Button>
           </div>
         </div>
@@ -4014,42 +4283,42 @@ const ProjectDetail = () => {
           setIsAddTimesheetModalOpen(false)
           setTimesheetFormData({ date: new Date().toISOString().split('T')[0], hours: '', description: '', user_id: '', task_id: '', start_time: '', end_time: '' })
         }}
-        title="{t('projects.activity.timesheets.add')}"
+        title={t('projects.activity.timesheets.add')}
         width="500px"
       >
         <div className="space-y-0 pb-4">
-          <FormSection title="Time Details">
-            <FormRow label="Member" required>
+          <FormSection title={t('projects.activity.timesheets.form.section_time')}>
+            <FormRow label={t('projects.activity.timesheets.form.member')} required>
               <FormSelect
                 value={timesheetFormData.user_id || ''}
                 onChange={(e) => setTimesheetFormData({ ...timesheetFormData, user_id: e.target.value })}
               >
-                <option value="">-- Select Member --</option>
+                <option value="">{t('projects.activity.timesheets.form.select_member')}</option>
                 {employees.map(emp => (
                   <option key={emp.id || emp.user_id} value={emp.id || emp.user_id}>{emp.name || emp.email}</option>
                 ))}
               </FormSelect>
             </FormRow>
-            <FormRow label="Task">
+            <FormRow label={t('projects.activity.timesheets.form.task')}>
               <FormSelect
                 value={timesheetFormData.task_id || ''}
                 onChange={(e) => setTimesheetFormData({ ...timesheetFormData, task_id: e.target.value })}
               >
-                <option value="">-- Select Task --</option>
+                <option value="">{t('projects.activity.timesheets.form.select_task')}</option>
                 {tasks.map(task => (
                   <option key={task.id} value={task.id}>{task.title}</option>
                 ))}
               </FormSelect>
             </FormRow>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FormRow label="Start Date/Time">
+              <FormRow label={t('projects.activity.timesheets.form.start')}>
                 <FormInput
                   type="datetime-local"
                   value={timesheetFormData.start_time || ''}
                   onChange={(e) => setTimesheetFormData({ ...timesheetFormData, start_time: e.target.value })}
                 />
               </FormRow>
-              <FormRow label="End Date/Time">
+              <FormRow label={t('projects.activity.timesheets.form.end')}>
                 <FormInput
                   type="datetime-local"
                   value={timesheetFormData.end_time || ''}
@@ -4066,26 +4335,26 @@ const ProjectDetail = () => {
                 />
               </FormRow>
             </div>
-            <FormRow label="Total Hours" required>
+            <FormRow label={t('projects.activity.timesheets.form.total_hours')} required>
               <FormInput
                 type="number"
                 step="0.25"
                 min="0"
                 value={timesheetFormData.hours || ''}
                 onChange={(e) => setTimesheetFormData({ ...timesheetFormData, hours: e.target.value })}
-                placeholder="Enter hours worked"
+                placeholder={t('projects.activity.timesheets.form.hours_placeholder')}
               />
             </FormRow>
           </FormSection>
 
-          <FormSection title="Note" last>
-            <FormRow label="Note" last>
+          <FormSection title={t('projects.activity.timesheets.form.section_note')} last>
+            <FormRow label={t('projects.activity.timesheets.form.section_note')} last>
               <textarea
                 value={timesheetFormData.description || ''}
                 onChange={(e) => setTimesheetFormData({ ...timesheetFormData, description: e.target.value })}
                 rows={4}
                 className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none text-sm"
-                placeholder="Enter work description or note"
+                placeholder={t('projects.activity.timesheets.form.note_placeholder')}
               />
             </FormRow>
           </FormSection>
@@ -4120,7 +4389,7 @@ const ProjectDetail = () => {
             note: ''
           })
         }}
-        title="Add Invoice"
+        title={t('projects.activity.invoices.modal_title')}
       >
         <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
           <div className="flex items-center">
@@ -4143,51 +4412,51 @@ const ProjectDetail = () => {
             />
           </div>
           <div className="flex items-center">
-            <label className="w-32 text-sm font-medium text-gray-700">Client *</label>
+            <label className="w-32 text-sm font-medium text-gray-700">{t('projects.activity.invoices.client')} *</label>
             <select
               value={invoiceFormData.client_id}
               onChange={(e) => setInvoiceFormData({ ...invoiceFormData, client_id: e.target.value })}
               className="flex-1 px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-primary-accent"
               required
             >
-              <option value="">Select Client</option>
-              {clients.map((client) => (
-                <option key={client.id} value={client.id}>
+              <option value="">{t('projects.activity.invoices.select_client')}</option>
+              {invoiceClientOptions.map((client) => (
+                <option key={client.id} value={String(client.id)}>
                   {client.client_name || client.name}
                 </option>
               ))}
             </select>
           </div>
           <div className="flex items-center">
-            <label className="w-32 text-sm font-medium text-gray-700">Amount</label>
+            <label className="w-32 text-sm font-medium text-gray-700">{t('projects.activity.invoices.amount')}</label>
             <Input
               type="number"
               step="0.01"
               min="0"
               value={invoiceFormData.amount}
               onChange={(e) => setInvoiceFormData({ ...invoiceFormData, amount: e.target.value })}
-              placeholder="Enter amount"
+              placeholder={t('projects.activity.invoices.amount_placeholder')}
               className="flex-1"
             />
           </div>
           <div className="flex items-center">
-            <label className="w-32 text-sm font-medium text-gray-700">Status</label>
+            <label className="w-32 text-sm font-medium text-gray-700">{t('projects.activity.invoices.status')}</label>
             <select
               value={invoiceFormData.status}
               onChange={(e) => setInvoiceFormData({ ...invoiceFormData, status: e.target.value })}
               className="flex-1 px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-primary-accent"
             >
-              <option value="unpaid">Unpaid</option>
-              <option value="partial">Partial</option>
-              <option value="paid">Paid</option>
+              <option value="unpaid">{t('projects.activity.invoices.status_unpaid')}</option>
+              <option value="partial">{t('projects.activity.invoices.status_partial')}</option>
+              <option value="paid">{t('projects.activity.invoices.status_paid')}</option>
             </select>
           </div>
           <div className="flex items-start">
-            <label className="w-32 text-sm font-medium text-gray-700 pt-2">Note</label>
+            <label className="w-32 text-sm font-medium text-gray-700 pt-2">{t('projects.activity.invoices.note')}</label>
             <textarea
               value={invoiceFormData.note}
               onChange={(e) => setInvoiceFormData({ ...invoiceFormData, note: e.target.value })}
-              placeholder="Add a note..."
+              placeholder={t('projects.activity.invoices.note_placeholder')}
               rows={3}
               className="flex-1 px-3 py-2 border border-gray-300 rounded-lg outline-none resize-none focus:ring-2 focus:ring-primary-accent"
             />
@@ -4212,7 +4481,7 @@ const ProjectDetail = () => {
               {t('common.cancel')}
             </Button>
             <Button variant="primary" onClick={handleAddInvoice} className="flex-1">
-              <IoCheckmark size={18} className="mr-1" /> Save
+              <IoCheckmark size={18} className="mr-1" /> {t('projects.activity.invoices.save')}
             </Button>
           </div>
         </div>
@@ -4232,11 +4501,11 @@ const ProjectDetail = () => {
             remarks: ''
           })
         }}
-        title="Add Payment"
+        title={t('projects.activity.payments.modal_title')}
       >
         <div className="space-y-4">
           <div className="flex items-center">
-            <label className="w-36 text-sm font-medium text-gray-700">Invoice *</label>
+            <label className="w-36 text-sm font-medium text-gray-700">{t('projects.activity.payments.invoice')} *</label>
             <select
               value={paymentFormData.invoice_id}
               onChange={(e) => {
@@ -4253,35 +4522,37 @@ const ProjectDetail = () => {
               className="flex-1 px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-primary-accent"
               required
             >
-              <option value="">Select Invoice</option>
+              <option value="">{t('projects.activity.payments.select_invoice')}</option>
               {invoices.filter(inv => inv.status !== 'paid').map((invoice) => (
                 <option key={invoice.id} value={invoice.id}>
-                  {invoice.invoice_number || `INV-${invoice.id}`} (Due: ${(parseFloat(invoice.total || 0) - parseFloat(invoice.paid_amount || 0)).toFixed(2)})
+                  {t('projects.activity.payments.option_due')
+                    .replace('{{number}}', invoice.invoice_number || `INV-${invoice.id}`)
+                    .replace('{{due}}', `$${(parseFloat(invoice.total || 0) - parseFloat(invoice.paid_amount || 0)).toFixed(2)}`)}
                 </option>
               ))}
             </select>
           </div>
           <div className="flex items-center">
-            <label className="w-36 text-sm font-medium text-gray-700">Payment Method *</label>
+            <label className="w-36 text-sm font-medium text-gray-700">{t('projects.activity.payments.payment_method')} *</label>
             <select
               value={paymentFormData.payment_method}
               onChange={(e) => setPaymentFormData({ ...paymentFormData, payment_method: e.target.value })}
               className="flex-1 px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-primary-accent"
               required
             >
-              <option value="">Select Payment Method</option>
-              <option value="cash">Cash</option>
-              <option value="bank_transfer">Bank Transfer</option>
-              <option value="paypal">PayPal</option>
-              <option value="stripe">Stripe</option>
-              <option value="credit_card">Credit Card</option>
-              <option value="debit_card">Debit Card</option>
-              <option value="upi">UPI</option>
-              <option value="cheque">Cheque</option>
+              <option value="">{t('projects.activity.payments.select_payment_method')}</option>
+              <option value="cash">{t('projects.activity.payments.method_cash')}</option>
+              <option value="bank_transfer">{t('projects.activity.payments.method_bank_transfer')}</option>
+              <option value="paypal">{t('projects.activity.payments.method_paypal')}</option>
+              <option value="stripe">{t('projects.activity.payments.method_stripe')}</option>
+              <option value="credit_card">{t('projects.activity.payments.method_credit_card')}</option>
+              <option value="debit_card">{t('projects.activity.payments.method_debit_card')}</option>
+              <option value="upi">{t('projects.activity.payments.method_upi')}</option>
+              <option value="cheque">{t('projects.activity.payments.method_cheque')}</option>
             </select>
           </div>
           <div className="flex items-center">
-            <label className="w-36 text-sm font-medium text-gray-700">Payment Date</label>
+            <label className="w-36 text-sm font-medium text-gray-700">{t('projects.activity.payments.payment_date')}</label>
             <Input
               type="date"
               value={paymentFormData.payment_date}
@@ -4290,33 +4561,33 @@ const ProjectDetail = () => {
             />
           </div>
           <div className="flex items-center">
-            <label className="w-36 text-sm font-medium text-gray-700">Amount *</label>
+            <label className="w-36 text-sm font-medium text-gray-700">{t('projects.activity.payments.amount')} *</label>
             <Input
               type="number"
               step="0.01"
               min="0"
               value={paymentFormData.amount}
               onChange={(e) => setPaymentFormData({ ...paymentFormData, amount: e.target.value })}
-              placeholder="Enter amount"
+              placeholder={t('projects.activity.invoices.amount_placeholder')}
               className="flex-1"
               required
             />
           </div>
           <div className="flex items-center">
-            <label className="w-36 text-sm font-medium text-gray-700">Transaction ID</label>
+            <label className="w-36 text-sm font-medium text-gray-700">{t('projects.activity.payments.transaction_id')}</label>
             <Input
               value={paymentFormData.transaction_id}
               onChange={(e) => setPaymentFormData({ ...paymentFormData, transaction_id: e.target.value })}
-              placeholder="Optional"
+              placeholder={t('projects.activity.payments.optional')}
               className="flex-1"
             />
           </div>
           <div className="flex items-start">
-            <label className="w-36 text-sm font-medium text-gray-700 pt-2">Note</label>
+            <label className="w-36 text-sm font-medium text-gray-700 pt-2">{t('projects.activity.payments.note')}</label>
             <textarea
               value={paymentFormData.remarks}
               onChange={(e) => setPaymentFormData({ ...paymentFormData, remarks: e.target.value })}
-              placeholder="Add a note..."
+              placeholder={t('projects.activity.payments.note_placeholder')}
               rows={3}
               className="flex-1 px-3 py-2 border border-gray-300 rounded-lg outline-none resize-none focus:ring-2 focus:ring-primary-accent"
             />
@@ -4340,7 +4611,7 @@ const ProjectDetail = () => {
               {t('common.cancel')}
             </Button>
             <Button variant="primary" onClick={handleAddPayment} className="flex-1">
-              <IoCheckmark size={18} className="mr-1" /> Add Payment
+              <IoCheckmark size={18} className="mr-1" /> {t('projects.activity.payments.submit')}
             </Button>
           </div>
         </div>
@@ -4353,32 +4624,32 @@ const ProjectDetail = () => {
           setIsAddExpenseModalOpen(false)
           setExpenseFormData({ title: '', amount: '', date: new Date().toISOString().split('T')[0], category: '', description: '' })
         }}
-        title="Add Expense"
+        title={t('projects.activity.expenses.modal_title')}
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-primary-text mb-2">Title *</label>
+            <label className="block text-sm font-medium text-primary-text mb-2">{t('projects.activity.expenses.title_label')} *</label>
             <Input
               value={expenseFormData.title}
               onChange={(e) => setExpenseFormData({ ...expenseFormData, title: e.target.value })}
-              placeholder="Enter expense title"
+              placeholder={t('projects.activity.expenses.title_placeholder')}
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-primary-text mb-2">Amount *</label>
+            <label className="block text-sm font-medium text-primary-text mb-2">{t('projects.activity.expenses.amount')} *</label>
             <Input
               type="number"
               step="0.01"
               min="0"
               value={expenseFormData.amount}
               onChange={(e) => setExpenseFormData({ ...expenseFormData, amount: e.target.value })}
-              placeholder="Enter amount"
+              placeholder={t('projects.activity.expenses.amount_placeholder')}
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-primary-text mb-2">Date *</label>
+            <label className="block text-sm font-medium text-primary-text mb-2">{t('projects.activity.expenses.date')} *</label>
             <Input
               type="date"
               value={expenseFormData.date}
@@ -4387,21 +4658,21 @@ const ProjectDetail = () => {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-primary-text mb-2">Category</label>
+            <label className="block text-sm font-medium text-primary-text mb-2">{t('projects.activity.expenses.category')}</label>
             <Input
               value={expenseFormData.category}
               onChange={(e) => setExpenseFormData({ ...expenseFormData, category: e.target.value })}
-              placeholder="Enter category"
+              placeholder={t('projects.activity.expenses.category_placeholder')}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-primary-text mb-2">Description</label>
+            <label className="block text-sm font-medium text-primary-text mb-2">{t('projects.activity.expenses.description')}</label>
             <textarea
               value={expenseFormData.description}
               onChange={(e) => setExpenseFormData({ ...expenseFormData, description: e.target.value })}
               rows={4}
               className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
-              placeholder="Enter expense description"
+              placeholder={t('projects.activity.expenses.description_placeholder')}
             />
           </div>
           <div className="flex gap-3 pt-4">
@@ -4412,7 +4683,7 @@ const ProjectDetail = () => {
               {t('common.cancel')}
             </Button>
             <Button variant="primary" onClick={handleAddExpense} className="flex-1">
-              Add Expense
+              {t('projects.activity.expenses.submit')}
             </Button>
           </div>
         </div>
@@ -4425,37 +4696,37 @@ const ProjectDetail = () => {
           setIsRemindersModalOpen(false)
           setReminderFormData({ title: '', description: '', reminder_date: '', reminder_time: '' })
         }}
-        title="Reminders"
+        title={t('projects.reminders_modal.title')}
       >
         <div className="space-y-4">
           <div>
             <Input
-              label="Reminder Title *"
+              label={`${t('projects.reminders_modal.reminder_title_label')} *`}
               value={reminderFormData.title}
               onChange={(e) => setReminderFormData({ ...reminderFormData, title: e.target.value })}
-              placeholder="Enter reminder title"
+              placeholder={t('projects.reminders_modal.reminder_title_placeholder')}
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-primary-text mb-2">Description</label>
+            <label className="block text-sm font-medium text-primary-text mb-2">{t('projects.reminders_modal.description')}</label>
             <textarea
               value={reminderFormData.description}
               onChange={(e) => setReminderFormData({ ...reminderFormData, description: e.target.value })}
               rows={3}
               className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
-              placeholder="Enter reminder description"
+              placeholder={t('projects.reminders_modal.description_placeholder')}
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
-              label="Reminder Date"
+              label={t('projects.reminders_modal.reminder_date')}
               type="date"
               value={reminderFormData.reminder_date}
               onChange={(e) => setReminderFormData({ ...reminderFormData, reminder_date: e.target.value })}
             />
             <Input
-              label="Reminder Time"
+              label={t('projects.reminders_modal.reminder_time')}
               type="time"
               value={reminderFormData.reminder_time}
               onChange={(e) => setReminderFormData({ ...reminderFormData, reminder_time: e.target.value })}
@@ -4473,15 +4744,15 @@ const ProjectDetail = () => {
               {t('common.cancel')}
             </Button>
             <Button variant="primary" onClick={handleAddReminder} className="flex-1">
-              Add Reminder
+              {t('projects.reminders_modal.add_reminder')}
             </Button>
           </div>
 
           {/* Existing Reminders List */}
           <div className="border-t border-gray-200 pt-4 mt-4">
-            <h3 className="text-sm font-semibold text-primary-text mb-3">Existing Reminders</h3>
+            <h3 className="text-sm font-semibold text-primary-text mb-3">{t('projects.reminders_modal.existing_title')}</h3>
             {reminders.length === 0 ? (
-              <p className="text-sm text-secondary-text">No reminders set</p>
+              <p className="text-sm text-secondary-text">{t('projects.reminders_modal.none_yet')}</p>
             ) : (
               <div className="space-y-2">
                 {reminders.map((reminder) => (
@@ -4490,13 +4761,13 @@ const ProjectDetail = () => {
                       <p className="text-sm font-medium text-primary-text">{reminder.title}</p>
                       <p className="text-xs text-secondary-text mt-1">{reminder.message}</p>
                       <p className="text-xs text-secondary-text mt-1">
-                        Created: {new Date(reminder.created_at).toLocaleString()}
+                        {t('projects.reminders_modal.created_prefix')} {new Date(reminder.created_at).toLocaleString(language === 'de' ? 'de-DE' : undefined)}
                       </p>
                     </div>
                     <button
                       onClick={() => handleDeleteReminder(reminder.id)}
                       className="p-1 text-red-600 hover:bg-red-50 rounded"
-                      title="Delete Reminder"
+                      title={t('projects.reminders_modal.delete_title')}
                     >
                       <IoTrash size={16} />
                     </button>
@@ -4512,40 +4783,40 @@ const ProjectDetail = () => {
       <Modal
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
-        title="Project Settings"
+        title={t('projects.settings_modal.title')}
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-primary-text mb-2">{t('projects.visibility.public')} Gantt Chart</label>
+            <label className="block text-sm font-medium text-primary-text mb-2">{t('projects.settings_modal.public_gantt')}</label>
             <select
               value={settingsFormData.public_gantt_chart}
               onChange={(e) => setSettingsFormData({ ...settingsFormData, public_gantt_chart: e.target.value })}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
             >
-              <option value="enable">Enable</option>
-              <option value="disable">Disable</option>
+              <option value="enable">{t('projects.settings_modal.enable')}</option>
+              <option value="disable">{t('projects.settings_modal.disable')}</option>
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-primary-text mb-2">{t('projects.visibility.public')} Task Board</label>
+            <label className="block text-sm font-medium text-primary-text mb-2">{t('projects.settings_modal.public_task_board')}</label>
             <select
               value={settingsFormData.public_task_board}
               onChange={(e) => setSettingsFormData({ ...settingsFormData, public_task_board: e.target.value })}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
             >
-              <option value="enable">Enable</option>
-              <option value="disable">Disable</option>
+              <option value="enable">{t('projects.settings_modal.enable')}</option>
+              <option value="disable">{t('projects.settings_modal.disable')}</option>
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-primary-text mb-2">Task Approval</label>
+            <label className="block text-sm font-medium text-primary-text mb-2">{t('projects.settings_modal.task_approval')}</label>
             <select
               value={settingsFormData.task_approval}
               onChange={(e) => setSettingsFormData({ ...settingsFormData, task_approval: e.target.value })}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
             >
-              <option value="enable">Enable</option>
-              <option value="disable">Disable</option>
+              <option value="enable">{t('projects.settings_modal.enable')}</option>
+              <option value="disable">{t('projects.settings_modal.disable')}</option>
             </select>
           </div>
           <div className="flex gap-3 pt-4">
@@ -4553,7 +4824,7 @@ const ProjectDetail = () => {
               {t('common.cancel')}
             </Button>
             <Button variant="primary" onClick={handleSaveSettings} className="flex-1">
-              Save Settings
+              {t('projects.settings_modal.save')}
             </Button>
           </div>
         </div>
@@ -4566,32 +4837,32 @@ const ProjectDetail = () => {
           setIsViewTaskModalOpen(false)
           setSelectedTask(null)
         }}
-        title={`Task: ${selectedTask?.title || ''}`}
+        title={`${t('projects.task_modal.title_prefix')}: ${selectedTask?.title || ''}`}
       >
         {selectedTask && (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-secondary-text mb-1">Title</label>
+              <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.task_modal.title_label')}</label>
               <p className="text-primary-text">{selectedTask.title}</p>
             </div>
             {selectedTask.description && (
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Description</label>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.task_modal.description')}</label>
                 <p className="text-primary-text whitespace-pre-wrap">{selectedTask.description}</p>
               </div>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Status</label>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.task_modal.status')}</label>
                 <Badge variant={
                   selectedTask.status === 'Done' || selectedTask.status === 'done' ? 'success' :
                     selectedTask.status === 'Doing' || selectedTask.status === 'doing' ? 'info' : 'warning'
                 }>
-                  {selectedTask.status || 'Incomplete'}
+                  {selectedTask.status || t('projects.task_modal.incomplete')}
                 </Badge>
               </div>
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Priority</label>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.task_modal.priority')}</label>
                 <Badge variant={
                   selectedTask.priority === 'High' || selectedTask.priority === 'high' ? 'danger' :
                     selectedTask.priority === 'Medium' || selectedTask.priority === 'medium' ? 'warning' : 'info'
@@ -4602,14 +4873,14 @@ const ProjectDetail = () => {
             </div>
             {selectedTask.due_date && (
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.invoices.due_date')}</label>
-                <p className="text-primary-text">{new Date(selectedTask.due_date).toLocaleDateString()}</p>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.task_modal.due_date')}</label>
+                <p className="text-primary-text">{new Date(selectedTask.due_date).toLocaleDateString(language === 'de' ? 'de-DE' : undefined)}</p>
               </div>
             )}
             {selectedTask.code && (
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Task Code</label>
-                <p className="text-primary-text">{selectedTask.code}</p>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.task_table.code')}</label>
+                <p className="text-primary-text">{localizeCodeText(selectedTask.code)}</p>
               </div>
             )}
             <div className="flex gap-3 pt-4">
@@ -4621,7 +4892,7 @@ const ProjectDetail = () => {
                 }}
                 className="flex-1"
               >
-                Close
+                {t('projects.task_modal.close')}
               </Button>
               <Button
                 variant="primary"
@@ -4631,58 +4902,7 @@ const ProjectDetail = () => {
                 }}
                 className="flex-1"
               >
-                Edit Task
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      {/* View Timesheet Modal */}
-      <Modal
-        isOpen={isViewTimesheetModalOpen}
-        onClose={() => {
-          setIsViewTimesheetModalOpen(false)
-          setSelectedTimesheet(null)
-        }}
-        title="Timesheet Details"
-      >
-        {selectedTimesheet && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">User</label>
-                <p className="text-primary-text font-medium">{selectedTimesheet.user_name || 'Unknown'}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Hours</label>
-                <p className="text-primary-text font-medium">{parseFloat(selectedTimesheet.hours || 0).toFixed(2)}</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Date</label>
-                <p className="text-primary-text">{selectedTimesheet.date ? new Date(selectedTimesheet.date).toLocaleDateString() : '-'}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Task</label>
-                <p className="text-primary-text">{selectedTimesheet.task_name || selectedTimesheet.task_title || '-'}</p>
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-secondary-text mb-1">Memo</label>
-              <p className="text-primary-text whitespace-pre-wrap">{selectedTimesheet.memo || selectedTimesheet.description || '-'}</p>
-            </div>
-            <div className="flex gap-3 pt-4 border-t">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setIsViewTimesheetModalOpen(false)
-                  setSelectedTimesheet(null)
-                }}
-                className="flex-1"
-              >
-                Close
+                {t('projects.task_modal.edit_task')}
               </Button>
             </div>
           </div>
@@ -4696,54 +4916,56 @@ const ProjectDetail = () => {
           setIsViewExpenseModalOpen(false)
           setSelectedExpense(null)
         }}
-        title="Expense Details"
+        title={t('projects.activity.expenses.view_title')}
       >
         {selectedExpense && (
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Expense #</label>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.expenses.expense_number')}</label>
                 <p className="text-primary-text font-medium">{selectedExpense.expense_number || `EXP#${selectedExpense.id}`}</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Status</label>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.expenses.status')}</label>
                 <Badge className={`text-xs ${selectedExpense.status === 'Approved' ? 'bg-green-100 text-green-800' :
                   selectedExpense.status === 'Rejected' ? 'bg-red-100 text-red-800' :
                     'bg-yellow-100 text-yellow-800'
                   }`}>
-                  {selectedExpense.status || 'Pending'}
+                  {selectedExpense.status === 'Approved' ? t('projects.activity.expenses.status_approved') :
+                    selectedExpense.status === 'Rejected' ? t('projects.activity.expenses.status_rejected') :
+                      selectedExpense.status || t('projects.activity.expenses.status_pending')}
                 </Badge>
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Amount</label>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.expenses.amount')}</label>
                 <p className="text-primary-text font-semibold text-lg">${parseFloat(selectedExpense.total || selectedExpense.amount || 0).toFixed(2)}</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Category</label>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.expenses.category')}</label>
                 <p className="text-primary-text">{selectedExpense.category || '-'}</p>
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Date</label>
-                <p className="text-primary-text">{selectedExpense.expense_date ? new Date(selectedExpense.expense_date).toLocaleDateString() : selectedExpense.created_at ? new Date(selectedExpense.created_at).toLocaleDateString() : '-'}</p>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.expenses.date')}</label>
+                <p className="text-primary-text">{selectedExpense.expense_date ? new Date(selectedExpense.expense_date).toLocaleDateString(language === 'de' ? 'de-DE' : undefined) : selectedExpense.created_at ? new Date(selectedExpense.created_at).toLocaleDateString(language === 'de' ? 'de-DE' : undefined) : '-'}</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Project</label>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.expenses.project')}</label>
                 <p className="text-primary-text">{project?.project_name || '-'}</p>
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-secondary-text mb-1">Description</label>
+              <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.expenses.description')}</label>
               <p className="text-primary-text whitespace-pre-wrap">{selectedExpense.description || '-'}</p>
             </div>
             {selectedExpense.receipt_path && (
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Receipt</label>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.expenses.receipt')}</label>
                 <a href={selectedExpense.receipt_path} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                  View Receipt
+                  {t('projects.activity.expenses.view_receipt')}
                 </a>
               </div>
             )}
@@ -4787,7 +5009,7 @@ const ProjectDetail = () => {
                 className="flex items-center gap-2"
               >
                 <IoPrint size={16} />
-                Print
+                {t('common.print')}
               </Button>
               <Button
                 variant="outline"
@@ -4796,7 +5018,7 @@ const ProjectDetail = () => {
                   setSelectedExpense(null)
                 }}
               >
-                Close
+                {t('common.close')}
               </Button>
               <Button
                 variant="primary"
@@ -4805,7 +5027,7 @@ const ProjectDetail = () => {
                   handleEditExpense(selectedExpense)
                 }}
               >
-                Edit
+                {t('common.edit')}
               </Button>
             </div>
           </div>
@@ -4819,7 +5041,7 @@ const ProjectDetail = () => {
           setIsViewTimesheetModalOpen(false)
           setSelectedTimesheet(null)
         }}
-        title="Timesheet Details"
+        title={t('projects.activity.timesheets.view.title')}
         width="500px"
       >
         {selectedTimesheet && (
@@ -4829,21 +5051,21 @@ const ProjectDetail = () => {
                 {selectedTimesheet.user_name ? selectedTimesheet.user_name.charAt(0).toUpperCase() : 'U'}
               </div>
               <div>
-                <h4 className="text-lg font-semibold text-gray-900">{selectedTimesheet.user_name || 'User'}</h4>
-                <p className="text-sm text-gray-500">Employee</p>
+                <h4 className="text-lg font-semibold text-gray-900">{selectedTimesheet.user_name || t('projects.activity.timesheets.view.user_fallback')}</h4>
+                <p className="text-sm text-gray-500">{t('projects.activity.timesheets.view.employee')}</p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 p-4 bg-gray-50 rounded-lg border border-gray-100">
               <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</label>
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t('projects.activity.timesheets.view.date')}</label>
                 <div className="mt-1 flex items-center gap-2 text-gray-900 font-medium">
                   <IoCalendarOutline className="text-gray-400" />
-                  {selectedTimesheet.date ? new Date(selectedTimesheet.date).toLocaleDateString() : (selectedTimesheet.created_at ? new Date(selectedTimesheet.created_at).toLocaleDateString() : '-')}
+                  {selectedTimesheet.date ? new Date(selectedTimesheet.date).toLocaleDateString(language === 'de' ? 'de-DE' : undefined) : (selectedTimesheet.created_at ? new Date(selectedTimesheet.created_at).toLocaleDateString(language === 'de' ? 'de-DE' : undefined) : '-')}
                 </div>
               </div>
               <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Hours Logged</label>
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t('projects.activity.timesheets.view.hours_logged')}</label>
                 <div className="mt-1 flex items-center gap-2">
                   <IoTime className="text-gray-400" />
                   <span className="font-mono bg-white px-2 py-0.5 rounded border border-gray-200 text-gray-900 font-semibold">
@@ -4854,9 +5076,9 @@ const ProjectDetail = () => {
             </div>
 
             <div>
-              <label className="text-sm font-semibold text-gray-900 mb-2 block">Description</label>
+              <label className="text-sm font-semibold text-gray-900 mb-2 block">{t('projects.activity.timesheets.view.description')}</label>
               <div className="p-4 bg-gray-50 rounded-lg border border-gray-100 text-gray-700 whitespace-pre-wrap leading-relaxed">
-                {selectedTimesheet.description || <span className="text-gray-400 italic">No description provided</span>}
+                {selectedTimesheet.description || <span className="text-gray-400 italic">{t('projects.activity.timesheets.view.no_description')}</span>}
               </div>
             </div>
 
@@ -4868,7 +5090,7 @@ const ProjectDetail = () => {
                   setSelectedTimesheet(null)
                 }}
               >
-                Close
+                {t('projects.activity.timesheets.view.close')}
               </Button>
               <Button
                 variant="danger"
@@ -4878,7 +5100,7 @@ const ProjectDetail = () => {
                 }}
                 className="flex items-center gap-2"
               >
-                <IoTrash size={16} /> Delete
+                <IoTrash size={16} /> {t('projects.activity.timesheets.view.delete')}
               </Button>
             </div>
           </div>
@@ -4894,25 +5116,25 @@ const ProjectDetail = () => {
           setIsViewCommentModalOpen(false)
           setSelectedComment(null)
         }}
-        title="Comment Details"
+        title={t('projects.activity.comments.view_title')}
       >
         {selectedComment && (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-secondary-text mb-1">By</label>
-              <p className="text-primary-text font-medium">{selectedComment.user_name || 'User'}</p>
+              <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.comments.by')}</label>
+              <p className="text-primary-text font-medium">{selectedComment.user_name || t('projects.activity.timesheets.view.user_fallback')}</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-secondary-text mb-1">Date</label>
-              <p className="text-primary-text">{selectedComment.created_at ? new Date(selectedComment.created_at).toLocaleString() : '-'}</p>
+              <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.comments.date')}</label>
+              <p className="text-primary-text">{selectedComment.created_at ? new Date(selectedComment.created_at).toLocaleString(language === 'de' ? 'de-DE' : undefined) : '-'}</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-secondary-text mb-1">Comment</label>
+              <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.comments.content')}</label>
               <p className="text-primary-text whitespace-pre-wrap bg-gray-50 p-4 rounded-lg border border-gray-200">{selectedComment.content || selectedComment.comment || '-'}</p>
             </div>
             <div className="flex gap-3 pt-4">
               <Button variant="outline" onClick={() => setIsViewCommentModalOpen(false)} className="flex-1">
-                Close
+                {t('common.close')}
               </Button>
             </div>
           </div>
@@ -4926,32 +5148,35 @@ const ProjectDetail = () => {
           setIsViewInvoiceModalOpen(false)
           setSelectedInvoice(null)
         }}
-        title="Invoice Details"
+        title={t('projects.activity.invoices.view_title')}
       >
         {selectedInvoice && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Invoice #</label>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.invoices.invoice_number')}</label>
                 <p className="text-primary-text font-medium">{selectedInvoice.invoice_number || `INV-${selectedInvoice.id}`}</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Status</label>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.invoices.status')}</label>
                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${selectedInvoice.status === 'paid' ? 'bg-green-100 text-green-800' :
                   selectedInvoice.status === 'overdue' ? 'bg-red-100 text-red-800' :
                     'bg-yellow-100 text-yellow-800'
                   }`}>
-                  {selectedInvoice.status || 'Unpaid'}
+                  {selectedInvoice.status === 'paid' ? t('projects.activity.invoices.status_paid') :
+                    selectedInvoice.status === 'partial' ? t('projects.activity.invoices.status_partial') :
+                      selectedInvoice.status === 'unpaid' ? t('projects.activity.invoices.status_unpaid') :
+                        selectedInvoice.status || t('projects.activity.invoices.status_unpaid')}
                 </span>
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Client</label>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.invoices.client')}</label>
                 <p className="text-primary-text">{selectedInvoice.client_name || '-'}</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Amount</label>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.invoices.amount')}</label>
                 <p className="text-primary-text font-semibold text-lg">${parseFloat(selectedInvoice.total || selectedInvoice.amount || 0).toFixed(2)}</p>
               </div>
             </div>
@@ -4967,7 +5192,7 @@ const ProjectDetail = () => {
             </div>
             {selectedInvoice.note && (
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Note</label>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.invoices.note')}</label>
                 <p className="text-primary-text bg-gray-50 p-3 rounded-lg">{selectedInvoice.note}</p>
               </div>
             )}
@@ -5054,7 +5279,7 @@ const ProjectDetail = () => {
                   className="flex items-center gap-2"
                 >
                   <IoPrint size={16} />
-                  Print
+                  {t('projects.activity.invoices.print')}
                 </Button>
                 <Button
                   variant="outline"
@@ -5069,10 +5294,10 @@ const ProjectDetail = () => {
                   className="flex items-center gap-2"
                 >
                   <IoDownload size={16} />
-                  Download
+                  {t('projects.activity.invoices.download')}
                 </Button>
               </div>
-              <Button variant="outline" onClick={() => setIsViewInvoiceModalOpen(false)}>Close</Button>
+              <Button variant="outline" onClick={() => setIsViewInvoiceModalOpen(false)}>{t('common.close')}</Button>
             </div>
           </div>
         )}
@@ -5085,54 +5310,65 @@ const ProjectDetail = () => {
           setIsViewPaymentModalOpen(false)
           setSelectedPayment(null)
         }}
-        title="Payment Details"
+        title={t('projects.activity.payments.view_title')}
       >
         {selectedPayment && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Payment #</label>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.payments.payment_number')}</label>
                 <p className="text-primary-text font-medium">PAY-{selectedPayment.id}</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Status</label>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.payments.status')}</label>
                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${selectedPayment.status === 'completed' ? 'bg-green-100 text-green-800' :
                   selectedPayment.status === 'failed' ? 'bg-red-100 text-red-800' :
                     'bg-yellow-100 text-yellow-800'
                   }`}>
-                  {selectedPayment.status || 'Pending'}
+                  {selectedPayment.status === 'completed' ? t('projects.activity.payments.status_completed') :
+                    selectedPayment.status === 'failed' ? t('projects.activity.payments.status_failed') :
+                      selectedPayment.status || t('projects.activity.payments.status_pending')}
                 </span>
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Invoice</label>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.payments.invoice')}</label>
                 <p className="text-primary-text">{selectedPayment.invoice_number || (selectedPayment.invoice_id ? `INV-${selectedPayment.invoice_id}` : '-')}</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Amount</label>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.payments.amount')}</label>
                 <p className="text-primary-text font-semibold text-lg">${parseFloat(selectedPayment.amount || 0).toFixed(2)}</p>
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Payment Date</label>
-                <p className="text-primary-text">{selectedPayment.payment_date ? new Date(selectedPayment.payment_date).toLocaleDateString() : '-'}</p>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.payments.payment_date')}</label>
+                <p className="text-primary-text">{selectedPayment.payment_date ? new Date(selectedPayment.payment_date).toLocaleDateString(language === 'de' ? 'de-DE' : undefined) : '-'}</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Method</label>
-                <p className="text-primary-text">{selectedPayment.payment_method ? selectedPayment.payment_method.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : '-'}</p>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.payments.method')}</label>
+                <p className="text-primary-text">{selectedPayment.payment_method ? ({
+                  cash: t('projects.activity.payments.method_cash'),
+                  bank_transfer: t('projects.activity.payments.method_bank_transfer'),
+                  paypal: t('projects.activity.payments.method_paypal'),
+                  stripe: t('projects.activity.payments.method_stripe'),
+                  credit_card: t('projects.activity.payments.method_credit_card'),
+                  debit_card: t('projects.activity.payments.method_debit_card'),
+                  upi: t('projects.activity.payments.method_upi'),
+                  cheque: t('projects.activity.payments.method_cheque'),
+                }[selectedPayment.payment_method] || selectedPayment.payment_method.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())) : '-'}</p>
               </div>
             </div>
             {selectedPayment.transaction_id && (
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Transaction ID</label>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.payments.transaction_id')}</label>
                 <p className="text-primary-text font-mono bg-gray-50 p-2 rounded">{selectedPayment.transaction_id}</p>
               </div>
             )}
             {selectedPayment.remarks && (
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Remarks</label>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.payments.remarks')}</label>
                 <p className="text-primary-text bg-gray-50 p-3 rounded-lg">{selectedPayment.remarks}</p>
               </div>
             )}
@@ -5187,10 +5423,10 @@ const ProjectDetail = () => {
                   className="flex items-center gap-2"
                 >
                   <IoPrint size={16} />
-                  Print
+                  {t('projects.activity.payments.print')}
                 </Button>
               </div>
-              <Button variant="outline" onClick={() => setIsViewPaymentModalOpen(false)}>Close</Button>
+              <Button variant="outline" onClick={() => setIsViewPaymentModalOpen(false)}>{t('common.close')}</Button>
             </div>
           </div>
         )}
@@ -5203,52 +5439,52 @@ const ProjectDetail = () => {
           setIsViewContractModalOpen(false)
           setSelectedContract(null)
         }}
-        title="Contract Details"
+        title={t('projects.activity.contracts.view_title')}
       >
         {selectedContract && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Contract #</label>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.contracts.contract_number')}</label>
                 <p className="text-primary-text font-medium">#{selectedContract.id}</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Type</label>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.contracts.type')}</label>
                 <p className="text-primary-text">{selectedContract.contract_type || '-'}</p>
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-secondary-text mb-1">Subject</label>
+              <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.contracts.subject')}</label>
               <p className="text-primary-text font-medium">{selectedContract.subject || '-'}</p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Client</label>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.contracts.client')}</label>
                 <p className="text-primary-text">{selectedContract.client_name || '-'}</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Value</label>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.contracts.value')}</label>
                 <p className="text-primary-text font-semibold text-lg">{selectedContract.contract_value ? `$${parseFloat(selectedContract.contract_value).toFixed(2)}` : '-'}</p>
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Start Date</label>
-                <p className="text-primary-text">{selectedContract.start_date ? new Date(selectedContract.start_date).toLocaleDateString() : '-'}</p>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.contracts.start_date')}</label>
+                <p className="text-primary-text">{selectedContract.start_date ? new Date(selectedContract.start_date).toLocaleDateString(language === 'de' ? 'de-DE' : undefined) : '-'}</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">End Date</label>
-                <p className="text-primary-text">{selectedContract.end_date ? new Date(selectedContract.end_date).toLocaleDateString() : '-'}</p>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.contracts.end_date')}</label>
+                <p className="text-primary-text">{selectedContract.end_date ? new Date(selectedContract.end_date).toLocaleDateString(language === 'de' ? 'de-DE' : undefined) : '-'}</p>
               </div>
             </div>
             {selectedContract.description && (
               <div>
-                <label className="block text-sm font-medium text-secondary-text mb-1">Description</label>
+                <label className="block text-sm font-medium text-secondary-text mb-1">{t('projects.activity.contracts.description')}</label>
                 <p className="text-primary-text bg-gray-50 p-3 rounded-lg whitespace-pre-wrap">{selectedContract.description}</p>
               </div>
             )}
             <div className="pt-6 border-t border-gray-200 flex justify-end gap-3">
-              <Button variant="outline" onClick={() => setIsViewContractModalOpen(false)}>Close</Button>
+              <Button variant="outline" onClick={() => setIsViewContractModalOpen(false)}>{t('common.close')}</Button>
             </div>
           </div>
         )}

@@ -1,335 +1,507 @@
-import { useState, useEffect, useRef } from 'react'
-import { IoSearch, IoClose, IoChevronDown, IoDocumentText, IoPerson, IoBriefcase, IoCheckmarkCircle } from 'react-icons/io5'
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react'
+import { createPortal } from 'react-dom'
+import {
+  IoSearch,
+  IoClose,
+  IoChevronDown,
+  IoDocumentText,
+  IoBriefcase,
+  IoCheckmarkCircle,
+  IoApps,
+} from 'react-icons/io5'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-import { useLanguage } from '../../context/LanguageContext.jsx'
-import { tasksAPI, projectsAPI, leadsAPI } from '../../api'
+import { useLanguage } from '../../context/LanguageContext'
+import { tasksAPI, projectsAPI, leadsAPI, companiesAPI, estimatesAPI, invoicesAPI } from '../../api'
+import adminSidebarData from '../../config/adminSidebarData.jsx'
+import employeeSidebarData from '../../config/employeeSidebarData.jsx'
+import superAdminSidebarData from '../../config/superAdminSidebarData.jsx'
 
-const GlobalSearch = ({ isOpen, onClose, mode = 'modal' }) => {
-    const { t } = useLanguage()
-    const navigate = useNavigate()
-    const { user } = useAuth()
-    const [searchQuery, setSearchQuery] = useState('')
-    const [debouncedQuery, setDebouncedQuery] = useState('')
-    const [searchType, setSearchType] = useState('Task')
-    const searchTypeLabels = {
-        'Task': t('search.task'),
-        'Project': t('search.project'),
-        'Lead': t('search.lead'),
-        'Client': t('search.client')
+function flattenNavItems(items, tFn, parentLabel = '') {
+  const out = []
+  if (!items || !Array.isArray(items)) return out
+  for (const item of items) {
+    const raw = item.label ? tFn(item.label) : ''
+    const label =
+      typeof raw === 'string' ? raw : String(item.label || '')
+    const combined = parentLabel ? `${parentLabel} › ${label}` : label
+    if (item.path) {
+      out.push({
+        path: item.path,
+        label: combined,
+        searchText: `${combined} ${item.path}`.toLowerCase(),
+      })
     }
-    const [showTypeDropdown, setShowTypeDropdown] = useState(false)
-    const [results, setResults] = useState([])
-    const [loading, setLoading] = useState(false)
-    const searchContainerRef = useRef(null)
-    const inputRef = useRef(null)
+    if (item.children?.length) {
+      out.push(...flattenNavItems(item.children, tFn, label))
+    }
+  }
+  return out
+}
 
-    // Debounce search query
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setDebouncedQuery(searchQuery)
-        }, 300)
-        return () => clearTimeout(timer)
-    }, [searchQuery])
+function sidebarForRole(role) {
+  const r = String(role || 'ADMIN').toUpperCase()
+  if (r === 'EMPLOYEE') return employeeSidebarData
+  if (r === 'SUPERADMIN') return superAdminSidebarData
+  return adminSidebarData
+}
 
-    // Handle click outside
-    useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (searchContainerRef.current && !searchContainerRef.current.contains(event.target)) {
-                if (mode === 'modal') onClose()
-                if (mode === 'inline') onClose()
-            }
-        }
+const GlobalSearch = ({
+  isOpen,
+  onClose,
+  mode = 'modal',
+  dismissOnClickOutside = true,
+}) => {
+  const { t } = useLanguage()
+  const navigate = useNavigate()
+  const { user } = useAuth()
+  const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
+  const searchTypeLabels = {
+    Task: t('search.task'),
+    Project: t('search.project'),
+    Lead: t('search.lead'),
+    Client: t('search.client'),
+    Estimate: t('search.estimate'),
+    Invoice: t('search.invoice'),
+  }
+  const [results, setResults] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [dropdownBox, setDropdownBox] = useState(null)
+  const searchContainerRef = useRef(null)
+  const anchorRef = useRef(null)
+  const inputRef = useRef(null)
 
-        if (isOpen) {
-            document.addEventListener('mousedown', handleClickOutside)
-        }
+  const companyId = useMemo(() => {
+    const fromUser = user?.company_id
+    const n = parseInt(String(fromUser ?? localStorage.getItem('companyId') ?? '1'), 10)
+    return Number.isFinite(n) && n > 0 ? n : 1
+  }, [user])
 
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside)
-        }
-    }, [isOpen, mode, onClose])
+  const navEntries = useMemo(() => {
+    const translate = (key) => (key ? t(key) : '')
+    return flattenNavItems(sidebarForRole(user?.role), translate)
+  }, [user?.role, t])
 
-    // Focus input when opened
-    useEffect(() => {
-        if (isOpen && inputRef.current) {
-            inputRef.current.focus()
-        }
-    }, [isOpen])
+  /** Live query drives panel + menu matches so the dropdown reacts immediately; API stays debounced */
+  const trimmedLive = (searchQuery || '').trim()
 
-    // Fetch search results
-    useEffect(() => {
-        const fetchResults = async () => {
-            if (!debouncedQuery || debouncedQuery.length < 2) {
-                setResults([])
-                return
-            }
+  const menuMatches = useMemo(() => {
+    const q = trimmedLive.toLowerCase()
+    if (!q) return []
+    return navEntries.filter((entry) => entry.searchText.includes(q)).slice(0, 12)
+  }, [trimmedLive, navEntries])
 
-            setLoading(true)
-            try {
-                const companyId = parseInt(localStorage.getItem('companyId') || 1)
-                let response
+  const isEmployee = String(user?.role || '').toUpperCase() === 'EMPLOYEE'
 
-                switch (searchType) {
-                    case 'Task':
-                    case 'To do':
-                        response = await tasksAPI.getAll({ search: debouncedQuery, company_id: companyId })
-                        break
-                    case 'Project':
-                        response = await projectsAPI.getAll({ search: debouncedQuery, company_id: companyId })
-                        break
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery)
+    }, 150)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
 
-                    case 'Lead':
-                        response = await leadsAPI.getAll({ search: debouncedQuery, company_id: companyId })
-                        break
-                    default:
-                        break
-                }
+  useEffect(() => {
+    if (!dismissOnClickOutside) return undefined
 
-                if (response?.data?.success) {
-                    setResults(response.data.data || [])
-                } else {
-                    setResults([])
-                }
-            } catch (error) {
-                console.error('Search error:', error)
-                setResults([])
-            } finally {
-                setLoading(false)
-            }
-        }
+    const handleClickOutside = (event) => {
+      if (
+        searchContainerRef.current &&
+        !searchContainerRef.current.contains(event.target)
+      ) {
+        if (mode === 'modal' || mode === 'inline') onClose?.()
+      }
+    }
 
-        fetchResults()
-    }, [debouncedQuery, searchType])
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
 
-    const handleResultClick = (item) => {
-        if (searchType === 'Task' || searchType === 'To do') {
-            if (item.project_id) {
-                navigate(`/app/admin/projects/${item.project_id}`)
-            } else {
-                navigate(`/app/admin/tasks?search=${item.heading || item.title}`)
-            }
-        } else if (searchType === 'Project') {
-            navigate(`/app/admin/projects/${item.id}`)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isOpen, mode, onClose, dismissOnClickOutside])
 
-        } else if (searchType === 'Lead') {
-            navigate(`/app/admin/leads/${item.id}`)
-        }
+  useEffect(() => {
+    if (isOpen && inputRef.current) {
+      inputRef.current.focus()
+    }
+  }, [isOpen])
 
-        if (mode === 'modal' || mode === 'inline') {
-            onClose()
-        }
-        setSearchQuery('')
+  useEffect(() => {
+    const fetchResults = async () => {
+      if (!debouncedQuery || debouncedQuery.trim().length < 2) {
         setResults([])
-        setShowTypeDropdown(false)
+        return
+      }
+
+      setLoading(true)
+      try {
+        const q = debouncedQuery.trim()
+        const params = { search: q, company_id: companyId, limit: 10, page: 1 }
+
+        const [tasksRes, projectsRes, leadsRes, clientsRes, estimatesRes, invoicesRes] = await Promise.all([
+          tasksAPI.getAll(params).catch(() => ({ data: { data: [] } })),
+          projectsAPI.getAll(params).catch(() => ({ data: { data: [] } })),
+          leadsAPI.getAll(params).catch(() => ({ data: { data: [] } })),
+          companiesAPI.getAll(params).catch(() => ({ data: { data: [] } })),
+          estimatesAPI.getAll(params).catch(() => ({ data: { data: [] } })),
+          invoicesAPI.getAll(params).catch(() => ({ data: { data: [] } }))
+        ])
+
+        const combinedResults = [
+          ...(tasksRes?.data?.data || []).map(item => ({ ...item, _searchType: 'Task' })),
+          ...(projectsRes?.data?.data || []).map(item => ({ ...item, _searchType: 'Project' })),
+          ...(leadsRes?.data?.data || []).map(item => ({ ...item, _searchType: 'Lead' })),
+          ...(clientsRes?.data?.data || []).map(item => ({ ...item, _searchType: 'Client' })),
+          ...(estimatesRes?.data?.data || []).map(item => ({ ...item, _searchType: 'Estimate' })),
+          ...(invoicesRes?.data?.data || []).map(item => ({ ...item, _searchType: 'Invoice' }))
+        ]
+        
+        setResults(combinedResults)
+      } catch (error) {
+        console.error('Search error:', error)
+        setResults([])
+      } finally {
+        setLoading(false)
+      }
     }
 
-    if (!isOpen) return null
+    fetchResults()
+  }, [debouncedQuery, companyId])
 
-    // Modal mode
-    if (mode === 'modal') {
-        return (
-            <div className="fixed inset-0 bg-black/50 z-[9999] flex items-start justify-center pt-20 px-4 animate-fadeIn">
-                <div
-                    ref={searchContainerRef}
-                    className="w-full max-w-xl bg-white rounded-2xl shadow-elevated overflow-hidden"
-                >
-                    {/* Search Input */}
-                    <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100">
-                        <IoSearch size={20} className="text-gray-400" />
-                        <input
-                            ref={inputRef}
-                            type="text"
-                            className="flex-1 outline-none text-base text-gray-700 placeholder-gray-400 bg-transparent"
-                            placeholder={t('search.placeholder')}
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                        />
-                        {searchQuery && (
-                            <button
-                                onClick={() => { setSearchQuery(''); setResults([]) }}
-                                className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100"
-                            >
-                                <IoClose size={18} />
-                            </button>
-                        )}
-                        <button
-                            onClick={onClose}
-                            className="text-gray-500 hover:text-gray-700 text-sm font-medium"
-                        >
-                            {t('search.esc')}
-                        </button>
-                    </div>
+  const clearSearch = useCallback(() => {
+    setSearchQuery('')
+    setResults([])
+  }, [])
 
-                    {/* Type Filter */}
-                    <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-100 bg-gray-50">
-                        <span className="text-xs text-gray-500">{t('search.search_in')}</span>
-                        <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
-                            {['Task', 'Project', 'Lead'].map(type => (
-                                <button
-                                    key={type}
-                                    className={`px-3 py-1 text-xs rounded-full transition-colors whitespace-nowrap ${searchType === type
-                                        ? 'bg-primary-accent text-white'
-                                        : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-                                        }`}
-                                    onClick={() => setSearchType(type)}
-                                >
-                                    {searchTypeLabels[type] || type}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
+  const handleMenuClick = useCallback(
+    (path) => {
+      if (path) navigate(path)
+      clearSearch()
+      onClose?.()
+    },
+    [navigate, clearSearch, onClose]
+  )
 
-                    {/* Results */}
-                    <div className="max-h-[400px] overflow-y-auto">
-                        {loading && (
-                            <div className="p-4 text-center text-gray-500 text-sm">{t('search.searching')}</div>
-                        )}
-                        {!loading && results.length > 0 && (
-                            <ul className="divide-y divide-gray-100">
-                                {results.map((item, index) => (
-                                    <li key={item.id || index}>
-                                        <button
-                                            className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors flex items-center gap-3 group"
-                                            onClick={() => handleResultClick(item)}
-                                        >
-                                            <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-100 transition-colors">
-                                                {searchType === 'Client' ? <IoPerson size={14} /> :
-                                                    searchType === 'Project' ? <IoBriefcase size={14} /> :
-                                                        searchType === 'Lead' ? <IoDocumentText size={14} /> :
-                                                            <IoCheckmarkCircle size={14} />}
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-medium text-gray-900 truncate group-hover:text-blue-600 transition-colors">
-                                                    {item.title || item.name || item.project_name || item.company_name || t('search.untitled')}
-                                                </p>
-                                                <p className="text-xs text-secondary-text truncate">
-                                                    {searchType === 'Task' ? (item.project_name ? `${t('search.project')}: ${item.project_name}` : t('search.no_project')) :
-                                                        (item.status || t('search.no_status'))}
-                                                </p>
-                                            </div>
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                        {!loading && searchQuery && results.length === 0 && (
-                            <div className="p-4 text-center text-gray-500 text-sm">
-                                {(t('search.no_results') || '').replace('{{query}}', searchQuery)}
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
+  const handleResultClick = useCallback(
+    (item) => {
+      const type = item._searchType
+      if (type === 'Task' || type === 'To do') {
+        const title = encodeURIComponent(item.title || item.heading || item.name || '')
+        if (item.project_id) {
+          navigate(
+            isEmployee
+              ? `/app/employee/my-projects/${item.project_id}`
+              : `/app/admin/projects/${item.project_id}`
+          )
+        } else {
+          navigate(
+            isEmployee
+              ? `/app/employee/tasks?search=${title}`
+              : `/app/admin/tasks?search=${title}`
+          )
+        }
+      } else if (type === 'Project') {
+        navigate(
+          isEmployee
+            ? `/app/employee/my-projects/${item.id}`
+            : `/app/admin/projects/${item.id}`
         )
+      } else if (type === 'Lead') {
+        navigate(
+          isEmployee
+            ? `/app/employee/leads/${item.id}`
+            : `/app/admin/leads/${item.id}`
+        )
+      } else if (type === 'Client') {
+        navigate(`/app/admin/clients/${item.id}`)
+      } else if (type === 'Estimate') {
+        navigate(`/app/admin/estimates/${item.id}`)
+      } else if (type === 'Invoice') {
+        navigate(`/app/admin/invoices/${item.id}`)
+      }
+
+      clearSearch()
+      onClose?.()
+    },
+    [navigate, isEmployee, clearSearch, onClose]
+  )
+
+  const trimmedDebounced = (debouncedQuery || '').trim()
+  const showResultsPanel = trimmedLive.length >= 1
+
+  useLayoutEffect(() => {
+    if (mode !== 'inline' || !isOpen) {
+      setDropdownBox(null)
+      return
+    }
+    if (!showResultsPanel) {
+      setDropdownBox(null)
+      return
+    }
+    const el = anchorRef.current
+    if (!el) return
+
+    const place = () => {
+      const r = el.getBoundingClientRect()
+      const width = Math.min(Math.max(r.width, 280), window.innerWidth - 24)
+      let left = r.left
+      if (left + width > window.innerWidth - 12) {
+        left = Math.max(12, window.innerWidth - 12 - width)
+      }
+      setDropdownBox({
+        top: r.bottom + 8,
+        left,
+        width,
+      })
     }
 
-    // Inline mode (Desktop)
+    place()
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    return () => {
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+    }
+  }, [mode, isOpen, showResultsPanel, trimmedLive, loading, results.length, menuMatches.length])
+
+  const renderMenuSection = () => {
+    if (!menuMatches.length) return null
     return (
-        <div className="hidden md:block relative w-[350px] mx-4" ref={searchContainerRef}>
-            <div className="relative w-full">
-                {/* Pill Container */}
-                <div className="flex items-center border border-gray-300 rounded-full bg-white shadow-sm h-10 overflow-visible z-30 relative focus-within:ring-2 focus-within:ring-primary-accent/20">
-
-                    {/* Type/Dropdown Trigger */}
-                    <div className="relative h-full border-r border-gray-200">
-                        <button
-                            type="button"
-                            className="flex items-center gap-2 px-4 h-full bg-transparent hover:bg-gray-50 text-xs font-medium text-gray-700 transition-colors min-w-[90px] justify-between cursor-pointer rounded-l-full"
-                            onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                setShowTypeDropdown(!showTypeDropdown);
-                            }}
-                        >
-                            <span>{searchTypeLabels[searchType] || searchType}</span>
-                            <IoChevronDown size={12} className={`text-gray-400 transition-transform ${showTypeDropdown ? 'rotate-180' : ''}`} />
-                        </button>
-
-                        {/* Type Dropdown */}
-                        {showTypeDropdown && (
-                            <div className="absolute top-[calc(100%+8px)] left-0 w-[140%] min-w-[140px] bg-white shadow-elevated rounded-xl border border-gray-100 py-1.5 z-50 animate-fadeIn">
-                                {['Task', 'Project', 'Lead'].map(type => (
-                                    <button
-                                        key={type}
-                                        type="button"
-                                        className={`w-full text-left px-4 py-2 text-sm hover:bg-primary-accent/5 hover:text-primary-accent transition-colors ${searchType === type ? 'text-primary-accent font-medium bg-primary-accent/5' : 'text-gray-700'}`}
-                                        onClick={() => {
-                                            setSearchType(type)
-                                            setShowTypeDropdown(false)
-                                        }}
-                                    >
-                                        {searchTypeLabels[type] || type}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Input Area */}
-                    <div className="flex-1 flex items-center px-3 h-full">
-                        <input
-                            ref={inputRef}
-                            type="text"
-                            className="w-full h-full outline-none text-sm text-gray-700 placeholder-gray-400 bg-transparent"
-                            placeholder={t('search.placeholder')}
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                        />
-                        {searchQuery && (
-                            <button
-                                onClick={() => { setSearchQuery(''); setResults([]) }}
-                                className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100"
-                            >
-                                <IoClose size={16} />
-                            </button>
-                        )}
-                    </div>
-                </div>
-
-                {/* Inline Results Dropdown */}
-                {(results.length > 0 || (loading && searchQuery)) && (
-                    <div className="absolute top-[calc(100%+8px)] left-0 w-full bg-white rounded-xl shadow-elevated border border-gray-100 overflow-hidden max-h-[400px] overflow-y-auto z-40 animate-fadeIn">
-                        {loading ? (
-                            <div className="p-4 text-center text-gray-500 text-sm">{t('search.searching')}</div>
-                        ) : (
-                            <ul className="divide-y divide-gray-100">
-                                {results.map((item, index) => (
-                                    <li key={item.id || index}>
-                                        <button
-                                            className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors flex items-center gap-3 group"
-                                            onClick={() => handleResultClick(item)}
-                                        >
-                                            <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-100 transition-colors">
-                                                {searchType === 'Project' ? <IoBriefcase size={14} /> :
-                                                    searchType === 'Lead' ? <IoDocumentText size={14} /> :
-                                                        <IoCheckmarkCircle size={14} />}
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-medium text-gray-900 truncate group-hover:text-blue-600 transition-colors">
-                                                    {item.title || item.name || item.project_name || item.company_name || t('search.untitled')}
-                                                </p>
-                                                <p className="text-xs text-secondary-text truncate">
-                                                    {searchType === 'Task' ? (item.project_name ? `${t('search.project')}: ${item.project_name}` : t('search.no_project')) :
-                                                        (item.status || t('search.no_status'))}
-                                                </p>
-                                            </div>
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </div>
-                )}
-
-                {searchQuery && !loading && results.length === 0 && (
-                    <div className="absolute top-[calc(100%+8px)] left-0 w-full bg-white rounded-xl shadow-elevated border border-gray-100 p-4 text-center text-gray-500 text-sm z-40">
-                        {(t('search.no_results') || '').replace('{{query}}', searchQuery)}
-                    </div>
-                )}
-            </div>
-        </div>
+      <div className="border-b border-gray-100 bg-gray-50/80">
+        <p className="px-4 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+          {t('search.pages')}
+        </p>
+        <ul className="pb-1">
+          {menuMatches.map((entry) => (
+            <li key={`${entry.path}-${entry.label}`}>
+              <button
+                type="button"
+                className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-gray-800 hover:bg-white"
+                onClick={() => handleMenuClick(entry.path)}
+              >
+                <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
+                  <IoApps size={15} />
+                </span>
+                <span className="min-w-0 truncate font-medium">{entry.label}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
     )
+  }
+
+  const renderApiSection = () => {
+    if (trimmedLive.length < 2) return null
+    if (debouncedQuery.trim().length < 2 || loading) {
+      return (
+        <div className="p-4 text-center text-sm text-gray-500">{t('search.searching')}</div>
+      )
+    }
+    if (results.length > 0) {
+      return (
+        <ul className="divide-y divide-gray-100">
+          {results.map((item, index) => (
+            <li key={item.id ?? index}>
+              <button
+                type="button"
+                className="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50"
+                onClick={() => handleResultClick(item)}
+              >
+                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600 group-hover:bg-blue-100">
+                  {item._searchType === 'Project' ? (
+                    <IoBriefcase size={14} />
+                  ) : item._searchType === 'Lead' ? (
+                    <IoDocumentText size={14} />
+                  ) : (
+                    <IoCheckmarkCircle size={14} />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-gray-900 group-hover:text-blue-600 flex items-center">
+                    <span className="mr-2 text-[10px] font-bold uppercase tracking-wider text-primary-accent bg-primary-accent/10 px-1.5 py-0.5 rounded">
+                      {searchTypeLabels[item._searchType] || item._searchType}
+                    </span>
+                    <span className="truncate">
+                      {item.title ||
+                        item.person_name ||
+                        item.name ||
+                        item.project_name ||
+                        item.company_name ||
+                        t('search.untitled')}
+                    </span>
+                  </p>
+                  <p className="truncate text-xs text-secondary-text mt-0.5">
+                    {item._searchType === 'Task' || item._searchType === 'To do'
+                      ? item.project_name
+                        ? `${t('search.project')}: ${item.project_name}`
+                        : t('search.no_project')
+                      : item._searchType === 'Lead'
+                        ? [item.email, item.company_name].filter(Boolean).join(' · ') ||
+                          item.status ||
+                          t('search.no_status')
+                        : item.status || t('search.no_status')}
+                  </p>
+                </div>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )
+    }
+    return (
+      <div className="p-4 text-center text-sm text-gray-500">
+        {(t('search.no_results') || '').includes('{{query}}')
+          ? t('search.no_results').replace('{{query}}', debouncedQuery)
+          : `${t('search.no_results')}: "${debouncedQuery}"`}
+      </div>
+    )
+  }
+
+  if (!isOpen) return null
+
+  if (mode === 'modal') {
+    return (
+      <div className="animate-fadeIn fixed inset-0 z-[9999] flex items-start justify-center bg-black/50 px-4 pt-20">
+        <div
+          ref={searchContainerRef}
+          className="shadow-elevated w-full max-w-xl overflow-hidden rounded-2xl bg-white"
+        >
+          <div className="flex items-center gap-3 border-b border-gray-100 px-4 py-3">
+            <IoSearch size={20} className="text-gray-400" />
+            <input
+              ref={inputRef}
+              type="text"
+              className="flex-1 bg-transparent text-base text-gray-700 outline-none placeholder:text-gray-400"
+              placeholder={t('search.placeholder')}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('')
+                  setResults([])
+                }}
+                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              >
+                <IoClose size={18} />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => onClose?.()}
+              className="text-sm font-medium text-gray-500 hover:text-gray-700"
+            >
+              {t('search.esc')}
+            </button>
+          </div>
+
+
+
+          <div className="max-h-[400px] overflow-y-auto">
+            {showResultsPanel && renderMenuSection()}
+            {showResultsPanel && trimmedLive.length >= 2 && (
+              <>
+                {results.length > 0 || loading || debouncedQuery.trim().length < 2 ? (
+                  <p className="border-t border-gray-100 bg-white px-4 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                    {t('search.results') || 'Results'}
+                  </p>
+                ) : null}
+                {renderApiSection()}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const inlineDropdownBody = (
+    <>
+      {renderMenuSection()}
+      {trimmedLive.length === 1 && menuMatches.length === 0 && (
+        <div className="border-b border-gray-100 px-4 py-2 text-xs text-gray-500">
+          {t('search.type_more')}
+        </div>
+      )}
+      {trimmedLive.length >= 2 && (
+        <>
+          {results.length > 0 || loading || debouncedQuery.trim().length < 2 ? (
+            <p className="border-t border-gray-100 bg-white px-4 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+              {t('search.results') || 'Results'}
+            </p>
+          ) : null}
+          {renderApiSection()}
+        </>
+      )}
+    </>
+  )
+
+  return (
+    <>
+      <div
+        ref={(el) => {
+          anchorRef.current = el
+          if (mode === 'inline') searchContainerRef.current = el
+        }}
+        className="relative z-[60] w-full max-w-xl"
+      >
+        <div className="relative w-full">
+        <div className="relative z-30 flex h-10 items-center overflow-visible rounded-full border border-gray-300 bg-white shadow-sm focus-within:ring-2 focus-within:ring-primary-accent/20">
+          <div className="flex h-full flex-1 items-center px-4">
+            <input
+              ref={inputRef}
+              type="text"
+              className="h-full w-full bg-transparent text-sm text-gray-700 outline-none placeholder:text-gray-400"
+              placeholder={t('search.placeholder')}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('')
+                  setResults([])
+                }}
+                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              >
+                <IoClose size={16} />
+              </button>
+            )}
+          </div>
+        </div>
+
+      </div>
+      </div>
+
+      {showResultsPanel &&
+        dropdownBox &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            className="max-h-[min(420px,calc(100vh-6rem))] overflow-y-auto rounded-xl border border-gray-100 bg-white shadow-elevated"
+            style={{
+              position: 'fixed',
+              top: dropdownBox.top,
+              left: dropdownBox.left,
+              width: dropdownBox.width,
+              zIndex: 10050,
+            }}
+            onMouseDown={(e) => e.preventDefault()}
+            role="listbox"
+            aria-label={t('search.placeholder')}
+          >
+            {inlineDropdownBody}
+          </div>,
+          document.body
+        )}
+    </>
+  )
 }
 
 export default GlobalSearch

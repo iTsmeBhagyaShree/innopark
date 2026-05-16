@@ -563,12 +563,45 @@ img {
     content: "";
   }
 
-  /* Optimize colors for printing */
-  * {
-    color: black !important;
-    background: white !important;
+  /*
+   * Dark mode: Tailwind `dark:` utilities beat a bare `*` rule, so text can stay light/white
+   * while Chrome prints a white background → invisible content. Force contrast on html.dark.
+   */
+  html {
+    color-scheme: only light !important;
+  }
+
+  html.dark body,
+  html.dark main {
+    background: #fff !important;
+    color: #111 !important;
+  }
+
+  html.dark main * {
+    color: #111827 !important;
     box-shadow: none !important;
     text-shadow: none !important;
+  }
+
+  /* Light theme: strip heavy shadows for print */
+  html:not(.dark) * {
+    color: #111 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  /* Recharts often measures 0px height in print; give a floor + preserve fills */
+  .recharts-responsive-container {
+    min-height: 280px !important;
+  }
+
+  svg {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  html.dark main svg text {
+    fill: #111827 !important;
   }
 
   /* badge and status backgrounds */

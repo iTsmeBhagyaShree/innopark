@@ -19,7 +19,7 @@ const getAll = async (req, res) => {
     const companyIdNum =
       rawC != null && rawC !== '' ? parseInt(String(rawC), 10) : parseInt(String(req.user?.company_id || 1), 10);
     const companyId = Number.isFinite(companyIdNum) && companyIdNum > 0 ? companyIdNum : 1;
-    const { assigned_to, status, priority, related_to_type, related_to_id, date_from, date_to, due_date, category, project_id, page = 1, limit = 50 } = req.query;
+    const { assigned_to, status, priority, related_to_type, related_to_id, date_from, date_to, due_date, category, project_id, search, page = 1, limit = 50 } = req.query;
 
     // Default to ADMIN if no user, or handle safely
     const userRole = req.user?.role || 'ADMIN';
@@ -30,8 +30,22 @@ const getAll = async (req, res) => {
 
     let query = `
             SELECT t.*, 
-                   u.name as assigned_to_name, 
-                   u.avatar as assigned_to_avatar,
+                   COALESCE(
+                     u.name,
+                     (SELECT uu.name FROM task_assignees taa 
+                      INNER JOIN users uu ON taa.user_id = uu.id 
+                      WHERE taa.task_id = t.id 
+                      ORDER BY taa.id ASC LIMIT 1),
+                     u_emp.name
+                   ) as assigned_to_name, 
+                   COALESCE(
+                     u.avatar,
+                     (SELECT uu.avatar FROM task_assignees taa 
+                      INNER JOIN users uu ON taa.user_id = uu.id 
+                      WHERE taa.task_id = t.id 
+                      ORDER BY taa.id ASC LIMIT 1),
+                     u_emp.avatar
+                   ) as assigned_to_avatar,
                    c.name as created_by_name,
                    CASE 
                      WHEN t.related_to_type = 'lead' THEN l.person_name
@@ -44,6 +58,8 @@ const getAll = async (req, res) => {
                    p.project_name as project_name
             FROM tasks t
             LEFT JOIN users u ON t.assigned_to = u.id
+            LEFT JOIN employees emp_assign ON emp_assign.id = t.assigned_to AND u.id IS NULL
+            LEFT JOIN users u_emp ON u_emp.id = emp_assign.user_id
             LEFT JOIN users c ON t.created_by = c.id
             LEFT JOIN leads l ON t.related_to_type = 'lead' AND t.related_to_id = l.id
             LEFT JOIN deals d ON t.related_to_type = 'deal' AND t.related_to_id = d.id
@@ -54,11 +70,22 @@ const getAll = async (req, res) => {
         `;
     const params = [companyId];
 
-    // Security: Non-admins only see their tasks
-    if (userRole !== 'ADMIN' && userRole !== 'SUPERADMIN' && userId) {
-      query += ' AND t.assigned_to = ?';
-      params.push(userId);
-    } else if (assigned_to) {
+    const isPrivileged =
+      String(userRole || '').toUpperCase() === 'ADMIN' ||
+      String(userRole || '').toUpperCase() === 'SUPERADMIN';
+
+    // Non-admins: tasks assigned to their user id, multi-assignee rows, or legacy employee-id assignment
+    if (!isPrivileged && userId) {
+      query += ` AND (
+        t.assigned_to = ?
+        OR EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = t.id AND ta.user_id = ?)
+        OR EXISTS (
+          SELECT 1 FROM employees e
+          WHERE e.company_id = t.company_id AND e.user_id = ? AND e.id = t.assigned_to AND t.assigned_to IS NOT NULL
+        )
+      )`;
+      params.push(userId, userId, userId);
+    } else if (isPrivileged && assigned_to) {
       query += ' AND t.assigned_to = ?';
       params.push(assigned_to);
     }
@@ -100,6 +127,35 @@ const getAll = async (req, res) => {
       params.push(project_id);
     }
 
+    const searchTrim = search != null && String(search).trim() ? String(search).trim() : '';
+    if (searchTrim) {
+      const pattern = `%${searchTrim}%`;
+      query += ` AND (
+        t.title LIKE ? OR IFNULL(t.description,'') LIKE ? OR t.code LIKE ?
+        OR IFNULL(t.sub_description,'') LIKE ?
+        OR IFNULL(p.project_name,'') LIKE ?
+        OR IFNULL(u.name,'') LIKE ?
+        OR IFNULL(u_emp.name,'') LIKE ?
+        OR IFNULL(l.person_name,'') LIKE ?
+        OR IFNULL(d.title,'') LIKE ?
+        OR IFNULL(con.name,'') LIKE ?
+        OR IFNULL(comp.name,'') LIKE ?
+      )`;
+      params.push(
+        pattern,
+        pattern,
+        pattern,
+        pattern,
+        pattern,
+        pattern,
+        pattern,
+        pattern,
+        pattern,
+        pattern,
+        pattern
+      );
+    }
+
     // Pagination
     let pageNum = parseInt(page);
     let limitNum = parseInt(limit);
@@ -118,25 +174,41 @@ const getAll = async (req, res) => {
     }
 
     if (!Array.isArray(rows) || rows.length === 0) {
-      // Level 1 Fallback: Simple query with is_deleted
       try {
+        let simpleWhere = 't.company_id = ? AND t.is_deleted = 0';
+        const simpleParams = [companyId];
+        if (searchTrim) {
+          const pattern = `%${searchTrim}%`;
+          simpleWhere +=
+            ' AND (t.title LIKE ? OR IFNULL(t.description,\'\') LIKE ? OR t.code LIKE ?)';
+          simpleParams.push(pattern, pattern, pattern);
+        }
         const simpleSql = `SELECT t.*, NULL AS assigned_to_name, NULL AS assigned_to_avatar, NULL AS created_by_name, NULL AS related_entity_name, NULL AS project_name
           FROM tasks t
-          WHERE t.company_id = ? AND t.is_deleted = 0
+          WHERE ${simpleWhere}
           ORDER BY t.due_date ASC
           LIMIT ? OFFSET ?`;
-        const [simpleRows] = await pool.query(simpleSql, [companyId, limitNum, offset]);
+        simpleParams.push(limitNum, offset);
+        const [simpleRows] = await pool.query(simpleSql, simpleParams);
         rows = simpleRows;
       } catch (e1) {
         console.warn('⚠️ Task fallback Level 1 failed:', e1.message);
-        // Level 2 Fallback: Simple query WITHOUT is_deleted
         try {
+          let s2Where = 't.company_id = ?';
+          const s2Params = [companyId];
+          if (searchTrim) {
+            const pattern = `%${searchTrim}%`;
+            s2Where +=
+              ' AND (t.title LIKE ? OR IFNULL(t.description,\'\') LIKE ? OR t.code LIKE ?)';
+            s2Params.push(pattern, pattern, pattern);
+          }
           const s2Sql = `SELECT t.*, NULL AS assigned_to_name, NULL AS assigned_to_avatar, NULL AS created_by_name, NULL AS related_entity_name, NULL AS project_name
             FROM tasks t
-            WHERE t.company_id = ?
+            WHERE ${s2Where}
             ORDER BY t.due_date ASC
             LIMIT ? OFFSET ?`;
-          const [s2Rows] = await pool.query(s2Sql, [companyId, limitNum, offset]);
+          s2Params.push(limitNum, offset);
+          const [s2Rows] = await pool.query(s2Sql, s2Params);
           rows = s2Rows;
         } catch (e2) {
           console.error('❌ All task fallbacks failed:', e2.message);
@@ -209,6 +281,50 @@ const generateTaskCode = async (companyId) => {
   }
 };
 
+/**
+ * Check whether current user can mutate (edit/delete) a task.
+ * Allows ADMIN/SUPERADMIN always, and for others:
+ * - task creator
+ * - directly assigned user (tasks.assigned_to = users.id)
+ * - legacy employee-mapped assignment (tasks.assigned_to = employees.id where employees.user_id = user.id)
+ * - multi-assignee mapping in task_assignees
+ */
+const canUserMutateTask = async ({ taskId, userId, userRole }) => {
+  const role = String(userRole || '').toUpperCase();
+  if (role === 'ADMIN' || role === 'SUPERADMIN') return true;
+  if (!userId) return false;
+
+  const [taskRows] = await pool.execute(
+    'SELECT id, assigned_to, created_by, company_id FROM tasks WHERE id = ? LIMIT 1',
+    [taskId]
+  );
+  if (!taskRows.length) return false;
+
+  const task = taskRows[0];
+  const assignedToNum = parseInt(String(task.assigned_to || ''), 10);
+  const userIdNum = parseInt(String(userId), 10);
+
+  if (task.created_by === userIdNum || assignedToNum === userIdNum) {
+    return true;
+  }
+
+  // Legacy rows: tasks.assigned_to stores employees.id instead of users.id
+  if (Number.isFinite(assignedToNum)) {
+    const [legacyRows] = await pool.execute(
+      'SELECT id FROM employees WHERE company_id = ? AND user_id = ? AND id = ? LIMIT 1',
+      [task.company_id, userIdNum, assignedToNum]
+    );
+    if (legacyRows.length > 0) return true;
+  }
+
+  // Multi-assignee table
+  const [assigneeRows] = await pool.execute(
+    'SELECT id FROM task_assignees WHERE task_id = ? AND user_id = ? LIMIT 1',
+    [taskId, userIdNum]
+  );
+  return assigneeRows.length > 0;
+};
+
 const create = async (req, res) => {
   try {
     const { title, description, due_date, priority, assigned_to, reminder_datetime, related_to_type, related_to_id, category, project_id, code } = req.body;
@@ -223,6 +339,24 @@ const create = async (req, res) => {
       return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_b98598be') : "Title, Due Date, and Assigned User are required" });
     }
 
+    // Handle assigned_to if it comes as an array [id1, id2] or "[id1, id2]"
+    let finalAssignedTo = assigned_to;
+    if (Array.isArray(assigned_to)) {
+      finalAssignedTo = assigned_to[0];
+    } else if (typeof assigned_to === 'string' && assigned_to.startsWith('[') && assigned_to.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(assigned_to);
+        if (Array.isArray(parsed)) finalAssignedTo = parsed[0];
+      } catch (e) {
+        // Fallback to parsing as integer if JSON parse fails
+        finalAssignedTo = parseInt(assigned_to.replace(/[\[\]]/g, ''), 10);
+      }
+    }
+    
+    // Convert to null if empty or invalid
+    finalAssignedTo = (finalAssignedTo !== undefined && finalAssignedTo !== null && finalAssignedTo !== '') ? finalAssignedTo : null;
+
+
     // Generate code if not provided
     const taskCode = code || await generateTaskCode(companyId);
 
@@ -233,10 +367,10 @@ const create = async (req, res) => {
         companyId,
         title,
         description || null,
-        due_date,
+        due_date || null,
         priority || 'Medium',
-        assigned_to,
-        reminder_datetime || null,
+        finalAssignedTo,
+        (reminder_datetime && reminder_datetime !== '') ? reminder_datetime : null,
         related_to_type || null,
         related_to_id || null,
         category || 'CRM',
@@ -260,14 +394,18 @@ const update = async (req, res) => {
     const userId = req.user?.id;
     const userRole = req.user?.role || 'EMPLOYEE';
 
-    // Security Check: Only assigned user or admin can update
+    // Security Check: Task existence
     const [existing] = await pool.execute('SELECT assigned_to, created_by FROM tasks WHERE id = ?', [id]);
     if (existing.length === 0) return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_e0214512') : "Task not found" });
 
-    const task = existing[0];
-    if (userRole !== 'ADMIN' && userRole !== 'SUPERADMIN' && task.assigned_to !== userId && task.created_by !== userId) {
-      return res.status(403).json({ success: false, error: req.t ? req.t('api_msg_4e77f18d') : "Permission denied. You can only update your own tasks." });
+    const canMutate = await canUserMutateTask({ taskId: id, userId, userRole });
+    if (!canMutate) {
+      return res.status(403).json({
+        success: false,
+        error: req.t ? req.t('api_msg_4e77f18d') : 'Permission denied. You can only update your own tasks.'
+      });
     }
+
 
     const allowed = ['title', 'description', 'due_date', 'priority', 'status', 'assigned_to', 'reminder_datetime', 'related_to_type', 'related_to_id', 'category', 'project_id', 'code'];
     const fields = [];
@@ -275,8 +413,30 @@ const update = async (req, res) => {
 
     for (const key of Object.keys(updates)) {
       if (allowed.includes(key) && updates[key] !== undefined) {
+        let value = updates[key];
+        
+        // Handle assigned_to array if updating
+        if (key === 'assigned_to') {
+          if (Array.isArray(value)) {
+            value = value[0];
+          } else if (typeof value === 'string' && value.startsWith('[') && value.endsWith(']')) {
+            try {
+              const parsed = JSON.parse(value);
+              if (Array.isArray(parsed)) value = parsed[0];
+            } catch (e) {
+              value = parseInt(value.replace(/[\[\]]/g, ''), 10);
+            }
+          }
+          value = (value !== '' && value !== null) ? value : null;
+        }
+
+        // Handle empty strings for date fields
+        if ((key === 'reminder_datetime' || key === 'due_date') && value === '') {
+          value = null;
+        }
+
         fields.push(`${key} = ?`);
-        values.push(updates[key]);
+        values.push(value);
       }
     }
 
@@ -297,13 +457,17 @@ const remove = async (req, res) => {
     const userId = req.user?.id;
     const userRole = req.user?.role || 'EMPLOYEE';
 
-    // Security Check: Only assigned user or admin can delete
+    // Security Check: Task existence
     const [existing] = await pool.execute('SELECT assigned_to, created_by FROM tasks WHERE id = ?', [id]);
     if (existing.length === 0) return res.status(404).json({ success: false, error: req.t ? req.t('api_msg_e0214512') : "Task not found" });
 
-    const task = existing[0];
-    if (userRole !== 'ADMIN' && userRole !== 'SUPERADMIN' && task.assigned_to !== userId && task.created_by !== userId) {
-      return res.status(403).json({ success: false, error: req.t ? req.t('api_msg_9f4e7f3f') : "Permission denied. You can only delete your own tasks." });
+
+    const canMutate = await canUserMutateTask({ taskId: id, userId, userRole });
+    if (!canMutate) {
+      return res.status(403).json({
+        success: false,
+        error: req.t ? req.t('api_msg_9f4e7f3f') : 'Permission denied. You can only delete your own tasks.'
+      });
     }
 
     await pool.execute('UPDATE tasks SET is_deleted = 1 WHERE id = ?', [id]);

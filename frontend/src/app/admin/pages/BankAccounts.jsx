@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import AddButton from '../../../components/ui/AddButton'
 import DataTable from '../../../components/ui/DataTable'
 import RightSideModal from '../../../components/ui/RightSideModal'
+import { useSettings } from '../../../context/SettingsContext.jsx'
 import Badge from '../../../components/ui/Badge'
 import Input from '../../../components/ui/Input'
 import Button from '../../../components/ui/Button'
@@ -21,8 +22,8 @@ import {
   IoCard as IoCardIcon,
   IoInformationCircle
 } from 'react-icons/io5'
-
 const BankAccounts = () => {
+  const { formatCurrency, settings } = useSettings()
   // Get company_id from localStorage
   const companyId = parseInt(localStorage.getItem('companyId') || 1, 10)
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
@@ -42,7 +43,7 @@ const BankAccounts = () => {
     routingNumber: '',
     swiftCode: '',
     iban: '',
-    currency: 'USD',
+    currency: 'EUR',
     openingBalance: '',
     currentBalance: '',
     address: '',
@@ -170,7 +171,7 @@ const BankAccounts = () => {
       routingNumber: '',
       swiftCode: '',
       iban: '',
-      currency: 'USD',
+      currency: settings?.default_currency || 'EUR',
       openingBalance: '',
       currentBalance: '',
       address: '',
@@ -236,7 +237,7 @@ const BankAccounts = () => {
       key: 'currency',
       label: 'Currency',
       render: (value) => (
-        <span className="text-primary-text">{value || 'USD'}</span>
+        <span className="text-primary-text">{value || settings?.default_currency || 'EUR'}</span>
       ),
     },
     {
@@ -244,7 +245,7 @@ const BankAccounts = () => {
       label: 'Balance',
       render: (value, row) => (
         <span className="font-semibold text-primary-text">
-          {row.currency || 'USD'} {parseFloat(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          {formatCurrency(value || 0, row.currency)}
         </span>
       ),
     },
@@ -283,7 +284,7 @@ const BankAccounts = () => {
                 routingNumber: row.routing_number || '',
                 swiftCode: row.swift_code || '',
                 iban: row.iban || '',
-                currency: row.currency || 'USD',
+                currency: row.currency || settings?.default_currency || 'EUR',
                 openingBalance: row.opening_balance || '',
                 currentBalance: row.current_balance || '',
                 address: row.address || '',
@@ -508,7 +509,7 @@ const BankAccounts = () => {
                   placeholder="Enter IBAN"
                 />
               </div>
-              <div>
+              <div className="hidden">
                 <label className="block text-sm font-medium text-primary-text mb-2">
                   Currency
                 </label>
@@ -517,11 +518,7 @@ const BankAccounts = () => {
                   onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
                   className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
                 >
-                  <option value="USD">USD ($)</option>
-                  <option value="INR">INR (€)</option>
-                  <option value="AED">AED (د.إ)</option>
                   <option value="EUR">EUR (€)</option>
-                  <option value="GBP">GBP (£)</option>
                 </select>
               </div>
               <div>
@@ -719,7 +716,7 @@ const BankAccounts = () => {
             <div>
               <label className="text-sm font-medium text-secondary-text">Current Balance</label>
               <p className="text-primary-text mt-1 font-semibold">
-                {selectedBankAccount.currency || 'USD'} {parseFloat(selectedBankAccount.current_balance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {formatCurrency(selectedBankAccount.current_balance || 0, selectedBankAccount.currency)}
               </p>
             </div>
             <div>

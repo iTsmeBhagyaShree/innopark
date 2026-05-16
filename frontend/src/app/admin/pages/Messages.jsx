@@ -143,7 +143,7 @@ const Messages = () => {
       setSending(true)
       const response = await messagesAPI.create({
         to_user_id: selectedConversation.other_user_id,
-        subject: 'Chat Message',
+        subject: t('messages.default_subject'),
         message: newMessageText.trim(),
         user_id: userId,
         company_id: companyId

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../context/AuthContext'
 import { useTheme } from '../../../context/ThemeContext'
+import { useLanguage } from '../../../context/LanguageContext'
 import { projectTemplatesAPI } from '../../../api'
 import AddButton from '../../../components/ui/AddButton'
 import Badge from '../../../components/ui/Badge'
@@ -10,6 +11,7 @@ import Card from '../../../components/ui/Card'
 import { IoCreate, IoTrash, IoEye, IoFolder, IoAdd, IoCheckbox, IoSquareOutline, IoSearch } from 'react-icons/io5'
 
 const ProjectTemplates = () => {
+  const { t } = useLanguage()
   const navigate = useNavigate()
   const { user } = useAuth()
   const { theme } = useTheme()
@@ -56,30 +58,29 @@ const ProjectTemplates = () => {
   }
 
   const handleDelete = async (template) => {
-    if (window.confirm(`Delete template "${template.name}"?`)) {
+    if (window.confirm(t('project_templates_ui.confirm_delete').replace('{{name}}', template.name))) {
       try {
         const response = await projectTemplatesAPI.delete(template.id, { company_id: companyId })
         if (response.data.success) {
-          alert('Template deleted successfully!')
+          alert(t('project_templates_ui.delete_success'))
           await fetchTemplates()
         } else {
-          alert(response.data.error || 'Failed to delete template')
+          alert(response.data.error || t('project_templates_ui.delete_failed'))
         }
       } catch (error) {
         console.error('Error deleting template:', error)
-        alert(error.response?.data?.error || 'Failed to delete template')
+        alert(error.response?.data?.error || t('project_templates_ui.delete_failed'))
       }
     }
   }
 
-  // Filter templates
-  const filteredTemplates = templates.filter(t => {
+  const filteredTemplates = templates.filter((tpl) => {
     if (!searchQuery) return true
     const query = searchQuery.toLowerCase()
     return (
-      t.name?.toLowerCase().includes(query) ||
-      t.category?.toLowerCase().includes(query) ||
-      t.summary?.toLowerCase().includes(query)
+      tpl.name?.toLowerCase().includes(query) ||
+      tpl.category?.toLowerCase().includes(query) ||
+      tpl.summary?.toLowerCase().includes(query)
     )
   })
 
@@ -87,10 +88,10 @@ const ProjectTemplates = () => {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-primary-text">Project Templates</h1>
-          <p className="text-sm sm:text-base text-secondary-text mt-1">Create and manage reusable project templates</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-primary-text">{t('project_templates_ui.list_title')}</h1>
+          <p className="text-sm sm:text-base text-secondary-text mt-1">{t('project_templates_ui.list_subtitle')}</p>
         </div>
-        <AddButton onClick={handleAdd} label="Add Template" />
+        <AddButton onClick={handleAdd} label={t('project_templates_ui.add_template')} />
       </div>
 
       {/* Search */}
@@ -101,7 +102,7 @@ const ProjectTemplates = () => {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search templates..."
+            placeholder={t('project_templates_ui.search_placeholder')}
             className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:border-transparent"
             style={{ '--tw-ring-color': primaryColor }}
           />
@@ -113,13 +114,13 @@ const ProjectTemplates = () => {
         {loading ? (
           <div className="col-span-full text-center py-12">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-t-transparent" style={{ borderColor: `${primaryColor} transparent ${primaryColor} ${primaryColor}` }}></div>
-            <p className="text-secondary-text mt-4">Loading templates...</p>
+            <p className="text-secondary-text mt-4">{t('project_templates_ui.loading')}</p>
           </div>
         ) : filteredTemplates.length === 0 ? (
           <div className="col-span-full text-center py-12">
             <IoFolder size={48} className="mx-auto mb-3 text-gray-300" />
             <p className="text-secondary-text">
-              {searchQuery ? 'No templates match your search' : 'No templates found. Create your first project template!'}
+              {searchQuery ? t('project_templates_ui.empty_search') : t('project_templates_ui.empty_all')}
             </p>
             {!searchQuery && (
               <button
@@ -128,7 +129,7 @@ const ProjectTemplates = () => {
                 style={{ backgroundColor: primaryColor }}
               >
                 <IoAdd size={18} />
-                Create Template
+                {t('project_templates_ui.create_template')}
               </button>
             )}
           </div>
@@ -167,12 +168,12 @@ const ProjectTemplates = () => {
                   {template.allow_manual_time_logs ? (
                     <span className="flex items-center gap-1">
                       <IoCheckbox size={16} style={{ color: primaryColor }} />
-                      Time logs
+                      {t('project_templates_ui.time_logs_on')}
                     </span>
                   ) : (
                     <span className="flex items-center gap-1">
                       <IoSquareOutline size={16} />
-                      No time logs
+                      {t('project_templates_ui.time_logs_off')}
                     </span>
                   )}
                 </div>
@@ -184,7 +185,7 @@ const ProjectTemplates = () => {
                     }}
                     className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                     style={{ color: primaryColor }}
-                    title="View"
+                    title={t('project_templates_ui.view_title')}
                   >
                     <IoEye size={18} />
                   </button>
@@ -194,7 +195,7 @@ const ProjectTemplates = () => {
                       handleEdit(template)
                     }}
                     className="p-2 text-amber-500 hover:bg-amber-50 rounded-lg transition-colors"
-                    title="Edit"
+                    title={t('project_templates_ui.edit_title')}
                   >
                     <IoCreate size={18} />
                   </button>
@@ -204,7 +205,7 @@ const ProjectTemplates = () => {
                       handleDelete(template)
                     }}
                     className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                    title="Delete"
+                    title={t('project_templates_ui.delete_title')}
                   >
                     <IoTrash size={18} />
                   </button>

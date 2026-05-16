@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { contractsAPI, projectsAPI, companiesAPI, itemsAPI } from '../../../api'
+import { contractsAPI, projectsAPI, companiesAPI, itemsAPI, contactsAPI } from '../../../api'
 import baseUrl from '../../../api/baseUrl'
 import { useSettings } from '../../../context/SettingsContext'
+import { useLanguage } from '../../../context/LanguageContext.jsx'
 import Card from '../../../components/ui/Card'
 import Button from '../../../components/ui/Button'
 import Input from '../../../components/ui/Input'
@@ -43,6 +44,21 @@ const ContractDetail = () => {
   const { id } = useParams()
   const navigate = useNavigate()
   const { formatDate, formatCurrency } = useSettings()
+  const { t, language } = useLanguage()
+  const localeTag = language === 'de' ? 'de-DE' : 'en-GB'
+
+  const translateContractStatus = (status) => {
+    const s = (status || 'draft').toLowerCase()
+    const keyMap = {
+      draft: 'status_draft',
+      sent: 'status_sent',
+      accepted: 'status_accepted',
+      declined: 'status_declined',
+      expired: 'status_expired'
+    }
+    const k = keyMap[s]
+    return k ? t(`contract_detail_page.${k}`) : status
+  }
 
   // Get company_id from localStorage
   const [companyId] = useState(() => {
@@ -83,8 +99,13 @@ const ContractDetail = () => {
   const [discountData, setDiscountData] = useState({ discount: 0, discount_type: '%' })
   const [newTask, setNewTask] = useState({ title: '', due_date: '' })
 
-  // Status options
-  const statusOptions = ['Draft', 'Sent', 'Accepted', 'Declined', 'Expired']
+  const statusOptions = [
+    { value: 'draft', labelKey: 'status_draft' },
+    { value: 'sent', labelKey: 'status_sent' },
+    { value: 'accepted', labelKey: 'status_accepted' },
+    { value: 'declined', labelKey: 'status_declined' },
+    { value: 'expired', labelKey: 'status_expired' }
+  ]
 
   useEffect(() => {
     fetchContract()
@@ -165,7 +186,7 @@ const ContractDetail = () => {
         // Fetch client details
         if (data.client_id) {
           try {
-            const clientResponse = await clientsAPI.getById(data.client_id, { company_id: companyId })
+            const clientResponse = await contactsAPI.getMasterById(data.client_id, { company_id: companyId })
             if (clientResponse.data && clientResponse.data.success) {
               setClient(clientResponse.data.data)
             }
@@ -185,7 +206,7 @@ const ContractDetail = () => {
     if (!dateString || dateString === '--') return '--'
     try {
       const date = new Date(dateString)
-      return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      return date.toLocaleDateString(localeTag, { day: '2-digit', month: '2-digit', year: 'numeric' })
     } catch {
       return dateString
     }
@@ -199,7 +220,7 @@ const ContractDetail = () => {
     if (currencyCode.length !== 3) {
       currencyCode = 'USD'
     }
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat(localeTag, {
       style: 'currency',
       currency: currencyCode,
       minimumFractionDigits: 2,
@@ -566,11 +587,11 @@ const ContractDetail = () => {
 
   const handleSendEmail = async () => {
     try {
-      alert('Email sent successfully!')
+      alert(t('contract_detail_page.email_sent'))
       setIsSendEmailModalOpen(false)
     } catch (error) {
       console.error('Error sending email:', error)
-      alert('Failed to send email')
+      alert(t('contract_detail_page.email_failed'))
     }
   }
 
@@ -583,7 +604,7 @@ const ContractDetail = () => {
       }
     } catch (error) {
       console.error('Error updating status:', error)
-      alert('Failed to update status')
+      alert(t('contract_detail_page.status_failed'))
     }
   }
 
@@ -606,11 +627,11 @@ const ContractDetail = () => {
         setIsAddItemModalOpen(false)
         await fetchContract()
       } else {
-        alert(response.data.error || 'Failed to add item')
+        alert(response.data.error || t('contract_detail_page.add_item_failed'))
       }
     } catch (error) {
       console.error('Error adding item:', error)
-      alert(error.response?.data?.error || 'Failed to add item')
+      alert(error.response?.data?.error || t('contract_detail_page.add_item_failed'))
     }
   }
 
@@ -646,16 +667,16 @@ const ContractDetail = () => {
         setEditingItem(null)
         await fetchContract()
       } else {
-        alert(response.data.error || 'Failed to update item')
+        alert(response.data.error || t('contract_detail_page.update_item_failed'))
       }
     } catch (error) {
       console.error('Error updating item:', error)
-      alert(error.response?.data?.error || 'Failed to update item')
+      alert(error.response?.data?.error || t('contract_detail_page.update_item_failed'))
     }
   }
 
   const handleDeleteItem = async (index) => {
-    if (!window.confirm('Are you sure you want to delete this item?')) return
+    if (!window.confirm(t('contract_detail_page.delete_item_confirm'))) return
     try {
       const updatedItems = (contract.items || []).filter((_, idx) => idx !== index)
       const response = await contractsAPI.update(id, { items: updatedItems }, { company_id: companyId })
@@ -664,7 +685,7 @@ const ContractDetail = () => {
       }
     } catch (error) {
       console.error('Error deleting item:', error)
-      alert('Failed to delete item')
+      alert(t('contract_detail_page.delete_item_failed'))
     }
   }
 
@@ -685,11 +706,11 @@ const ContractDetail = () => {
         setIsEditDiscountModalOpen(false)
         await fetchContract()
       } else {
-        alert(response.data.error || 'Failed to update discount')
+        alert(response.data.error || t('contract_detail_page.discount_update_failed'))
       }
     } catch (error) {
       console.error('Error updating discount:', error)
-      alert(error.response?.data?.error || 'Failed to update discount')
+      alert(error.response?.data?.error || t('contract_detail_page.discount_update_failed'))
     }
   }
 
@@ -701,14 +722,14 @@ const ContractDetail = () => {
         contract_content: editorContent,
       }, { company_id: companyId })
       if (response.data.success) {
-        alert('Contract saved successfully!')
+        alert(t('contract_detail_page.saved'))
         await fetchContract()
       } else {
-        alert(response.data.error || 'Failed to save contract')
+        alert(response.data.error || t('contract_detail_page.save_failed'))
       }
     } catch (error) {
       console.error('Error saving contract:', error)
-      alert(error.response?.data?.error || 'Failed to save contract')
+      alert(error.response?.data?.error || t('contract_detail_page.save_failed'))
     }
   }
 
@@ -730,13 +751,13 @@ const ContractDetail = () => {
   }
 
   const handleDeleteTask = (taskId) => {
-    setTasks(tasks.filter(t => t.id !== taskId))
+    setTasks(tasks.filter((task) => task.id !== taskId))
   }
 
   const handleCopyPublicUrl = () => {
     const publicUrl = `${window.location.origin}/view/contract/${id}`
     navigator.clipboard.writeText(publicUrl)
-    alert('Public contract URL copied to clipboard!')
+    alert(t('contract_detail_page.url_copied'))
   }
 
   // Filter catalog items
@@ -754,7 +775,7 @@ const ContractDetail = () => {
       <div className="flex items-center justify-center h-screen bg-gray-100">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading contract details...</p>
+          <p className="text-gray-600">{t('contract_detail_page.loading')}</p>
         </div>
       </div>
     )
@@ -765,11 +786,11 @@ const ContractDetail = () => {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-100">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-red-600 mb-4">Contract Not Found</h2>
-          <p className="text-gray-600 mb-4">The contract you're looking for doesn't exist or has been deleted.</p>
+          <h2 className="text-2xl font-bold text-red-600 mb-4">{t('contract_detail_page.not_found_title')}</h2>
+          <p className="text-gray-600 mb-4">{t('contract_detail_page.not_found_body')}</p>
           <Button onClick={() => navigate('/app/admin/contracts')}>
             <IoArrowBack className="mr-2" />
-            Back to Contracts
+            {t('contract_detail_page.back_to_list')}
           </Button>
         </div>
       </div>
@@ -795,7 +816,7 @@ const ContractDetail = () => {
               </span>
             </div>
             <span className={`px-3 py-1 rounded-full text-sm font-medium ${isExpired() ? statusColors.expired : (statusColors[contract.status] || statusColors.draft)}`}>
-              {isExpired() ? 'Expired' : contract.status.charAt(0).toUpperCase() + contract.status.slice(1)}
+              {isExpired() ? t('contract_detail_page.status_expired') : translateContractStatus(contract.status)}
             </span>
             <div className="flex items-center gap-1 text-gray-500 text-sm">
               <IoMail size={16} />
@@ -809,14 +830,14 @@ const ContractDetail = () => {
               className="flex items-center gap-2"
             >
               <IoOpenOutline size={16} />
-              Contract URL
+              {t('contract_detail_page.contract_url')}
             </Button>
             <Button
               onClick={() => setIsSendEmailModalOpen(true)}
               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
             >
               <IoMailOutline size={16} />
-              Send to client
+              {t('contract_detail_page.send_to_client')}
             </Button>
           </div>
         </div>
@@ -834,7 +855,7 @@ const ContractDetail = () => {
             >
               <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
                 <IoList size={20} />
-                Contract Items
+                {t('contract_detail_page.contract_items_heading')}
               </h3>
               {isItemsExpanded ? <IoChevronDown size={20} /> : <IoChevronForward size={20} />}
             </div>
@@ -846,10 +867,10 @@ const ContractDetail = () => {
                   <table className="w-full">
                     <thead className="bg-gray-100 border-b border-gray-200">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase w-2/5">Item</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase w-1/6">Quantity</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase w-1/6">Rate</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase w-1/6">Total</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase w-2/5">{t('contract_detail_page.table_item')}</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase w-1/6">{t('contract_detail_page.table_qty')}</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase w-1/6">{t('contract_detail_page.table_rate')}</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase w-1/6">{t('contract_detail_page.table_amount')}</th>
                         <th className="px-4 py-3 text-center w-20"></th>
                       </tr>
                     </thead>
@@ -859,7 +880,7 @@ const ContractDetail = () => {
                           <tr key={idx} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors`}>
                             <td className="px-4 py-3">
                               <div>
-                                <p className="text-sm font-medium text-gray-800">{item.item_name || 'Item'}</p>
+                                <p className="text-sm font-medium text-gray-800">{item.item_name || t('contract_detail_page.table_item')}</p>
                                 {item.description && (
                                   <p className="text-xs text-gray-500 mt-1">{item.description}</p>
                                 )}
@@ -879,14 +900,14 @@ const ContractDetail = () => {
                                 <button
                                   onClick={() => handleEditItem(idx)}
                                   className="p-1.5 text-blue-600 hover:bg-blue-100 rounded transition-colors"
-                                  title="Edit"
+                                  title={t('contract_detail_page.edit_tooltip')}
                                 >
                                   <IoCreate size={16} />
                                 </button>
                                 <button
                                   onClick={() => handleDeleteItem(idx)}
                                   className="p-1.5 text-red-600 hover:bg-red-100 rounded transition-colors"
-                                  title="Delete"
+                                  title={t('contract_detail_page.delete_tooltip')}
                                 >
                                   <IoClose size={16} />
                                 </button>
@@ -897,7 +918,7 @@ const ContractDetail = () => {
                       ) : (
                         <tr>
                           <td colSpan={5} className="px-4 py-8 text-center text-gray-400 italic">
-                            No items added yet
+                            {t('contract_detail_page.no_line_items')}
                           </td>
                         </tr>
                       )}
@@ -914,7 +935,7 @@ const ContractDetail = () => {
                     className="flex items-center gap-2"
                   >
                     <IoAdd size={16} />
-                    Add item
+                    {t('contract_detail_page.add_item_button')}
                   </Button>
                 </div>
               </>
@@ -925,16 +946,17 @@ const ContractDetail = () => {
           <Card className="p-4 mb-6">
             <div className="space-y-3">
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Sub Total:</span>
+                <span className="text-gray-500">{t('contract_detail_page.subtotal_label')}:</span>
                 <span className="font-semibold text-gray-800">{localFormatCurrency(calculateSubTotal())}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500 flex items-center gap-2">
-                  Discount:
+                  {t('contract_detail_page.discount_label_short')}:
                   <button
+                    type="button"
                     onClick={() => setIsEditDiscountModalOpen(true)}
                     className="text-blue-500 hover:text-blue-700 transition-colors"
-                    title="Edit Discount"
+                    title={t('contract_detail_page.edit_discount_title')}
                   >
                     <IoCreate size={14} />
                   </button>
@@ -960,7 +982,7 @@ const ContractDetail = () => {
                 </div>
               )}
               <div className="flex justify-between pt-3 border-t border-gray-300">
-                <span className="text-lg font-bold text-gray-800">Total:</span>
+                <span className="text-lg font-bold text-gray-800">{t('contract_detail_page.total')}:</span>
                 <span className="text-lg font-bold text-green-600">{localFormatCurrency(calculateTotal())}</span>
               </div>
             </div>
@@ -968,11 +990,11 @@ const ContractDetail = () => {
 
           {/* Rich Text Editor Section */}
           <Card className="p-4">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Contract Terms</h3>
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">{t('contract_detail_page.contract_terms')}</h3>
             <RichTextEditor
               value={editorContent}
               onChange={setEditorContent}
-              placeholder="Write your contract terms here..."
+              placeholder={t('contract_detail_page.terms_placeholder')}
             />
 
             {/* Action Buttons */}
@@ -984,7 +1006,7 @@ const ContractDetail = () => {
                 className="flex items-center gap-2"
               >
                 <IoSettings size={16} />
-                Change template
+                {t('contract_detail_page.change_template')}
               </Button>
               <Button
                 variant="primary"
@@ -993,7 +1015,7 @@ const ContractDetail = () => {
                 className="flex items-center gap-2"
               >
                 <IoCheckmark size={16} />
-                Save
+                {t('contract_detail_page.save')}
               </Button>
               <Button
                 variant="primary"
@@ -1002,7 +1024,7 @@ const ContractDetail = () => {
                 className="flex items-center gap-2"
               >
                 <IoEye size={16} />
-                Save & show
+                {t('contract_detail_page.save_and_show')}
               </Button>
             </div>
           </Card>
@@ -1015,7 +1037,7 @@ const ContractDetail = () => {
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-gray-800 flex items-center gap-2">
                 <IoDocumentText className="text-gray-500" size={18} />
-                Contract info
+                {t('contract_detail_page.contract_info_heading')}
               </h3>
               <button className="p-1 hover:bg-gray-100 rounded transition-colors">
                 <IoEllipsisVertical size={16} className="text-gray-400" />
@@ -1040,13 +1062,13 @@ const ContractDetail = () => {
               )}
               <div className="text-sm text-gray-600">
                 <p className="flex justify-between py-1">
-                  <span>Contract date:</span>
+                  <span>{t('contract_detail_page.contract_date_row')}:</span>
                   <span className="font-medium">{localFormatDate(contract.contract_date)}</span>
                 </p>
                 <p className="flex justify-between py-1">
-                  <span>Valid until:</span>
+                  <span>{t('contract_detail_page.valid_until')}:</span>
                   <span className={`font-medium ${isExpired() ? 'text-red-600' : ''}`}>
-                    {localFormatDate(contract.valid_until)} {isExpired() && '(Expired)'}
+                    {localFormatDate(contract.valid_until)} {isExpired() && t('contract_detail_page.expired_suffix')}
                   </span>
                 </p>
               </div>
@@ -1063,7 +1085,7 @@ const ContractDetail = () => {
                 className="flex items-center justify-center gap-2 hover:bg-gray-100"
               >
                 <IoEye size={16} />
-                Preview
+                {t('contract_detail_page.preview')}
               </Button>
               <Button
                 variant="outline"
@@ -1072,7 +1094,7 @@ const ContractDetail = () => {
                 className="flex items-center justify-center gap-2 hover:bg-gray-100"
               >
                 <IoPrint size={16} />
-                Print
+                {t('contract_detail_page.print')}
               </Button>
               <Button
                 variant="outline"
@@ -1081,7 +1103,7 @@ const ContractDetail = () => {
                 className="flex items-center justify-center gap-2 hover:bg-gray-100"
               >
                 <IoDocumentText size={16} />
-                View PDF
+                {t('contract_detail_page.view_pdf_button')}
               </Button>
               <Button
                 variant="outline"
@@ -1090,7 +1112,7 @@ const ContractDetail = () => {
                 className="flex items-center justify-center gap-2 hover:bg-gray-100"
               >
                 <IoDownload size={16} />
-                Download PDF
+                {t('contract_detail_page.download_pdf_button')}
               </Button>
             </div>
           </Card>
@@ -1099,12 +1121,12 @@ const ContractDetail = () => {
           <Card className="p-4">
             <div className="flex items-center gap-2 mb-3">
               <IoDocumentText size={16} className="text-gray-500" />
-              <h3 className="font-semibold text-gray-800">Note</h3>
+              <h3 className="font-semibold text-gray-800">{t('contract_detail_page.note_sidebar_title')}</h3>
             </div>
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Add internal notes here..."
+              placeholder={t('contract_detail_page.note_placeholder_internal')}
               rows={3}
               className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
             />
@@ -1114,7 +1136,7 @@ const ContractDetail = () => {
           <Card className="p-4">
             <div className="flex items-center gap-2 mb-3">
               <IoPerson size={16} className="text-gray-500" />
-              <h3 className="font-semibold text-gray-800">Signer info (Client)</h3>
+              <h3 className="font-semibold text-gray-800">{t('contract_detail_page.signer_heading')}</h3>
             </div>
             <div className="space-y-2">
               {contract.signer_name ? (
@@ -1133,14 +1155,14 @@ const ContractDetail = () => {
                   {contract.signed_at ? (
                     <div className="flex items-center gap-2 text-green-600 text-sm mt-2">
                       <IoCheckmarkCircle size={16} />
-                      <span>Signed on {localFormatDate(contract.signed_at)}</span>
+                      <span>{t('contract_detail_page.signed_on_prefix')} {localFormatDate(contract.signed_at)}</span>
                     </div>
                   ) : (
-                    <p className="text-sm text-yellow-600 mt-2">Awaiting signature</p>
+                    <p className="text-sm text-yellow-600 mt-2">{t('contract_detail_page.awaiting_signature')}</p>
                   )}
                 </>
               ) : (
-                <p className="text-sm text-gray-400 italic">No signer assigned yet</p>
+                <p className="text-sm text-gray-400 italic">{t('contract_detail_page.no_signer_yet')}</p>
               )}
             </div>
           </Card>
@@ -1150,7 +1172,7 @@ const ContractDetail = () => {
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <IoCheckmarkCircle size={16} className="text-gray-500" />
-                <h3 className="font-semibold text-gray-800">Tasks</h3>
+                <h3 className="font-semibold text-gray-800">{t('contract_detail_page.tasks_heading')}</h3>
               </div>
               <Button
                 variant="primary"
@@ -1159,7 +1181,7 @@ const ContractDetail = () => {
                 className="flex items-center gap-1 text-xs px-2 py-1"
               >
                 <IoAdd size={14} />
-                Add task
+                {t('contract_detail_page.add_task_button')}
               </Button>
             </div>
             {tasks.length > 0 ? (
@@ -1178,7 +1200,7 @@ const ContractDetail = () => {
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-gray-400 italic">No tasks yet</p>
+              <p className="text-xs text-gray-400 italic">{t('contract_detail_page.no_tasks_yet')}</p>
             )}
           </Card>
         </div>
@@ -1190,7 +1212,7 @@ const ContractDetail = () => {
       <Modal
         isOpen={isAddItemModalOpen}
         onClose={() => setIsAddItemModalOpen(false)}
-        title="Add Items to Contract"
+        title={t('contract_detail_page.add_items_modal_title')}
         size="xl"
       >
         <div className="space-y-4">
@@ -1198,7 +1220,7 @@ const ContractDetail = () => {
             <div className="relative flex-1">
               <input
                 type="text"
-                placeholder="Search items..."
+                placeholder={t('contract_detail_page.search_items_placeholder')}
                 value={itemSearchQuery}
                 onChange={(e) => setItemSearchQuery(e.target.value)}
                 className="w-full pl-4 pr-10 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
@@ -1209,7 +1231,7 @@ const ContractDetail = () => {
               onChange={(e) => setItemCategoryFilter(e.target.value)}
               className="px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
             >
-              <option value="">All Categories</option>
+              <option value="">{t('contract_detail_page.all_categories')}</option>
               {[...new Set(catalogItems.map(item => item.category).filter(Boolean))].map(cat => (
                 <option key={cat} value={cat}>{cat}</option>
               ))}
@@ -1218,7 +1240,7 @@ const ContractDetail = () => {
 
           {filteredCatalogItems.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              <p>No items found. Add items in the Items section first.</p>
+              <p>{t('contract_detail_page.no_catalog_items')}</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
@@ -1240,7 +1262,7 @@ const ContractDetail = () => {
                       </p>
                       <div className="flex items-center gap-1 text-xs text-green-600 mt-1">
                         <IoCheckmark size={12} />
-                        <span>Click to add</span>
+                        <span>{t('contract_detail_page.click_to_add')}</span>
                       </div>
                     </div>
                   </div>
@@ -1251,7 +1273,7 @@ const ContractDetail = () => {
 
           <div className="flex justify-end pt-4 border-t border-gray-200">
             <Button variant="outline" onClick={() => setIsAddItemModalOpen(false)}>
-              Close
+              {t('contract_detail_page.close')}
             </Button>
           </div>
         </div>
@@ -1261,26 +1283,26 @@ const ContractDetail = () => {
       <Modal
         isOpen={isEditItemModalOpen}
         onClose={() => { setIsEditItemModalOpen(false); setEditingItem(null) }}
-        title="Edit Item"
+        title={t('contract_detail_page.edit_item_modal_title')}
         size="md"
       >
         {editingItem && (
           <div className="space-y-4">
             <Input
-              label="Item Name"
+              label={t('contract_detail_page.item_name_label')}
               value={editingItem.item_name || ''}
               onChange={(e) => setEditingItem({ ...editingItem, item_name: e.target.value })}
-              placeholder="Item name"
+              placeholder={t('contract_detail_page.item_name_label')}
             />
             <Input
-              label="Description"
+              label={t('contract_detail_page.description_label')}
               value={editingItem.description || ''}
               onChange={(e) => setEditingItem({ ...editingItem, description: e.target.value })}
-              placeholder="Description"
+              placeholder={t('contract_detail_page.description_label')}
             />
             <div className="grid grid-cols-3 gap-3">
               <Input
-                label="Quantity"
+                label={t('contract_detail_page.quantity_label')}
                 type="number"
                 value={editingItem.quantity || 1}
                 onChange={(e) => {
@@ -1291,14 +1313,14 @@ const ContractDetail = () => {
                 min="0"
               />
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Unit</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">{t('contract_detail_page.unit_label')}</label>
                 <Input
                   value={editingItem.unit || 'PC'}
                   onChange={(e) => setEditingItem({ ...editingItem, unit: e.target.value })}
                 />
               </div>
               <Input
-                label="Unit Price"
+                label={t('contract_detail_page.unit_price_label')}
                 type="number"
                 value={editingItem.unit_price || 0}
                 onChange={(e) => {
@@ -1311,15 +1333,15 @@ const ContractDetail = () => {
               />
             </div>
             <div className="text-right">
-              <span className="text-sm text-gray-500">Amount: </span>
+              <span className="text-sm text-gray-500">{t('contract_detail_page.amount_label')}: </span>
               <span className="font-semibold text-gray-800">{localFormatCurrency(editingItem.amount || 0)}</span>
             </div>
             <div className="flex justify-end gap-2 pt-4 border-t border-gray-200">
               <Button variant="outline" onClick={() => { setIsEditItemModalOpen(false); setEditingItem(null) }}>
-                Cancel
+                {t('contract_detail_page.cancel')}
               </Button>
               <Button variant="primary" onClick={handleUpdateItem}>
-                Update Item
+                {t('contract_detail_page.update_item')}
               </Button>
             </div>
           </div>
@@ -1330,13 +1352,13 @@ const ContractDetail = () => {
       <Modal
         isOpen={isEditDiscountModalOpen}
         onClose={() => setIsEditDiscountModalOpen(false)}
-        title="Edit Discount"
+        title={t('contract_detail_page.edit_discount_title')}
         size="md"
       >
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
-              label="Discount"
+              label={t('contract_detail_page.discount_label')}
               type="number"
               value={discountData.discount || 0}
               onChange={(e) => setDiscountData({ ...discountData, discount: parseFloat(e.target.value) || 0 })}
@@ -1344,20 +1366,20 @@ const ContractDetail = () => {
               step="0.01"
             />
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">{t('contract_detail_page.type_label')}</label>
               <select
                 value={discountData.discount_type}
                 onChange={(e) => setDiscountData({ ...discountData, discount_type: e.target.value })}
                 className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               >
-                <option value="%">Percentage (%)</option>
-                <option value="fixed">Fixed Amount</option>
+                <option value="%">{t('contract_detail_page.discount_percent')}</option>
+                <option value="fixed">{t('contract_detail_page.discount_fixed')}</option>
               </select>
             </div>
           </div>
           <div className="flex justify-end gap-2 pt-4 border-t border-gray-200">
-            <Button variant="outline" onClick={() => setIsEditDiscountModalOpen(false)}>Cancel</Button>
-            <Button variant="primary" onClick={handleUpdateDiscount}>Update Discount</Button>
+            <Button variant="outline" onClick={() => setIsEditDiscountModalOpen(false)}>{t('contract_detail_page.cancel')}</Button>
+            <Button variant="primary" onClick={handleUpdateDiscount}>{t('contract_detail_page.update_discount')}</Button>
           </div>
         </div>
       </Modal>
@@ -1366,33 +1388,33 @@ const ContractDetail = () => {
       <Modal
         isOpen={isPreviewModalOpen}
         onClose={() => setIsPreviewModalOpen(false)}
-        title="Contract Preview"
+        title={t('contract_detail_page.preview_modal_title')}
         size="xl"
       >
         <div className="space-y-6">
           <div className="text-center border-b pb-4">
-            <h2 className="text-2xl font-bold">CONTRACT</h2>
+            <h2 className="text-2xl font-bold">{t('contract_detail_page.header_contract')}</h2>
             <p className="text-xl text-gray-600">{contract.contract_number}</p>
             <p className="text-lg text-gray-700">{contract.title}</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
             <div>
-              <p><strong>Client:</strong> {contract.client_name}</p>
-              <p><strong>Contract Date:</strong> {localFormatDate(contract.contract_date)}</p>
+              <p><strong>{t('contract_detail_page.client_label')}:</strong> {contract.client_name}</p>
+              <p><strong>{t('contract_detail_page.contract_date_label')}:</strong> {localFormatDate(contract.contract_date)}</p>
             </div>
             <div>
-              <p><strong>Valid Until:</strong> {localFormatDate(contract.valid_until)}</p>
-              <p><strong>Status:</strong> {contract.status}</p>
+              <p><strong>{t('contract_detail_page.valid_until')}:</strong> {localFormatDate(contract.valid_until)}</p>
+              <p><strong>{t('contract_detail_page.status_label')}:</strong> {translateContractStatus(contract.status)}</p>
             </div>
           </div>
           {contract.items && contract.items.length > 0 && (
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr className="border-b bg-gray-50">
-                  <th className="text-left p-2">Item</th>
-                  <th className="text-right p-2">Qty</th>
-                  <th className="text-right p-2">Rate</th>
-                  <th className="text-right p-2">Amount</th>
+                  <th className="text-left p-2">{t('contract_detail_page.table_preview_item')}</th>
+                  <th className="text-right p-2">{t('contract_detail_page.table_preview_qty')}</th>
+                  <th className="text-right p-2">{t('contract_detail_page.table_preview_rate')}</th>
+                  <th className="text-right p-2">{t('contract_detail_page.table_preview_amount')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1407,7 +1429,7 @@ const ContractDetail = () => {
               </tbody>
               <tfoot>
                 <tr className="font-bold">
-                  <td colSpan="3" className="p-2 text-right">Total:</td>
+                  <td colSpan="3" className="p-2 text-right">{t('contract_detail_page.total_label')}:</td>
                   <td className="p-2 text-right">{localFormatCurrency(calculateTotal())}</td>
                 </tr>
               </tfoot>
@@ -1415,13 +1437,13 @@ const ContractDetail = () => {
           )}
           {editorContent && (
             <div className="border-t pt-4">
-              <h3 className="font-semibold mb-2">Contract Content:</h3>
+              <h3 className="font-semibold mb-2">{t('contract_detail_page.preview_content_heading')}:</h3>
               <div className="prose max-w-none text-sm" dangerouslySetInnerHTML={{ __html: editorContent.replace(/\n/g, '<br/>') }} />
             </div>
           )}
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setIsPreviewModalOpen(false)}>Close</Button>
-            <Button variant="primary" onClick={handlePrint}><IoPrint size={16} className="mr-2" />Print</Button>
+            <Button variant="outline" onClick={() => setIsPreviewModalOpen(false)}>{t('contract_detail_page.close')}</Button>
+            <Button variant="primary" onClick={handlePrint}><IoPrint size={16} className="mr-2" />{t('contract_detail_page.print')}</Button>
           </div>
         </div>
       </Modal>
@@ -1430,18 +1452,21 @@ const ContractDetail = () => {
       <Modal
         isOpen={isSendEmailModalOpen}
         onClose={() => setIsSendEmailModalOpen(false)}
-        title="Send Contract to Client"
+        title={t('contract_detail_page.send_modal_title')}
       >
         <div className="space-y-4">
           <p className="text-gray-600">
-            Send this contract to <strong>{client?.email || contract.client_name}</strong>?
+            {t('contract_detail_page.send_modal_body').replace(
+              '{{email}}',
+              client?.email || contract.client_name || ''
+            )}
           </p>
           <div className="flex gap-3">
             <Button variant="outline" onClick={() => setIsSendEmailModalOpen(false)} className="flex-1">
-              Cancel
+              {t('contract_detail_page.cancel')}
             </Button>
             <Button onClick={handleSendEmail} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white">
-              Send Email
+              {t('contract_detail_page.send_email')}
             </Button>
           </div>
         </div>
@@ -1451,28 +1476,29 @@ const ContractDetail = () => {
       <Modal
         isOpen={isStatusModalOpen}
         onClose={() => setIsStatusModalOpen(false)}
-        title="Change Contract Status"
+        title={t('contract_detail_page.status_modal_title')}
       >
         <div className="space-y-4">
-          <p className="text-gray-600 mb-4">Select new status for this contract:</p>
+          <p className="text-gray-600 mb-4">{t('contract_detail_page.status_modal_hint')}</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {statusOptions.map((status) => (
+            {statusOptions.map((opt) => (
               <button
-                key={status}
-                onClick={() => handleUpdateStatus(status)}
+                type="button"
+                key={opt.value}
+                onClick={() => handleUpdateStatus(opt.value)}
                 className={`px-4 py-3 rounded-lg border text-sm font-medium transition-colors ${
-                  contract.status.toLowerCase() === status.toLowerCase()
+                  contract.status.toLowerCase() === opt.value
                     ? 'border-blue-500 bg-blue-50 text-blue-700'
                     : 'border-gray-200 hover:bg-gray-50 text-gray-700'
                 }`}
               >
-                {status}
+                {t(`contract_detail_page.${opt.labelKey}`)}
               </button>
             ))}
           </div>
           <div className="flex justify-end pt-4">
             <Button variant="outline" onClick={() => setIsStatusModalOpen(false)}>
-              Cancel
+              {t('contract_detail_page.cancel')}
             </Button>
           </div>
         </div>

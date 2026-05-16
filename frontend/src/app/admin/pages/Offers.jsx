@@ -20,6 +20,12 @@ import {
   IoCheckmarkCircle,
   IoTime,
   IoClose,
+  IoList,
+  IoGrid,
+  IoCopy,
+  IoEllipsisVertical,
+  IoChevronBack,
+  IoChevronForward,
 } from 'react-icons/io5'
 
 /**
@@ -76,6 +82,20 @@ const Offers = () => {
     return { h, s: Math.round(s * 100), l: Math.round(l * 100) };
   };
 
+  const translateOfferStatus = (status) => {
+    const s = (status || '').toLowerCase().trim()
+    const keyMap = {
+      draft: 'offersForm.offerStatus.draft',
+      sent: 'offersForm.offerStatus.sent',
+      accepted: 'offersForm.offerStatus.accepted',
+      declined: 'offersForm.offerStatus.declined',
+      expired: 'offersForm.offerStatus.expired',
+      waiting: 'offer_detail_page.status_waiting',
+    }
+    const key = keyMap[s] || 'offersForm.offerStatus.draft'
+    return t(key)
+  }
+
   const getStatusStyle = (status) => {
     const base = hexToHsl(primaryColor);
     const s = status?.toLowerCase() || "";
@@ -104,23 +124,28 @@ const Offers = () => {
 
   const [offers, setOffers] = useState([])
   const [loading, setLoading] = useState(true)
+  const [offerViewMode, setOfferViewMode] = useState('list') // 'list' | 'tile'
   const [searchQuery, setSearchQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState('All')
+  const [statusFilter, setStatusFilter] = useState('all')
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [companies, setCompanies] = useState([])
   const [formData, setFormData] = useState({
     title: '',
     valid_till: '',
-    currency: 'USD',
+    currency: 'EUR',
     description: '',
     note: '',
-    terms: 'Vielen Dank für Ihr Vertrauen.',
+    terms: '',
     discount: 0,
     discount_type: '%',
     amount: '',
     status: 'draft',
     company_id: companyId,
   })
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
 
   useEffect(() => {
     fetchOffers()
@@ -161,13 +186,13 @@ const Offers = () => {
         return
       }
 
-      const currencyCode = formData.currency ? formData.currency.split(' ')[0] : 'USD'
+      const currencyCode = 'EUR'
       const validTill = formData.valid_till || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
       const amount = parseFloat(formData.amount) || 0
       const offerData = {
         description: formData.description || formData.title || '',
         note: formData.note || null,
-        terms: formData.terms || 'Vielen Dank für Ihr Vertrauen.',
+        terms: formData.terms || t('offer_detail_page.default_terms'),
         valid_till: validTill,
         currency: currencyCode,
         discount: parseFloat(formData.discount) || 0,
@@ -188,10 +213,10 @@ const Offers = () => {
         setFormData({
           title: '',
           valid_till: '',
-          currency: 'USD',
+          currency: 'EUR',
           description: '',
           note: '',
-          terms: 'Thank you for your business.',
+          terms: '',
           discount: 0,
           discount_type: '%',
           amount: '',
@@ -200,11 +225,11 @@ const Offers = () => {
         })
         fetchOffers()
       } else {
-      alert(response.data.error || 'Angebot konnte nicht erstellt werden')
-    }
-  } catch (error) {
-    console.error('Error creating offer:', error)
-    alert(error.response?.data?.error || 'Angebot konnte nicht erstellt werden')
+        alert(response.data.error || t('offersForm.create_failed'))
+      }
+    } catch (error) {
+      console.error('Error creating offer:', error)
+      alert(error.response?.data?.error || t('offersForm.create_failed'))
     }
   }
 
@@ -213,81 +238,139 @@ const Offers = () => {
       (offer.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (offer.offer_number || '').toLowerCase().includes(searchQuery.toLowerCase())
     const offerStatus = (offer.status || '').toLowerCase()
-    const matchesStatus = statusFilter === 'All' || offerStatus === statusFilter.toLowerCase()
+    const matchesStatus = statusFilter === 'all' || offerStatus === statusFilter.toLowerCase()
     return matchesSearch && matchesStatus
   })
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredOffers.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedOffers = filteredOffers.slice(startIndex, endIndex)
+  const totalAmount = filteredOffers.reduce((sum, offer) => sum + (parseFloat(offer.total) || 0), 0)
 
   return (
     <div className="space-y-3 sm:space-y-4 bg-main-bg min-h-screen p-2 sm:p-4 text-primary-text">
       {/* Header Card */}
-      <Card className="bg-card-bg rounded-lg shadow-soft border border-border-light overflow-visible">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border-b border-border-light">
+      <div className="bg-card-bg rounded-lg shadow-soft border border-border-light overflow-visible">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 p-4 sm:p-5 border-b border-border-light">
           <div>
-            <h1 className="text-xl font-bold text-gray-900 notranslate">{t('Quotes')}</h1>
-            <p className="text-xs text-secondary-text mt-0.5 notranslate">{t('estimates.subtitle')}</p>
+            <h1 className="text-xl font-black text-gray-900 flex items-center gap-2">
+              <IoDocumentText className="text-primary-accent" size={22} /> <span className="notranslate">{t('sidebar.offers')}</span>
+            </h1>
           </div>
-          <Button
-            variant="primary"
-            className="flex items-center gap-2"
-            onClick={() => setIsAddModalOpen(true)}
+          <button
+            onClick={() => {
+              setFormData({
+                title: '',
+                valid_till: '',
+                currency: 'EUR',
+                description: '',
+                note: '',
+                terms: t('offer_detail_page.default_terms'),
+                discount: 0,
+                discount_type: '%',
+                amount: '',
+                status: 'draft',
+                company_id: companyId,
+              })
+              setIsAddModalOpen(true)
+            }}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors shadow-sm"
           >
-            <IoAdd size={18} /> <span className="notranslate">{t('estimates.addEstimate')}</span>
-          </Button>
+            <IoAdd size={18} /> <span>{t('estimates.addEstimate')}</span>
+          </button>
         </div>
-        
-        {/* Filters integrated into header card if needed, or keep as separate card below */}
-      </Card>
 
-      {/* Filters Card */}
-      <Card className="p-3 sm:p-4 bg-card-bg border border-border-light shadow-soft">
-        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-          <div className="flex-1 relative">
-            <IoSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-            <Input
-              placeholder={t('estimates.search_placeholder')}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 text-sm"
-            />
+        {/* Controls row - aligned with Invoices */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-3 sm:px-4 py-3">
+          <div className="flex items-center gap-2">
+            <div className="inline-flex rounded-md border border-border-light bg-input-bg p-0.5" role="group" aria-label={t('sidebar.offers')}>
+              <button
+                type="button"
+                title={t('common.list')}
+                onClick={() => setOfferViewMode('list')}
+                className={`px-2.5 py-1.5 text-xs font-medium rounded transition-colors ${offerViewMode === 'list' ? 'bg-primary-accent text-white shadow-sm' : 'text-secondary-text hover:text-primary-text'}`}
+              >
+                <IoList size={14} className="inline-block sm:mr-1 align-middle" />
+                <span className="hidden sm:inline">{t('common.list')}</span>
+              </button>
+              <button
+                type="button"
+                title={t('common.tile')}
+                onClick={() => setOfferViewMode('tile')}
+                className={`px-2.5 py-1.5 text-xs font-medium rounded transition-colors ${offerViewMode === 'tile' ? 'bg-primary-accent text-white shadow-sm' : 'text-secondary-text hover:text-primary-text'}`}
+              >
+                <IoGrid size={14} className="inline-block sm:mr-1 align-middle" />
+                <span className="hidden sm:inline">{t('common.tile')}</span>
+              </button>
+            </div>
           </div>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 sm:px-4 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-accent outline-none bg-input-bg"
-          >
-            <option value="All">{t('common.all_status')}</option>
-            <option value="draft">{t('offersForm.offerStatus.draft')}</option>
-            <option value="sent">{t('offersForm.offerStatus.sent')}</option>
-            <option value="accepted">{t('offersForm.offerStatus.accepted')}</option>
-            <option value="declined">{t('offersForm.offerStatus.declined')}</option>
-            <option value="expired">{t('offersForm.offerStatus.expired')}</option>
-          </select>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="relative flex-1 sm:min-w-[280px]">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t('estimates.search_placeholder')}
+                className="pl-8 pr-3 py-2 text-sm border border-border-light rounded-lg w-full focus:ring-2 focus:ring-primary-accent outline-none bg-input-bg text-primary-text"
+              />
+              <IoSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-text" size={14} />
+            </div>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3 py-2 border border-border-light rounded-lg bg-white text-sm min-w-[130px]"
+            >
+              <option value="all">{t('common.all_status')}</option>
+              <option value="draft">{t('offersForm.offerStatus.draft')}</option>
+              <option value="sent">{t('offersForm.offerStatus.sent')}</option>
+              <option value="accepted">{t('offersForm.offerStatus.accepted')}</option>
+              <option value="declined">{t('offersForm.offerStatus.declined')}</option>
+              <option value="expired">{t('offersForm.offerStatus.expired')}</option>
+            </select>
+          </div>
         </div>
-      </Card>
+      </div>
 
       {/* Offers List Container Card */}
-      <Card className="p-4 sm:p-6 bg-card-bg border border-border-light shadow-soft overflow-hidden min-h-[400px]">
+      <Card className="p-0 overflow-hidden bg-card-bg border border-border-light shadow-soft min-h-[400px]">
         {loading ? (
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-accent mx-auto"></div>
             <p className="text-gray-500 mt-4 notranslate">{t('common.loading')}</p>
           </div>
-        ) : filteredOffers.length === 0 ? (
+        ) : paginatedOffers.length === 0 ? (
           <div className="p-12 text-center">
             <IoDocumentText size={64} className="mx-auto text-gray-300 mb-4" />
             <h3 className="text-lg font-semibold text-gray-700 mb-2 notranslate">{t('estimates.no_estimates_found')}</h3>
             <p className="text-gray-500 mb-6 notranslate">{t('estimates.get_started')}</p>
             <Button
               variant="primary"
-              onClick={() => setIsAddModalOpen(true)}
+              onClick={() => {
+                setFormData({
+                  title: '',
+                  valid_till: '',
+                  currency: 'EUR',
+                  description: '',
+                  note: '',
+                  terms: t('offer_detail_page.default_terms'),
+                  discount: 0,
+                  discount_type: '%',
+                  amount: '',
+                  status: 'draft',
+                  company_id: companyId,
+                })
+                setIsAddModalOpen(true)
+              }}
               className="flex items-center gap-2 mx-auto"
             >
               <IoAdd size={18} /> <span className="notranslate">{t('estimates.createEstimate')}</span>
             </Button>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
-            {filteredOffers.map((offer) => (
+        ) : offerViewMode === 'tile' ? (
+          <div className="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
+            {paginatedOffers.map((offer) => (
               <Card key={offer.id} className="p-6 hover:shadow-lg transition-shadow cursor-pointer border border-gray-100" onClick={() => {
                 const path = user?.role === 'EMPLOYEE' ? `/app/employee/offers/${offer.id}` : `/app/admin/offers/${offer.id}`;
                 navigate(path);
@@ -295,20 +378,19 @@ const Offers = () => {
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1 min-w-0">
                     <h3 className="text-sm sm:text-base font-bold text-gray-900 mb-1 truncate" title={offer.description || offer.offer_number}>
-                      {offer.description?.trim() ? (offer.description.length > 55 ? `${offer.description.slice(0, 55).trim()}...` : offer.description.trim()) : (offer.offer_number || 'Unbenanntes Angebot')}
+                      {offer.description?.trim() ? (offer.description.length > 55 ? `${offer.description.slice(0, 55).trim()}...` : offer.description.trim()) : (offer.offer_number || t('offersForm.unnamed_offer'))}
                     </h3>
                     <p className="text-[10px] text-gray-400 mb-0.5">{offer.offer_number}</p>
-                    <p className="text-xs text-gray-500">{offer.offer_number}</p>
                   </div>
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold border whitespace-nowrap" style={getStatusStyle(offer.status)}>
-                    {offer.status || 'Entwurf'}
+                    {translateOfferStatus(offer.status)}
                   </span>
                 </div>
                 <div className="space-y-2 mb-4">
                   <div className="flex items-center justify-between text-xs sm:text-sm">
-                    <span className="text-gray-500">{t('leads.columns.value')}:</span>
+                    <span className="text-gray-500">{t('common.total')}:</span>
                     <span className="font-semibold text-gray-900">
-                      {formatCurrency(offer.total)}
+                      {formatCurrency(offer.total, offer.currency)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-xs sm:text-sm">
@@ -329,7 +411,7 @@ const Offers = () => {
                       navigate(path);
                     }}
                   >
-                    <IoEye size={14} /> Ansehen
+                    <IoEye size={14} /> {t('offersForm.view_action')}
                   </Button>
                   <Button
                     variant="ghost"
@@ -340,7 +422,7 @@ const Offers = () => {
                       const path = user?.role === 'EMPLOYEE' ? `/app/employee/offers/${offer.id}` : `/app/admin/offers/${offer.id}`;
                       navigate(path);
                     }}
-                    title="Ansehen / Bearbeiten"
+                    title={t('offersForm.view_edit_tooltip')}
                   >
                     <IoCreate size={14} />
                   </Button>
@@ -348,6 +430,96 @@ const Offers = () => {
               </Card>
             ))}
           </div>
+        ) : (
+          <>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-xs sm:text-sm">
+              <thead className="bg-main-bg border-b border-border-light">
+                <tr>
+                  <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-secondary-text uppercase tracking-wider">{t('estimates.quote_title')}</th>
+                  <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-secondary-text uppercase tracking-wider hidden lg:table-cell">{t('common.created')}</th>
+                  <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-secondary-text uppercase tracking-wider hidden md:table-cell">{t('common.due_date')}</th>
+                  <th className="px-2 sm:px-4 py-2 sm:py-3 text-right text-[10px] sm:text-xs font-semibold text-secondary-text uppercase tracking-wider">{t('common.total')}</th>
+                  <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-secondary-text uppercase tracking-wider">{t('common.status')}</th>
+                  <th className="px-2 sm:px-4 py-2 sm:py-3 text-right text-[10px] sm:text-xs font-semibold text-secondary-text uppercase tracking-wider sticky right-0 bg-main-bg">{t('common.actions')}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border-light bg-card-bg">
+                {paginatedOffers.map((offer) => {
+                  const path = user?.role === 'EMPLOYEE' ? `/app/employee/offers/${offer.id}` : `/app/admin/offers/${offer.id}`
+                  const titleText = offer.description?.trim()
+                    ? (offer.description.length > 80 ? `${offer.description.slice(0, 80)}…` : offer.description)
+                    : (offer.offer_number || t('offersForm.unnamed_offer'))
+                  return (
+                    <tr key={offer.id} className="hover:bg-main-bg">
+                      <td className="px-2 sm:px-4 py-2 sm:py-3">
+                        <button type="button" onClick={() => navigate(path)} className="text-left font-semibold text-primary-accent hover:underline text-xs sm:text-sm">
+                          {offer.offer_number}
+                        </button>
+                        <div className="text-secondary-text mt-0.5 max-w-md truncate text-[11px] sm:text-xs" title={offer.description || ''}>{titleText}</div>
+                      </td>
+                      <td className="px-2 sm:px-4 py-2 sm:py-3 text-secondary-text hidden lg:table-cell whitespace-nowrap text-xs sm:text-sm">{formatDate(offer.created_at)}</td>
+                      <td className="px-2 sm:px-4 py-2 sm:py-3 text-secondary-text hidden md:table-cell whitespace-nowrap text-xs sm:text-sm">{offer.valid_till ? formatDate(offer.valid_till) : '—'}</td>
+                      <td className="px-2 sm:px-4 py-2 sm:py-3 text-right font-semibold text-primary-text whitespace-nowrap text-xs sm:text-sm">{formatCurrency(offer.total, offer.currency)}</td>
+                      <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold border" style={getStatusStyle(offer.status)}>
+                          {translateOfferStatus(offer.status)}
+                        </span>
+                      </td>
+                      <td className="px-2 sm:px-4 py-2 sm:py-3 sticky right-0 bg-card-bg">
+                        <div className="flex items-center justify-end gap-0.5">
+                          <button type="button" onClick={() => navigate(path)} className="p-1 sm:p-1.5 text-secondary-text hover:bg-main-bg rounded" title={t('offersForm.view_action')}>
+                            <IoEye size={14} />
+                          </button>
+                          <button type="button" onClick={() => navigate(path)} className="p-1 sm:p-1.5 text-secondary-text hover:bg-main-bg rounded" title={t('offersForm.view_edit_tooltip')}>
+                            <IoCreate size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Footer with Pagination and Total - Matching Invoices */}
+          <div className="px-3 sm:px-4 py-2 sm:py-3 border-t border-border-light flex flex-wrap items-center justify-between gap-2 sm:gap-3 bg-main-bg">
+            <div className="flex items-center gap-2 sm:gap-4">
+              <select
+                value={itemsPerPage}
+                onChange={(e) => { setItemsPerPage(parseInt(e.target.value)); setCurrentPage(1); }}
+                className="px-1.5 sm:px-2 py-1 text-xs sm:text-sm border border-border-light rounded bg-input-bg"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+              </select>
+              <span className="text-xs sm:text-sm text-secondary-text">
+                {startIndex + 1}-{Math.min(endIndex, filteredOffers.length)}/{filteredOffers.length}
+              </span>
+            </div>
+            <div className="text-xs sm:text-sm font-semibold text-primary-text hidden xs:block">
+              Gesamt: {formatCurrency(totalAmount, settings?.default_currency)}
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className={`p-1 sm:p-1.5 border border-border-light rounded ${currentPage === 1 ? 'text-muted-text cursor-not-allowed' : 'hover:bg-main-bg'}`}
+              >
+                <IoChevronBack size={14} />
+              </button>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages || totalPages === 0}
+                className={`p-1 sm:p-1.5 border border-border-light rounded ${currentPage === totalPages || totalPages === 0 ? 'text-muted-text cursor-not-allowed' : 'hover:bg-main-bg'}`}
+              >
+                <IoChevronForward size={14} />
+              </button>
+            </div>
+          </div>
+          </>
         )}
       </Card>
 
@@ -359,18 +531,18 @@ const Offers = () => {
           setFormData({
             title: '',
             valid_till: '',
-            currency: 'USD',
+            currency: 'EUR',
             description: '',
             note: '',
-          terms: 'Vielen Dank für Ihr Vertrauen.',
-          discount: 0,
-          discount_type: '%',
-          amount: '',
-          status: 'draft',
-          company_id: companyId,
-        })
-      }}
-      title={<span className="notranslate">{t('offersForm.addOffer')}</span>}
+            terms: '',
+            discount: 0,
+            discount_type: '%',
+            amount: '',
+            status: 'draft',
+            company_id: companyId,
+          })
+        }}
+        title={<span className="notranslate">{t('offersForm.addOffer')}</span>}
       >
         <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
           <Input
@@ -387,23 +559,20 @@ const Offers = () => {
               value={formData.valid_till}
               onChange={(e) => setFormData({ ...formData, valid_till: e.target.value })}
             />
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Währung</label>
+            <div className="hidden">
+              <label className="block text-sm font-medium text-gray-700 mb-2">{t('common.currency')}</label>
               <select
                 value={formData.currency}
                 onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
               >
-                <option value="USD">USD ($)</option>
                 <option value="EUR">EUR (€)</option>
-                <option value="GBP">GBP (£)</option>
-                <option value="INR">INR (€)</option>
               </select>
             </div>
           </div>
 
           <Input
-            label={<span className="notranslate">{t('estimates.quote_value')} ($) *</span>}
+            label={<span className="notranslate">{t('estimates.quote_value')} (€) *</span>}
             type="number"
             value={formData.amount}
             onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
@@ -425,7 +594,7 @@ const Offers = () => {
                 onChange={(e) => setFormData({ ...formData, discount_type: e.target.value })}
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
               >
-                <option value="%">Prozent (%)</option>
+                <option value="%">{t('offersForm.percent_option')}</option>
                 <option value="flat">{t('offersForm.fixedAmount')}</option>
               </select>
             </div>
@@ -465,13 +634,13 @@ const Offers = () => {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Allgemeine Geschäftsbedingungen</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">{t('offer_detail_page.terms')}</label>
             <textarea
               value={formData.terms}
               onChange={(e) => setFormData({ ...formData, terms: e.target.value })}
               rows={2}
               className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-              placeholder="Allgemeine Geschäftsbedingungen"
+              placeholder={t('offer_detail_page.default_terms')}
             />
           </div>
           <div className="flex gap-3 pt-4 border-t border-gray-200">
@@ -482,23 +651,23 @@ const Offers = () => {
                 setFormData({
                   title: '',
                   valid_till: '',
-                  currency: 'USD',
+                  currency: 'EUR',
                   description: '',
                   note: '',
-              terms: 'Vielen Dank für Ihr Vertrauen.',
-              discount: 0,
-              discount_type: '%',
-              amount: '',
-              status: 'draft',
-              company_id: companyId,
-            })
-          }}
-          className="flex-1"
-        >
-          Abbrechen
-        </Button>
-        <Button variant="primary" onClick={handleCreateOffer} className="flex-1 notranslate">
-          Angebot erstellen
+                  terms: '',
+                  discount: 0,
+                  discount_type: '%',
+                  amount: '',
+                  status: 'draft',
+                  company_id: companyId,
+                })
+              }}
+              className="flex-1"
+            >
+              {t('common.cancel')}
+            </Button>
+            <Button variant="primary" onClick={handleCreateOffer} className="flex-1 notranslate">
+              {t('offersForm.createOffer')}
             </Button>
           </div>
         </div>

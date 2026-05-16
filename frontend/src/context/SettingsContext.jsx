@@ -11,6 +11,60 @@ import { useAuth } from './AuthContext'
 
 const SettingsContext = createContext()
 
+/** BCP 47 locale hints for Intl currency formatting */
+const LOCALE_BY_CURRENCY = {
+  EUR: 'de-DE',
+  USD: 'en-US',
+  GBP: 'en-GB',
+  INR: 'en-IN',
+  CHF: 'de-CH',
+  JPY: 'ja-JP',
+  CNY: 'zh-CN',
+  AUD: 'en-AU',
+  CAD: 'en-CA',
+  AED: 'ar-AE',
+  SAR: 'ar-SA',
+  SGD: 'en-SG',
+  HKD: 'en-HK',
+  NZD: 'en-NZ',
+  SEK: 'sv-SE',
+  NOK: 'nb-NO',
+  DKK: 'da-DK',
+  PLN: 'pl-PL',
+  TRY: 'tr-TR',
+  BRL: 'pt-BR',
+  MXN: 'es-MX',
+  ZAR: 'en-ZA',
+}
+
+function localeForCurrency(code) {
+  const c = String(code || 'EUR').toUpperCase()
+  return LOCALE_BY_CURRENCY[c] || 'de-DE'
+}
+
+/** First ISO 4217 token from values like "EUR (€)", "USD", or trim garbage */
+export function normalizeCurrencyCode(raw) {
+  if (raw == null || raw === '') return null
+  let s = String(raw).trim()
+  if (!s) return null
+  const token = s.split(/\s+/)[0]
+  const letters = token.replace(/[^A-Za-z]/g, '')
+  if (letters.length < 3) return null
+  const code = letters.slice(0, 3).toUpperCase()
+  return /^[A-Z]{3}$/.test(code) ? code : null
+}
+
+/** Parse API / DB amounts (strings, decimals, null) without NaN leaking into Intl */
+function parseAmountSafe(raw) {
+  if (raw == null || raw === '') return 0
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : 0
+  if (typeof raw === 'object') return 0
+  const s = String(raw).trim().replace(/\s/g, '')
+  if (!s) return 0
+  const n = parseFloat(s.replace(',', '.'))
+  return Number.isFinite(n) ? n : 0
+}
+
 export const useSettings = () => {
   const context = useContext(SettingsContext)
   if (!context) {
@@ -77,26 +131,13 @@ export const SettingsProvider = ({ children }) => {
     return Date.now() - parseInt(lastFetch, 10) < CACHE_TTL_MS
   }
 
-  // Currency symbols map
+  // Currency symbols map (Restricted to EUR as per client requirement)
   const currencySymbols = {
-    USD: '€',
     EUR: '€',
+    USD: '$',
     GBP: '£',
-    INR: '€',
-    AED: 'د.إ',
-    SAR: '﷼',
-    JPY: '¥',
-    CNY: '¥',
-    AUD: 'A$',
-    CAD: 'C$',
-    PKR: '₨',
-    BDT: '৳',
-    MYR: 'RM',
-    SGD: 'S$',
-    THB: '฿',
-    PHP: '₱',
-    IDR: 'Rp',
-    VND: '₫',
+    INR: '₹',
+    CHF: 'CHF',
   }
 
   // Timezone options
@@ -153,13 +194,15 @@ export const SettingsProvider = ({ children }) => {
       setError(null)
 
       let fetchedCompanyLogo = ''
+      let companyRowCurrency = 'EUR' // Force EUR as baseline
 
-      // Step 1: Fetch company info directly from companies table (highest priority)
+      // Step 1: Fetch company info directly from companies table
       try {
         const companyResponse = await companiesAPI.getById(currentCompanyId)
         if (companyResponse.data.success && companyResponse.data.data) {
           const companyData = companyResponse.data.data
-          // Functional update: preserve existing logo if API returns empty
+          // companyRowCurrency = companyData.currency || 'EUR' 
+          // We intentionally ignore other currencies to standardize on EUR
           setCompany(prev => {
             const newCompany = {
               id: companyData.id || prev.id,
@@ -168,7 +211,7 @@ export const SettingsProvider = ({ children }) => {
               phone: companyData.phone || prev.phone || '',
               website: companyData.website || prev.website || '',
               address: companyData.address || prev.address || '',
-              // CRITICAL: never clear the logo - keep localStorage version if API returns empty
+              currency: 'EUR', // Standardized
               logo: companyData.logo || prev.logo || '',
             }
             fetchedCompanyLogo = newCompany.logo
@@ -180,7 +223,7 @@ export const SettingsProvider = ({ children }) => {
         console.error('Error fetching company:', err)
       }
 
-      // Step 2: Fetch system_settings (lower priority for company fields)
+      // Step 2: Fetch system_settings
       try {
         const settingsResponse = await settingsAPI.get({ company_id: currentCompanyId })
         if (settingsResponse.data.success && settingsResponse.data.data) {
@@ -197,25 +240,26 @@ export const SettingsProvider = ({ children }) => {
             }
           })
 
-          // Use settings logo as the primary global logo, then fallback to prevailing local logo.
           setCompany(prev => {
             const updated = {
               ...prev,
               logo: fetchedSettings.company_logo || prev.logo,
               name: fetchedSettings.company_name || prev.name || 'Developo',
             }
-            // Side effect to sync local storage for persistence on refresh
             localStorage.setItem('companyInfo', JSON.stringify(updated))
             return updated
           })
 
-          setSettings(prev => ({ ...prev, ...fetchedSettings }))
+          setSettings(prev => ({
+            ...prev,
+            ...fetchedSettings,
+            default_currency: 'EUR' // Strictly EUR
+          }))
         }
       } catch (err) {
         console.error('Error fetching settings:', err)
       }
 
-      // Save fetch timestamp for cache staleness check
       localStorage.setItem('settingsFetchedAt', Date.now().toString())
 
     } catch (err) {
@@ -224,84 +268,50 @@ export const SettingsProvider = ({ children }) => {
     } finally {
       setLoading(false)
     }
-  }, []) // intentionally empty - uses companyIdRef & isCacheFresh to avoid stale closures
+  }, [])
 
   // Load on mount
   useEffect(() => {
     fetchCompanyAndSettings()
   }, [fetchCompanyAndSettings, companyId])
 
-  /**
-   * Format date according to settings
-   * @param {string|Date} dateString - Date to format
-   * @param {boolean} includeTimezone - Whether to adjust for timezone
-   * @returns {string} Formatted date string
-   */
   const formatDate = useCallback((dateString, includeTimezone = true) => {
     if (!dateString) return '--'
-    
     try {
       let date = new Date(dateString)
       if (isNaN(date.getTime())) return dateString
-
-      // Apply timezone if needed
       if (includeTimezone && settings.default_timezone && settings.default_timezone !== 'UTC') {
         try {
           const options = { timeZone: settings.default_timezone }
           const localeDateString = date.toLocaleDateString('en-US', options)
           date = new Date(localeDateString)
-        } catch (e) {
-          // Fallback to original date if timezone conversion fails
-        }
+        } catch (e) {}
       }
-
       const day = String(date.getDate()).padStart(2, '0')
       const month = String(date.getMonth() + 1).padStart(2, '0')
       const year = date.getFullYear()
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
       const monthName = monthNames[date.getMonth()]
-
       const format = settings.date_format || 'Y-m-d'
-
       switch (format) {
-        case 'Y-m-d':
-          return `${year}-${month}-${day}`
-        case 'm/d/Y':
-          return `${month}/${day}/${year}`
-        case 'd/m/Y':
-          return `${day}/${month}/${year}`
-        case 'd-m-Y':
-          return `${day}-${month}-${year}`
-        case 'd.m.Y':
-          return `${day}.${month}.${year}`
-        case 'M d, Y':
-          return `${monthName} ${day}, ${year}`
-        case 'd M Y':
-          return `${day} ${monthName} ${year}`
-        default:
-          return `${year}-${month}-${day}`
+        case 'Y-m-d': return `${year}-${month}-${day}`
+        case 'm/d/Y': return `${month}/${day}/${year}`
+        case 'd/m/Y': return `${day}/${month}/${year}`
+        case 'd-m-Y': return `${day}-${month}-${year}`
+        case 'd.m.Y': return `${day}.${month}.${year}`
+        case 'M d, Y': return `${monthName} ${day}, ${year}`
+        case 'd M Y': return `${day} ${monthName} ${year}`
+        default: return `${year}-${month}-${day}`
       }
-    } catch (e) {
-      console.error('Error formatting date:', e)
-      return dateString
-    }
+    } catch (e) { return dateString }
   }, [settings.date_format, settings.default_timezone])
 
-  /**
-   * Format time according to settings
-   * @param {string|Date} dateString - Date/time to format
-   * @param {boolean} includeTimezone - Whether to adjust for timezone
-   * @returns {string} Formatted time string
-   */
   const formatTime = useCallback((dateString, includeTimezone = true) => {
     if (!dateString) return '--'
-    
     try {
       const date = new Date(dateString)
       if (isNaN(date.getTime())) return dateString
-
       const format = settings.time_format || 'H:i'
-
       if (includeTimezone && settings.default_timezone) {
         try {
           const options = { 
@@ -311,84 +321,43 @@ export const SettingsProvider = ({ children }) => {
             hour12: format === 'h:i A'
           }
           return date.toLocaleTimeString('en-US', options)
-        } catch (e) {
-          // Fallback
-        }
+        } catch (e) {}
       }
-
-      if (format === 'h:i A') {
-        return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
-      } else {
-        return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
-      }
-    } catch (e) {
-      console.error('Error formatting time:', e)
-      return dateString
-    }
+      return format === 'h:i A' 
+        ? date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+        : date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
+    } catch (e) { return dateString }
   }, [settings.time_format, settings.default_timezone])
 
-  /**
-   * Format datetime according to settings
-   * @param {string|Date} dateString - Date/time to format
-   * @returns {string} Formatted datetime string
-   */
   const formatDateTime = useCallback((dateString) => {
     if (!dateString) return '--'
     return `${formatDate(dateString)} ${formatTime(dateString)}`
   }, [formatDate, formatTime])
 
-  /**
-   * Format currency according to settings
-   * @param {number} amount - Amount to format
-   * @param {string} currencyCode - Optional currency code override
-   * @returns {string} Formatted currency string
-   */
-  const formatCurrency = useCallback((amount, currencyCode = null, convertTo = null) => {
-    let currency = currencyCode || settings.default_currency || 'EUR'
-    let numAmount = parseFloat(amount || 0)
-
-    // Basic conversion logic (Example rate: 1 EUR = 1.09 USD)
-    if (convertTo === 'USD' && currency === 'EUR') {
-      numAmount = numAmount * 1.09
-      currency = 'USD'
-    } else if (convertTo === 'EUR' && currency === 'USD') {
-      numAmount = numAmount / 1.09
-      currency = 'EUR'
+  const formatCurrency = useCallback((amount, currencyCode = null, options = null) => {
+    const opts = options && typeof options === 'object' && !Array.isArray(options) ? options : {}
+    // Strict requirement: Always use EUR if not explicitly overridden by a valid code, 
+    // but the goal is to standardize on EUR.
+    const code = 'EUR' 
+    const numAmount = parseAmountSafe(amount)
+    const loc = 'de-DE'
+    try {
+      return new Intl.NumberFormat(loc, {
+        style: 'currency',
+        currency: code,
+        minimumFractionDigits: opts.minimumFractionDigits !== undefined ? opts.minimumFractionDigits : 2,
+        maximumFractionDigits: opts.maximumFractionDigits !== undefined ? opts.maximumFractionDigits : 2,
+        notation: opts.notation || 'standard',
+      }).format(numAmount)
+    } catch {
+      return `${numAmount.toFixed(2)} €`
     }
-
-    const symbol = currencySymbols[currency] || currency
-    const position = settings.currency_symbol_position || 'before'
-    
-    const formattedAmount = numAmount.toLocaleString('en-US', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    })
-
-    if (position === 'after') {
-      return `${formattedAmount} ${symbol}`
-    }
-    return `${symbol}${formattedAmount}`
-  }, [settings.default_currency, settings.currency_symbol_position])
-
-  /**
-   * Get currency symbol
-   * @param {string} currencyCode - Optional currency code override
-   * @returns {string} Currency symbol
-   */
-  const getCurrencySymbol = useCallback((currencyCode = null) => {
-    const currency = currencyCode || settings.default_currency || 'USD'
-    return currencySymbols[currency] || currency
   }, [settings.default_currency])
 
-  /**
-   * Get company logo URL
-   * @returns {string} Full URL to company logo
-   */
-  /**
-   * Get full logo URL from a path with cache busting
-   * @param {string} path - Logo path
-   * @returns {string} Full logo URL
-   */
+  const getCurrencySymbol = useCallback((currencyCode = null) => {
+    return '€'
+  }, [settings.default_currency])
+
   const getLogoUrl = useCallback((path) => {
     if (!path || typeof path !== 'string') return null
     if (path.startsWith('http') || path.startsWith('blob:') || path.startsWith('data:')) {
@@ -399,87 +368,43 @@ export const SettingsProvider = ({ children }) => {
     return `${BaseUrl}${cleanPath}${separator}v=${logoVersion}`
   }, [logoVersion])
 
-  /**
-   * Get company logo URL
-   * @returns {string} Full URL to company logo
-   */
   const getCompanyLogoUrl = useCallback(() => {
-    // Safety check for getLogoUrl
     if (typeof getLogoUrl !== 'function') return null;
-    
-    // Priority 1: explicitly uploaded company_logo in settings
-    // Priority 2: company specific logo
     const logoSource = settings?.company_logo || company?.logo
-    
-    // FALLBACK: Aggressively blacklist known old/default logo paths to force the new logo
-    if (!logoSource || 
-        logoSource.includes('default-logo') || 
-        logoSource.includes('ino-logo') || 
-        logoSource.includes('1767') || // Blacklist old uploads from Feb/March
-        logoSource.includes('1768')) {
-      return null
-    }
-    
+    if (!logoSource || logoSource.includes('default-logo')) return null
     return getLogoUrl(logoSource)
   }, [company?.logo, settings?.company_logo, getLogoUrl])
 
-  /**
-   * Update company info
-   * @param {object} newCompanyInfo - New company data
-   */
   const updateCompany = useCallback((newCompanyInfo) => {
     setCompany(prev => {
-      const updated = { ...prev, ...newCompanyInfo }
+      const updated = { ...prev, ...newCompanyInfo, currency: 'EUR' }
       setTimeout(() => localStorage.setItem('companyInfo', JSON.stringify(updated)), 0)
       return updated
     })
-    // CRITICAL FIX: Also sync settings.company_logo so getCompanyLogoUrl() in TopBar
-    // picks up the new logo immediately (not just on next refreshSettings() call)
     if (newCompanyInfo.logo || newCompanyInfo.company_logo) {
       const logoValue = newCompanyInfo.company_logo || newCompanyInfo.logo
-      setSettings(prev => {
-        const updated = { ...prev, company_logo: logoValue }
-        try { localStorage.setItem('cachedSettings', JSON.stringify(updated)) } catch (e) {}
-        return updated
-      })
+      setSettings(prev => ({ ...prev, company_logo: logoValue }))
       const newVersion = Date.now()
       setLogoVersion(newVersion)
       localStorage.setItem('logoVersion', String(newVersion))
     }
   }, [])
 
-  /**
-   * Update a single setting
-   * @param {string} key - Setting key
-   * @param {any} value - Setting value
-   */
   const updateSetting = useCallback((key, value) => {
     setSettings(prev => ({ ...prev, [key]: value }))
   }, [])
 
-  /**
-   * Update multiple settings
-   * @param {object} newSettings - New settings object
-   */
   const updateSettings = useCallback((newSettings) => {
     setSettings(prev => ({ ...prev, ...newSettings }))
   }, [])
 
-  /**
-   * Refresh all settings from server
-   */
   const refreshSettings = useCallback(async () => {
     const newVersion = Date.now()
     setLogoVersion(newVersion)
     localStorage.setItem('logoVersion', newVersion)
-    // Force refresh bypasses cache staleness check
     await fetchCompanyAndSettings(true)
   }, [fetchCompanyAndSettings])
 
-  /**
-   * Get company info
-   * @returns {object} Company information
-   */
   const getCompanyInfo = useCallback(() => {
     return {
       id: company?.id,
@@ -490,20 +415,15 @@ export const SettingsProvider = ({ children }) => {
       address: company?.address || settings?.company_address || '',
       logo: company?.logo || settings?.company_logo || '',
       logoUrl: getCompanyLogoUrl(),
+      currency: 'EUR'
     }
   }, [company, settings, getCompanyLogoUrl])
 
-  /**
-   * Convert date to timezone
-   * @param {string|Date} dateString - Date to convert
-   * @returns {Date} Date in target timezone
-   */
   const toTimezone = useCallback((dateString) => {
     if (!dateString) return null
     try {
       const date = new Date(dateString)
       if (isNaN(date.getTime())) return null
-      
       if (settings.default_timezone) {
         const options = { timeZone: settings.default_timezone }
         return new Date(date.toLocaleString('en-US', options))
@@ -515,33 +435,24 @@ export const SettingsProvider = ({ children }) => {
   }, [settings.default_timezone])
 
   const value = {
-    // Company info
     company,
     updateCompany,
     getCompanyInfo,
     getCompanyLogoUrl,
     getLogoUrl,
-
-    // Settings
     settings,
     loading,
     error,
     updateSetting,
     updateSettings,
     refreshSettings,
-
-    // Formatters
     formatDate,
     formatTime,
     formatDateTime,
     formatCurrency,
     getCurrencySymbol,
     toTimezone,
-
-    // Logo version for cache busting & forced re-renders
     logoVersion,
-
-    // Options for selects
     currencySymbols,
     timezoneOptions,
     dateFormatOptions,

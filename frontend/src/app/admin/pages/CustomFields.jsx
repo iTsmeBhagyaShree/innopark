@@ -92,7 +92,7 @@ const CustomFields = () => {
     { value: 'reports', label: t('custom_fields.enabled_in.reports') },
   ]
 
-  const modules = ['Leads', 'Deals', 'Contacts', 'Clients', 'Projects', 'Tasks', 'Finance', 'Invoices', 'Proposals', 'Estimates', 'Contracts']
+  const modules = ['Leads', 'Deals', 'Contacts', 'Projects', 'Tasks']
 
   const columns = [
     { key: 'label', label: t('custom_fields.columns.field_label') },
@@ -345,7 +345,7 @@ const CustomFields = () => {
       </div>
 
       {/* Module Filter Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         {modules.map((module) => {
           const count = customFields.filter(f => f.module === module).length
           return (

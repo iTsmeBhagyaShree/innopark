@@ -19,6 +19,7 @@ import TaskFormModal from '../../../components/ui/TaskFormModal'
 import ColorPicker from '../../../components/ui/ColorPicker'
 import { formatPhoneNumber, isValidPhone } from '../../../utils/formatters'
 import { useAuth } from '../../../context/AuthContext'
+import { useSettings } from '../../../context/SettingsContext.jsx'
 import {
   IoEye,
   IoCreate,
@@ -56,6 +57,7 @@ import {
   IoChevronDown,
   IoLayers,
   IoBusiness,
+  IoBusinessOutline,
   IoPeopleOutline,
   IoCalendarOutline,
   IoEllipsisHorizontal,
@@ -68,6 +70,7 @@ import {
 } from 'react-icons/io5'
 import BarChart from '../../../components/charts/BarChart'
 import DonutChart from '../../../components/charts/DonutChart'
+import PriorityActivities from '../../../components/shared/PriorityActivities'
 
 /** Stage title for Kanban column header (i18n) */
 const leadStageDisplayName = (stage, t) => {
@@ -100,6 +103,178 @@ const getColumnLeadsForStage = (stage, allStages, boardLeads) =>
 /** Synthetic stage id when pipeline has no stages — drag/drop disabled */
 const LEAD_KANBAN_FALLBACK_STAGE_ID = '__lead_kanban_fallback__'
 
+/** Single Kanban card with ⋯ menu (portal so it is not clipped by column scroll) */
+const LeadKanbanCard = ({
+  lead,
+  color,
+  cardsDraggable,
+  onDragStart,
+  onDragEnd,
+  onView,
+  onEdit,
+  onDelete,
+  getTimeAgo,
+  fmt,
+}) => {
+  const { t } = useLanguage()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const btnWrapRef = useRef(null)
+  const menuPanelRef = useRef(null)
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const handler = (e) => {
+      const el = e.target
+      if (btnWrapRef.current?.contains(el)) return
+      if (menuPanelRef.current?.contains(el)) return
+      setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [menuOpen])
+
+  const toggleMenu = (e) => {
+    e.stopPropagation()
+    e.preventDefault()
+    setMenuOpen((v) => !v)
+  }
+
+  const prob = parseInt(lead.probability || 0)
+
+  return (
+    <div
+      draggable={cardsDraggable}
+      onDragStart={cardsDraggable ? (e) => onDragStart(e, lead) : undefined}
+      onDragEnd={onDragEnd}
+      className={`bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-xl hover:border-primary-accent/30 transition-all group select-none overflow-hidden ${cardsDraggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'} animate-in fade-in zoom-in-95 duration-200`}
+    >
+      {/* Probability bar */}
+      <div className="h-1.5 w-full bg-gray-100 relative overflow-hidden">
+        <div 
+          className="h-full transition-all duration-1000 ease-out shadow-[0_0_8px_rgba(0,0,0,0.1)]" 
+          style={{ 
+            backgroundColor: color, 
+            width: `${prob}%`,
+            opacity: 0.8
+          }} 
+        />
+      </div>
+
+      <div className="p-4 space-y-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <h4
+              className="font-black text-sm text-gray-900 group-hover:text-primary-accent transition-colors leading-snug line-clamp-2 cursor-pointer tracking-tight"
+              onClick={(e) => {
+                e.stopPropagation()
+                onView(lead)
+              }}
+            >
+              {lead.leadType === 'Organization' ? (lead.companyName || lead.personName) : (lead.personName || lead.companyName)}
+            </h4>
+          </div>
+          
+          <div className="relative shrink-0" ref={btnWrapRef}>
+            <button
+              type="button"
+              className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-900 rounded-xl hover:bg-gray-100 transition-all"
+              onClick={toggleMenu}
+            >
+              <IoEllipsisHorizontal size={16} />
+            </button>
+            {menuOpen && (
+              <div
+                ref={menuPanelRef}
+                className="absolute right-0 top-full mt-2 w-44 bg-white border border-gray-100 rounded-2xl shadow-2xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200"
+              >
+                <button
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-gray-50 transition-colors"
+                  onClick={() => { onView(lead); setMenuOpen(false) }}
+                >
+                  <IoEye size={16} className="text-primary-accent" /> {t('common.actions.view')}
+                </button>
+                <button
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-gray-50 transition-colors"
+                  onClick={() => { onEdit(lead); setMenuOpen(false) }}
+                >
+                  <IoPencil size={16} className="text-indigo-500" /> {t('common.actions.edit')}
+                </button>
+                <div className="h-px bg-gray-100 my-1 mx-2" />
+                <button
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-bold text-red-600 hover:bg-red-50 transition-colors"
+                  onClick={() => { onDelete(lead); setMenuOpen(false) }}
+                >
+                  <IoTrashOutline size={16} /> {t('common.actions.delete')}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Lead Info */}
+        <div className="space-y-1.5">
+          {lead.leadType === 'Organization' ? (
+            lead.personName && (
+              <div className="flex items-center gap-2 text-[11px] font-bold text-gray-500 bg-gray-50 px-2 py-1 rounded-lg w-fit">
+                <IoPerson size={12} className="text-gray-400 shrink-0" />
+                <span className="truncate">{lead.personName}</span>
+              </div>
+            )
+          ) : (
+            lead.companyName && (
+              <div className="flex items-center gap-2 text-[11px] font-bold text-gray-500 bg-gray-50 px-2 py-1 rounded-lg w-fit">
+                <IoBusiness size={12} className="text-gray-400 shrink-0" />
+                <span className="truncate">{lead.companyName}</span>
+              </div>
+            )
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            {lead.email && (
+              <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg" title={lead.email}>
+                <IoMail size={12} />
+              </div>
+            )}
+            {lead.phone && (
+              <div className="p-1.5 bg-green-50 text-green-600 rounded-lg" title={lead.phone}>
+                <IoCall size={12} />
+              </div>
+            )}
+            {lead.city && (
+              <div className="flex items-center gap-1 text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                <IoLocation size={10} /> {lead.city}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+          <div className="flex flex-col">
+            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{t('deals.form.amount')}</span>
+            <span className="font-black text-sm text-gray-900">{fmt(parseFloat(lead.value) || 0, lead.currency)}</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="flex flex-col items-end">
+              <span className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">{t('leads.created')}</span>
+              <span className="text-[10px] font-bold text-gray-600">
+                {getTimeAgo(lead.created_at || lead.created || lead.createdDate)}
+              </span>
+            </div>
+            <div 
+              className="w-8 h-8 rounded-xl bg-gray-100 border-2 border-white shadow-sm flex items-center justify-center text-[11px] font-black text-gray-600 transition-transform group-hover:scale-110"
+              title={lead.assigned_user_name || 'Unassigned'}
+            >
+              {(lead.assigned_user_name || lead.employeeAvatar || (lead.employee?.[0] || 'U')).toUpperCase().slice(0, 1)}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /**
  * Kanban column — same drag/drop + layout pattern as `Deals.jsx` (KanbanColumn)
  */
@@ -109,11 +284,13 @@ const LeadKanbanColumn = ({
   columnLeads,
   t,
   isDragOver,
-  onDragOverCol,
-  onDropCol,
+  onDragOver,
+  onDrop,
   onDragStart,
   onDragEnd,
   onOpenLead,
+  onEditLead,
+  onDeleteLead,
   getTimeAgo,
   fmtShort: fmt,
   cardsDraggable = true,
@@ -122,11 +299,10 @@ const LeadKanbanColumn = ({
   const totalValue = columnLeads.reduce((s, l) => s + parseFloat(l.value || 0), 0)
   return (
     <div
-      className={`flex-shrink-0 w-[300px] flex flex-col rounded-2xl border transition-all duration-200 min-h-0 ${
-        isDragOver ? 'border-primary-accent/50 bg-primary-accent/5 shadow-lg shadow-primary-accent/10' : 'border-gray-200/70 bg-gray-50/80'
-      }`}
-      onDragOver={onDragOverCol}
-      onDrop={onDropCol}
+      className={`flex-shrink-0 w-[300px] flex flex-col rounded-2xl border transition-all duration-200 min-h-0 ${isDragOver ? 'border-primary-accent/50 bg-primary-accent/5 shadow-lg shadow-primary-accent/10' : 'border-gray-200/70 bg-gray-50/80'
+        }`}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
     >
       <div className="p-3 pb-2 shrink-0">
         <div className="flex items-center justify-between mb-1">
@@ -152,66 +328,32 @@ const LeadKanbanColumn = ({
       </div>
       <div className="flex-1 min-h-[120px] max-h-[calc(100vh-280px)] overflow-y-auto overflow-x-hidden px-3 pb-3 space-y-2.5 custom-scrollbar">
         {columnLeads.map((lead) => (
-          <div
+          <LeadKanbanCard
             key={lead.id}
-            draggable={cardsDraggable}
-            onDragStart={cardsDraggable ? (e) => onDragStart(e, lead) : undefined}
+            lead={lead}
+            color={color}
+            cardsDraggable={cardsDraggable}
+            onDragStart={onDragStart}
             onDragEnd={onDragEnd}
-            className={`bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md hover:border-primary-accent/40 transition-all group select-none ${
-              cardsDraggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
-            }`}
-          >
-            <div className="h-1 rounded-t-xl" style={{ backgroundColor: color }} />
-            <div className="p-4">
-              <div className="flex items-start justify-between mb-3">
-                <h4
-                  className="font-bold text-sm text-gray-900 group-hover:text-primary-accent transition-colors flex-1 pr-2 leading-tight line-clamp-2 cursor-pointer"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onOpenLead(lead)
-                  }}
-                >
-                  {lead.personName || lead.companyName}
-                </h4>
-                <button
-                  type="button"
-                  className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <IoEllipsisHorizontal size={18} />
-                </button>
-              </div>
-              {lead.companyName && (
-                <div className="flex items-center gap-2 text-xs text-secondary-text mb-2">
-                  <IoBusiness size={14} className="text-gray-400 shrink-0" />
-                  <span className="truncate">{lead.companyName}</span>
-                </div>
-              )}
-              <div className="flex items-center justify-between pt-3 mt-auto border-t border-gray-50">
-                <span className="font-bold text-sm text-gray-900">
-                  {fmt(parseFloat(lead.value) || 0)}
-                </span>
-                <div className="flex items-center gap-2">
-                  <div className="px-2 py-0.5 bg-red-50 border border-red-100 rounded-full text-[10px] font-bold text-red-500">
-                    {getTimeAgo(lead.created_at || lead.created || lead.createdDate)}
-                  </div>
-                  <div className="w-6 h-6 rounded-full bg-primary-accent/10 border border-primary-accent/20 flex items-center justify-center text-[10px] font-bold text-primary-accent ring-2 ring-white">
-                    {(lead.employeeAvatar || (lead.employee?.[0] || 'U')).toUpperCase().slice(0, 1)}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+            onView={onOpenLead}
+            onEdit={onEditLead}
+            onDelete={onDeleteLead}
+            getTimeAgo={getTimeAgo}
+            fmt={fmt}
+          />
         ))}
         {columnLeads.length === 0 && (
           <div
-            className={`h-28 border-2 border-dashed rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all ${
-              isDragOver ? 'border-primary-accent/40 bg-primary-accent/5' : 'border-gray-200 opacity-50'
-            }`}
+            className={`h-28 border-2 border-dashed rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all ${isDragOver && cardsDraggable ? 'border-primary-accent/40 bg-primary-accent/5 opacity-100' : 'border-gray-200 opacity-50'
+              }`}
           >
             <IoBriefcase size={20} className="text-gray-300" />
             <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-center px-2">
-              {cardsDraggable ? t('deals.kanban.drop_here') : t('leads.kanban.no_stages_list')}
+              {isDragOver && cardsDraggable
+                ? t('deals.kanban.drop_here')
+                : cardsDraggable
+                  ? t('leads.kanban.empty_column')
+                  : t('leads.kanban.no_stages_list')}
             </span>
           </div>
         )}
@@ -220,9 +362,18 @@ const LeadKanbanColumn = ({
   )
 }
 
+/** GET /employees row → users.id for leads.owner_id */
+function employeeAssignableUserId(row) {
+  if (!row) return ''
+  const id = row.assignable_user_id ?? row.user_id ?? row.uid ?? row.id
+  if (id == null || id === '') return ''
+  return String(id)
+}
+
 const Leads = () => {
   const { t } = useLanguage()
   const { user } = useAuth()
+  const { settings } = useSettings()
   const companyId = parseInt(user?.company_id || localStorage.getItem('companyId') || 0, 10)
   const companyName = user?.company_name || localStorage.getItem('companyName') || ''
   const userId = user?.id || localStorage.getItem('userId') || 1
@@ -314,14 +465,14 @@ const Leads = () => {
     }
   }
 
-  const fmtShort = (n) => {
-    return new Intl.NumberFormat('de-DE', {
-      style: 'currency',
-      currency: 'EUR',
+  const { formatCurrency } = useSettings()
+  const fmtShort = useCallback((n, curr) => {
+    return formatCurrency(n || 0, curr || settings?.default_currency || 'EUR', {
       notation: 'compact',
-      maximumFractionDigits: 1
-    }).format(n || 0)
-  }
+      maximumFractionDigits: 1,
+      minimumFractionDigits: 0
+    })
+  }, [settings?.default_currency, formatCurrency])
 
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -362,8 +513,20 @@ const Leads = () => {
   useEffect(() => {
     if (selectedLead && isViewModalOpen) {
       fetchLeadTasks(selectedLead.id)
+      fetchLeadEstimates(selectedLead.id)
     }
   }, [selectedLead, isViewModalOpen])
+
+  const fetchLeadEstimates = async (leadId) => {
+    try {
+      const res = await estimatesAPI.getAll({ company_id: companyId, lead_id: leadId })
+      if (res.data.success) {
+        setEstimates(res.data.data || [])
+      }
+    } catch (err) {
+      console.error('Error fetching lead estimates:', err)
+    }
+  }
 
   const fetchLeadTasks = async (leadId) => {
     try {
@@ -463,6 +626,7 @@ const Leads = () => {
     label: '',                   // Label/Tag
     services: [],                // Services array (for backward compatibility)
     leadType: 'Organization',    // Lead type
+    currency: settings?.default_currency || 'EUR',
     custom_fields: {},           // Custom fields
     pipeline_id: '',             // Modal: selected pipeline (defaults from view)
     stage_id: '',                // Auto: first stage of selected pipeline (no separate field in UI)
@@ -633,6 +797,7 @@ const Leads = () => {
           probability: lead.probability || null,
           callThisWeek: lead.call_this_week || false,
           contacts: 1,
+          currency: lead.currency || settings?.default_currency || 'EUR',
           custom_fields: lead.custom_fields || {},
         }))
 
@@ -818,14 +983,18 @@ const Leads = () => {
   const handleDrop = async (e, stageId) => {
     e.preventDefault()
     e.stopPropagation()
+    const stageIdStr = String(stageId)
     setDragOverStageId(null)
-    if (String(stageId) === LEAD_KANBAN_FALLBACK_STAGE_ID) return
-    if (!draggedLead || String(draggedLead.stage_id) === String(stageId)) return
-    const pid = currentPipeline?.id
-    // Optimistic UI (like Deals)
+
+    if (stageIdStr === LEAD_KANBAN_FALLBACK_STAGE_ID) return
+    if (!draggedLead || String(draggedLead.stage_id) === stageIdStr) return
+
+    const pid = currentPipeline?.id || draggedLead.pipeline_id
+
+    // Optimistic UI update (like Deals.jsx)
     setLeads((prev) =>
       prev.map((l) =>
-        l.id === draggedLead.id ? { ...l, stage_id: stageId, pipeline_id: pid != null ? pid : l.pipeline_id } : l
+        l.id === draggedLead.id ? { ...l, stage_id: stageIdStr, pipeline_id: pid } : l
       )
     )
     try {
@@ -834,7 +1003,6 @@ const Leads = () => {
     } catch (error) {
       console.error('Error updating lead stage:', error)
       await fetchLeads()
-      alert(t('leads.kanban.load_error'))
     }
   }
 
@@ -1357,53 +1525,45 @@ const Leads = () => {
       notes: '',
       probability: '',
       callThisWeek: false,
+      currency: settings?.default_currency || 'EUR',
       services: [], // Added services field
       pipeline_id: currentPipeline?.id != null ? String(currentPipeline.id) : '',
       stage_id: stages[0]?.id != null ? String(stages[0].id) : '',
     })
+    setSelectedLead(null)
     setIsAddModalOpen(true)
   }
   // CRM Lead Table Columns - as per wireframe specification
   const columns = [
     {
-      key: 'checkbox',
-      label: '',
-      width: '40px',
-      render: (value, row) => (
-        <input
-          type="checkbox"
-          checked={selectedLeads.includes(row.id)}
-          onChange={() => handleSelectLead(row.id)}
-          className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-        />
-      ),
-    },
-    {
       key: 'name',
       label: t('leads.columns.lead_name'),
-      render: (value, row) => (
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-sm">
-            {(value || row.personName || row.companyName || 'L').charAt(0).toUpperCase()}
+      render: (value, row) => {
+        const title = row.leadType === 'Organization' ? (row.companyName || row.personName) : (row.personName || row.companyName);
+        return (
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-sm">
+              {(title || 'L').charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  const path = user?.role === 'EMPLOYEE' ? `/app/employee/leads/${row.id}` : `/app/admin/leads/${row.id}`;
+                  navigate(path);
+                }}
+                className="font-semibold text-gray-800 hover:text-blue-600 transition-colors"
+              >
+                {title || '-'}
+              </a>
+              {row.email && (
+                <p className="text-xs text-gray-400">{row.email}</p>
+              )}
+            </div>
           </div>
-          <div>
-            <a
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                const path = user?.role === 'EMPLOYEE' ? `/app/employee/leads/${row.id}` : `/app/admin/leads/${row.id}`;
-                navigate(path);
-              }}
-              className="font-semibold text-gray-800 hover:text-blue-600 transition-colors"
-            >
-              {value || row.personName || row.companyName || '-'}
-            </a>
-            {row.email && (
-              <p className="text-xs text-gray-400">{row.email}</p>
-            )}
-          </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       key: 'contact',
@@ -1430,13 +1590,18 @@ const Leads = () => {
     },
     {
       key: 'companyName',
-      label: t('leads.columns.company'),
-      render: (value, row) => (
-        <div className="flex items-center gap-2">
-          <IoBusiness size={16} className="text-gray-400" />
-          <span className="text-gray-700">{value || '-'}</span>
-        </div>
-      ),
+      label: t('leads.columns.company_contact') || 'Company/Contact',
+      render: (value, row) => {
+        const isOrg = row.leadType === 'Organization';
+        const displayVal = isOrg ? row.personName : row.companyName;
+        const Icon = isOrg ? IoPerson : IoBusiness;
+        return (
+          <div className="flex items-center gap-2">
+            <Icon size={16} className="text-gray-400" />
+            <span className="text-gray-700">{displayVal || '-'}</span>
+          </div>
+        );
+      },
     },
     {
       key: 'status',
@@ -1460,7 +1625,7 @@ const Leads = () => {
         if (amount === 0) return <span className="text-gray-400">-</span>
         return (
           <span className="font-semibold text-green-600">
-            ${amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+            {formatCurrency(amount, row.currency || settings?.default_currency || 'EUR')}
           </span>
         )
       },
@@ -1540,6 +1705,7 @@ const Leads = () => {
           address: fullLead.address || lead.address || '',
           city: fullLead.city || lead.city || '',
           value: fullLead.value?.toString() || lead.value?.toString() || '',
+          currency: fullLead.currency || lead.currency || settings?.default_currency || 'EUR',
           dueFollowup: fullLead.due_followup || lead.dueFollowup || '',
           notes: fullLead.notes || '',
           probability: fullLead.probability?.toString() || lead.probability?.toString() || '',
@@ -1569,6 +1735,7 @@ const Leads = () => {
         address: lead.address || '',
         city: lead.city || '',
         value: lead.value?.toString() || '',
+        currency: lead.currency || settings?.default_currency || 'EUR',
         dueFollowup: lead.dueFollowup || '',
         notes: '',
         probability: lead.probability?.toString() || '',
@@ -1637,17 +1804,24 @@ const Leads = () => {
         }
       }
 
+      const pickedOwnerRaw =
+        formData.employee !== '' && formData.employee != null && String(formData.employee).trim() !== ''
+          ? parseInt(String(formData.employee), 10)
+          : null
+      const pickedOwner = pickedOwnerRaw != null && !Number.isNaN(pickedOwnerRaw) ? pickedOwnerRaw : null
+
       const leadData = {
         lead_type: formData.leadType,
-        company_name: formData.leadType === 'Organization' ? (formData.companyName || null) : null,
-        person_name: formData.leadType === 'Person' ? formData.personName.trim() : (formData.personName || null),
-        phone: formData.phone.trim(),
-        owner_id: formData.employee, // Changed from owner to employee
+        company_name: formData.companyName?.trim() || null,
+        person_name: formData.personName?.trim() || null,
+        email: formData.email?.trim() || null,
+        phone: formData.phone?.trim() || null,
         status: formData.status,
         source: formData.source || null,
         address: formData.address || null,
         city: formData.city || null,
         value: formData.value ? parseFloat(formData.value) : null,
+        currency: formData.currency || settings?.default_currency || 'EUR',
         due_followup: formData.dueFollowup || null,
         notes: formData.notes || null,
         probability: formData.probability ? parseInt(formData.probability) : null,
@@ -1660,6 +1834,9 @@ const Leads = () => {
         pipeline_id: resolvedPipelineId ? parseInt(resolvedPipelineId, 10) : null,
         stage_id: resolvedStageId ? parseInt(resolvedStageId, 10) : null,
         custom_fields: formData.custom_fields || {}
+      }
+      if (pickedOwner != null) {
+        leadData.owner_id = pickedOwner
       }
 
       if (isEditModalOpen && selectedLead) {
@@ -1701,6 +1878,7 @@ const Leads = () => {
         address: '',
         city: '',
         value: '',
+        currency: settings?.default_currency || 'EUR',
         dueFollowup: '',
         notes: '',
         probability: '',
@@ -1925,9 +2103,9 @@ const Leads = () => {
                   </span>
                   {selectedLead.probability && (
                     <span className="px-3 py-1.5 text-xs font-medium rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200">
-                    {selectedLead.probability}% Wahrscheinlichkeit
-                  </span>
-                )}
+                      {selectedLead.probability}% Wahrscheinlichkeit
+                    </span>
+                  )}
                 </div>
 
                 {/* Owner */}
@@ -2011,135 +2189,133 @@ const Leads = () => {
       </div>
     ) : (
       <div className="flex flex-col h-[calc(100vh-4rem)] lg:h-[calc(100vh-5rem)] overflow-hidden bg-gray-50">
-        {/* ── Unified Header (Deals Style) ── */}
-        <div className="bg-white border-b border-gray-200 px-4 py-4 flex flex-col gap-3 shadow-sm z-20">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            {/* Title + tabs */}
-            <div>
-              <h1 className="text-xl font-black text-gray-900 flex items-center gap-2">
-                <IoBriefcase className="text-primary-accent" size={22} /> <span className="notranslate">{t('Leads')}</span>
-              </h1>
-              <div className="flex items-center gap-1 mt-1.5">
-                {[
-                  { id: 'kanban', icon: IoGrid, label: 'Kanban', tab: 'kanban' },
-                  { id: 'list', icon: IoList, label: 'Liste', tab: 'leads' }
-                ].map(v => (
-                  <button
-                    key={v.id}
-                    onClick={() => {
-                      setActiveTab(v.tab)
-                      setViewMode(v.id)
-                    }}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${viewMode === v.id ? 'bg-primary-accent/10 text-primary-accent' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'}`}
-                  >
-                    <v.icon size={14} /> {v.label}
-                  </button>
-                ))}
+        {/* ── Premium Header ── */}
+        <div className="bg-white border-b border-gray-200 px-4 py-2 z-20 shadow-sm">
+          <div className="max-w-full mx-auto flex flex-col gap-2">
+            {/* Row 1: Brand, Search, Primary Actions */}
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-primary-accent/10 flex items-center justify-center text-primary-accent shrink-0">
+                  <IoBriefcase size={18} />
+                </div>
+                <h1 className="text-xl font-black text-gray-900 tracking-tight shrink-0">{t('Leads')}</h1>
+                
+                <div className="hidden md:flex items-center gap-1 p-1 bg-gray-100 rounded-lg shadow-inner ml-2">
+                  {[
+                    { id: 'kanban', icon: IoGrid, label: t('common.kanban') || 'Kanban', tab: 'kanban' },
+                    { id: 'list', icon: IoList, label: t('common.list') || 'Liste', tab: 'leads' }
+                  ].map(v => (
+                    <button
+                      key={v.id}
+                      onClick={() => { setActiveTab(v.tab); setViewMode(v.id) }}
+                      className={`flex items-center gap-1.5 px-2 py-1 text-[10px] font-black rounded-md transition-all ${viewMode === v.id ? 'bg-white text-primary-accent shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                      <v.icon size={12} /> {v.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {/* My Leads / All Leads Toggle (Admin only to simplify Employee view) */}
-              {user?.role !== 'EMPLOYEE' && (
-                <div className="flex items-center gap-1.5 p-1 bg-gray-100 border border-gray-200 rounded-xl mt-2 w-fit">
-                  <button
-                    onClick={() => setActiveFilter('all')}
-                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${activeFilter === 'all' ? 'bg-white text-primary-accent shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                  >
-                    {t('common.all_leads')}
-                  </button>
-                  <button
-                    onClick={() => setActiveFilter('my')}
-                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${activeFilter === 'my' ? 'bg-white text-primary-accent shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                  >
-                    {t('common.my_leads')}
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Right controls */}
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Pipeline selector */}
-              {pipelines.length > 0 && (
-                <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 transition-all hover:border-primary-accent shadow-sm">
-                  <IoLayers size={14} className="text-gray-400" />
-                  <select
-                    className="bg-transparent text-sm font-bold text-gray-700 focus:outline-none cursor-pointer"
-                    value={currentPipeline?.id || ''}
-                    onChange={e => {
-                      const v = e.target.value
-                      const p = pipelines.find((x) => String(x.id) === String(v))
-                      if (p) {
-                        setCurrentPipeline(p)
-                        fetchStages(p.id)
-                      }
-                    }}
-                  >
-                    {pipelines.map(p => <option key={p.id} value={p.id}>{['lead pipeline'].includes((p.name||'').replace(/['"]/g, '').toLowerCase().trim()) ? 'Lead-Pipeline' : ['international sales'].includes((p.name||'').replace(/['"]/g, '').toLowerCase().trim()) ? 'Internationaler Vertrieb' : ['sales pipeline'].includes((p.name||'').replace(/['"]/g, '').toLowerCase().trim()) ? 'Vertriebspipeline' : p.name}</option>)}
-                  </select>
-                </div>
-              )}
-
-              {/* Search */}
-              <div className="relative">
+              {/* Search - Flexible */}
+              <div className="flex-1 max-w-md relative group">
                 <input
                   type="text"
-                  placeholder={t('leads.search_placeholder') || 'Search leads...'}
+                  placeholder={t('leads.search_placeholder') || 'Search...'}
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  className="pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent text-sm w-52 transition-all"
+                  className="w-full pl-9 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent text-sm transition-all"
                 />
-                <IoSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
+                <IoSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
               </div>
 
-              {/* Filter btn */}
-              <button
-                onClick={() => setIsFilterOpen(!isFilterOpen)}
-                className={`relative flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-bold transition-all ${isFilterOpen ? 'bg-primary-accent text-white border-primary-accent shadow-lg shadow-primary-accent/30' : 'bg-white border-gray-200 text-gray-600 hover:border-primary-accent hover:text-primary-accent'}`}
-              >
-                <IoFilter size={15} /> {t('common.filter')}
-                {(filterOwner || filterStatus || filterSource || filterDate) && (
-                  <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">!</span>
-                )}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleAdd}
+                  className="flex items-center gap-1.5 px-4 py-1.5 bg-primary-accent text-white rounded-lg text-xs font-black shadow-md shadow-primary-accent/20 hover:bg-primary-accent-hover transition-all whitespace-nowrap"
+                >
+                  <IoAdd size={16} /> {t('leads.add_new_lead')}
+                </button>
 
-              {/* Add Lead - Available for all roles */}
-              <Button
-                variant="primary"
-                onClick={() => {
-                  setIsAddModalOpen(true)
-                  setEditingLead(null)
-                }}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-bold shadow-sm"
-              >
-                <IoAdd size={18} /> {t('leads.add_new_lead')}
-              </Button>
-
-              {/* Import */}
-              <Button variant="outline" onClick={() => setIsImportModalOpen(true)} className="text-sm py-2 px-4">
-                <IoDownload size={16} /> {t('common.import')}
-              </Button>
+                <button 
+                  onClick={() => setIsImportModalOpen(true)}
+                  className="p-1.5 bg-white border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-all shadow-sm"
+                  title={t('common.import')}
+                >
+                  <IoDownload size={18} />
+                </button>
+              </div>
             </div>
-          </div>
 
-          {/* Stats bar */}
-          <div className="flex items-center gap-4 text-xs text-gray-400">
-            <span>
-              {(viewMode === 'kanban' && currentPipeline ? pipelineScopeTotals.count : filteredLeads.length)}{' '}
-              {t('leads.columns.lead') || 'Leads'}
-            </span>
-            <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-            <span className="font-bold">
-              {t('dashboard.total') || 'Total'}:{' '}
-              <span className="text-primary-accent">
-                {fmtShort((viewMode === 'kanban' && currentPipeline ? pipelineScopeTotals.value : leadsTotals.value))}
-              </span>
-            </span>
-            {(filterOwner || filterStatus || filterSource || filterDate) && (
-              <>
-                <span className="w-1 h-1 bg-gray-300 rounded-full" />
-                <span className="text-amber-600 font-bold">{t('common.filters_active') || 'Filters Active'}</span>
-              </>
-            )}
+            {/* Row 2: Pipeline, Filters, and Compact Stats */}
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                {/* Pipeline Selector */}
+                {pipelines.length > 0 && (
+                  <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-lg px-2 py-1 hover:border-primary-accent transition-all">
+                    <IoLayers size={14} className="text-gray-400" />
+                    <select
+                      className="bg-transparent text-[10px] font-bold text-gray-700 focus:outline-none cursor-pointer"
+                      value={currentPipeline?.id || ''}
+                      onChange={e => {
+                        const v = e.target.value
+                        const p = pipelines.find((x) => String(x.id) === String(v))
+                        if (p) { setCurrentPipeline(p); fetchStages(p.id) }
+                      }}
+                    >
+                      {pipelines.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </div>
+                )}
+
+                {/* Filter Toggle */}
+                <button
+                  onClick={() => setIsFilterOpen(!isFilterOpen)}
+                  className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[10px] font-black transition-all ${isFilterOpen ? 'bg-primary-accent text-white border-primary-accent shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:border-primary-accent'}`}
+                >
+                  <IoFilter size={14} /> {t('common.filter')}
+                  {(filterOwner || filterStatus || filterSource || filterDate || filterDateFrom || filterDateTo) && (
+                    <div className="w-1.5 h-1.5 bg-red-500 rounded-full"></div>
+                  )}
+                </button>
+
+                <div className="md:hidden flex items-center gap-1 p-0.5 bg-gray-100 rounded-lg">
+                  {[
+                    { id: 'kanban', icon: IoGrid, tab: 'kanban' },
+                    { id: 'list', icon: IoList, tab: 'leads' }
+                  ].map(v => (
+                    <button
+                      key={v.id}
+                      onClick={() => { setActiveTab(v.tab); setViewMode(v.id) }}
+                      className={`p-1 rounded-md transition-all ${viewMode === v.id ? 'bg-white text-primary-accent shadow-sm' : 'text-gray-500'}`}
+                    >
+                      <v.icon size={12} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Ultra-compact Stats Bar */}
+              <div className="flex items-center gap-4 text-[10px] font-bold text-gray-500">
+                <div className="flex items-center gap-1.5">
+                  <span className="uppercase tracking-tighter opacity-70">{t('leads.total_leads') || 'Leads'}:</span>
+                  <span className="text-gray-900 font-black">{(viewMode === 'kanban' && currentPipeline ? pipelineScopeTotals.count : filteredLeads.length)}</span>
+                </div>
+                <div className="w-px h-3 bg-gray-200"></div>
+                <div className="flex items-center gap-1.5">
+                  <span className="uppercase tracking-tighter opacity-70">{t('leads.total_value') || 'Value'}:</span>
+                  <span className="text-primary-accent font-black">
+                    {fmtShort(viewMode === 'kanban' && currentPipeline ? pipelineScopeTotals.value : leadsTotals.value, settings?.default_currency)}
+                  </span>
+                </div>
+                <div className="w-px h-3 bg-gray-200"></div>
+                <div className="flex items-center gap-1.5">
+                  <span className="uppercase tracking-tighter opacity-70">{t('leads.avg_probability') || 'Prob'}:</span>
+                  <span className="text-amber-600 font-black">
+                    {filteredLeads.length > 0 ? Math.round(filteredLeads.reduce((s, l) => s + (l.probability || 0), 0) / filteredLeads.length) : 0}%
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -2167,20 +2343,23 @@ const Leads = () => {
               <div className="flex-1 min-w-[160px]">
                 <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">{t('deals.form.assigned_to')}</label>
                 <select value={filterOwner} onChange={e => setFilterOwner(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent">
-                    <option value="">{t('common.all_users')}</option>
-                    {employees.map(e => <option key={e.id} value={e.user_id || e.id}>{e.name || e.employee_name}</option>)}
+                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent">
+                  <option value="">{t('common.all_users')}</option>
+                  {employees.map((e) => {
+                    const uid = employeeAssignableUserId(e)
+                    return <option key={uid || e.email || e.id} value={uid}>{e.name || e.employee_name}</option>
+                  })}
                 </select>
               </div>
               <div className="flex-1 min-w-[140px]">
                 <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">{t('common.date_from')}</label>
                 <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent" />
+                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent" />
               </div>
               <div className="flex-1 min-w-[140px]">
                 <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">{t('common.date_to')}</label>
                 <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent" />
+                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent" />
               </div>
 
               {/* Quick Actions (Reset) */}
@@ -2241,6 +2420,8 @@ const Leads = () => {
                         onDragStart={handleDragStart}
                         onDragEnd={handleDragEnd}
                         onOpenLead={handleView}
+                        onEditLead={handleEdit}
+                        onDeleteLead={handleDelete}
                         getTimeAgo={getTimeAgo}
                         fmtShort={fmtShort}
                       />
@@ -2278,11 +2459,13 @@ const Leads = () => {
                       t={t}
                       cardsDraggable
                       isDragOver={dragOverStageId === stage.id}
-                      onDragOverCol={(e) => handleDragOver(e, stage.id)}
-                      onDropCol={(e) => handleDrop(e, stage.id)}
+                      onDragOver={(e) => handleDragOver(e, stage.id)}
+                      onDrop={(e) => handleDrop(e, stage.id)}
                       onDragStart={handleDragStart}
                       onDragEnd={handleDragEnd}
                       onOpenLead={handleView}
+                      onEditLead={handleEdit}
+                      onDeleteLead={handleDelete}
                       getTimeAgo={getTimeAgo}
                       fmtShort={fmtShort}
                     />
@@ -2466,7 +2649,7 @@ const Leads = () => {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
                   {/* Assigned Users */}
                   <Card className="p-4 sm:p-6">
-                    <h3 className="text-lg font-semibold text-primary-text mb-4">{t('leads.assigned_users') || 'Zugewiesene Benutzer'}</h3>
+                    <h3 className="text-lg font-semibold text-primary-text mb-4">{t('leads.assigned_users')}</h3>
                     {overviewData.assigned_users && overviewData.assigned_users.length > 0 ? (
                       <div className="space-y-3">
                         {overviewData.assigned_users.slice(0, 5).map((user) => (
@@ -2535,19 +2718,19 @@ const Leads = () => {
                     <div>
                       <p className="text-sm text-secondary-text mb-1">{t('') || ''}</p>
                       <p className="text-2xl font-bold text-primary-text">
-                        ${overviewData.revenue.total_value.toLocaleString()}
+                        {formatCurrency(overviewData.revenue.total_value, settings?.default_currency || 'EUR')}
                       </p>
                     </div>
                     <div>
                       <p className="text-sm text-secondary-text mb-1">{t('') || ''}</p>
                       <p className="text-2xl font-bold text-green-600">
-                        ${overviewData.revenue.converted_value.toLocaleString()}
+                        {formatCurrency(overviewData.revenue.converted_value, settings?.default_currency || 'EUR')}
                       </p>
                     </div>
                     <div>
                       <p className="text-sm text-secondary-text mb-1">{t('') || ''}</p>
                       <p className="text-2xl font-bold text-primary-accent">
-                        ${overviewData.revenue.avg_value.toLocaleString()}
+                        {formatCurrency(overviewData.revenue.avg_value, settings?.default_currency || 'EUR')}
                       </p>
                     </div>
                   </div>
@@ -2565,6 +2748,7 @@ const Leads = () => {
                 columns={columns}
                 data={filteredLeads}
                 searchPlaceholder="Search leads..."
+                hideSearch={true}
                 filters={true}
                 filterConfig={[
                   {
@@ -2638,6 +2822,7 @@ const Leads = () => {
                 <Card className="p-0">
                   <DataTable
                     data={contacts}
+                    hideSearch={true}
                     columns={[
                       { key: 'name', label: t('leads.columns.lead_name') },
                       { key: 'company', label: t('leads.columns.company'), render: (value) => value || '-' },
@@ -2867,493 +3052,447 @@ const Leads = () => {
             }}
             title={isAddModalOpen ? (t('leads.add_new_lead') || 'Add New Lead') : (t('leads.edit_lead') || 'Edit Lead')}
           >
-            <div className="space-y-4">
-              {/* Basic Info Section */}
-              <div className="border-b border-gray-200 pb-4">
-                <h3 className="text-lg font-semibold text-primary-text mb-3">{t('leads.basic_info')}</h3>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-primary-text mb-2">
-                        {t('leads.lead_type_label')} <span className="text-danger">*</span>
-                      </label>
-                      <select
-                        value={formData.leadType}
-                        onChange={(e) => {
-                          const newLeadType = e.target.value
-                          setFormData({
-                            ...formData,
-                            leadType: newLeadType,
-                            // Clear fields when switching types
-                            personName: newLeadType === 'Organization' ? '' : formData.personName,
-                            companyName: newLeadType === 'Person' ? '' : formData.companyName
-                          })
-                        }}
-                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
-                      >
-                        <option value="Organization">{t('leads.organization')}</option>
-                        <option value="Person">{t('leads.person')}</option>
-                      </select>
+            <div className="flex flex-col h-full bg-white">
+              {/* Form Content - Scrollable */}
+              <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8 custom-scrollbar">
+                
+                {/* ── Section: Lead Classification ── */}
+                <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                  <div className="flex items-center gap-3 border-b border-gray-100 pb-3">
+                    <div className="p-2 bg-primary-accent/10 rounded-lg text-primary-accent">
+                      <IoBriefcase size={20} />
                     </div>
-                    {formData.leadType === 'Person' ? (
-                      <Input
-                        label={t('leads.person_name')}
-                        value={formData.personName}
-                        onChange={(e) => setFormData({ ...formData, personName: e.target.value })}
-                        placeholder={t('leads.enter_person_name')}
-                      />
-                    ) : (
-                      <Input
-                        label={t('leads.organization_name')}
-                        value={formData.companyName}
-                        onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                        placeholder={t('leads.enter_organization_name')}
-                      />
-                    )}
+                    <h3 className="text-lg font-black text-gray-900 tracking-tight">{t('leads.basic_info')}</h3>
                   </div>
-                  <Input
-                    label={t('common.phone')}
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: formatPhoneNumber(e.target.value) })}
-                    placeholder={t('leads.enter_phone')}
-                    helperText={formData.phone && !isValidPhone(formData.phone) ? t('leads.invalid_phone') : '+49 für Deutschland'}
-                    error={formData.phone && !isValidPhone(formData.phone)}
-                  />
 
-                  {/* Custom Fields Section */}
-                  {customFields.length > 0 && (
-                    <div className="pt-2 border-t border-gray-100">
-                      <h4 className="text-sm font-semibold text-primary-text mb-3 flex items-center gap-2">
-                        <IoList className="text-primary-accent" />
-                        {t('leads.additional_info')}
-                      </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {customFields.map((field) => (
-                          <div key={field.id}>
-                            <label className="block text-sm font-medium text-primary-text mb-2">
-                              {field.label}
-                              {field.required === 1 && <span className="text-red-500 ml-1">*</span>}
-                            </label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="block text-xs font-black text-gray-500 uppercase tracking-[0.15em]">
+                        {t('leads.lead_type_label')} <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={formData.leadType}
+                          onChange={(e) => setFormData({ ...formData, leadType: e.target.value })}
+                          className="w-full pl-4 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-4 focus:ring-primary-accent/10 focus:border-primary-accent focus:bg-white outline-none appearance-none font-bold text-gray-700 transition-all shadow-sm"
+                        >
+                          <option value="Organization">🏢 {t('leads.organization')}</option>
+                          <option value="Person">👤 {t('leads.person')}</option>
+                        </select>
+                        <IoChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                      </div>
+                    </div>
 
-                            {/* TEXTAREA */}
-                            {field.type === 'textarea' ? (
-                              <textarea
-                                value={formData.custom_fields?.[field.name] || ''}
-                                onChange={(e) => setFormData({ ...formData, custom_fields: { ...formData.custom_fields, [field.name]: e.target.value } })}
-                                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none resize-none"
-                                rows={3}
-                                placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}`}
-                              />
+                    <div className="space-y-2">
+                      <label className="block text-xs font-black text-gray-500 uppercase tracking-[0.15em]">
+                        {formData.leadType === 'Organization' ? t('leads.organization_name') : t('leads.person_name')}
+                      </label>
+                      <div className="relative group">
+                        <input
+                          type="text"
+                          value={formData.leadType === 'Organization' ? formData.companyName : formData.personName}
+                          onChange={(e) => {
+                            if (formData.leadType === 'Organization') {
+                              setFormData({ ...formData, companyName: e.target.value })
+                            } else {
+                              setFormData({ ...formData, personName: e.target.value })
+                            }
+                          }}
+                          placeholder={formData.leadType === 'Organization' ? t('leads.enter_organization_name') : t('leads.enter_person_name')}
+                          className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-4 focus:ring-primary-accent/10 focus:border-primary-accent focus:bg-white outline-none font-bold text-gray-700 transition-all shadow-sm"
+                        />
+                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary-accent transition-colors">
+                          {formData.leadType === 'Organization' ? <IoBusiness size={18} /> : <IoPerson size={18} />}
+                        </div>
+                      </div>
+                    </div>
 
-                            ) : field.type === 'dropdown' ? (
-                              /* DROPDOWN */
+                    <div className="space-y-2">
+                      <label className="block text-xs font-black text-gray-500 uppercase tracking-[0.15em]">
+                        {t('common.email')}
+                      </label>
+                      <div className="relative group">
+                        <input
+                          type="email"
+                          value={formData.email}
+                          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                          placeholder={t('leads.enter_email') || 'example@mail.com'}
+                          className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-4 focus:ring-primary-accent/10 focus:border-primary-accent focus:bg-white outline-none font-bold text-gray-700 transition-all shadow-sm"
+                        />
+                        <IoMail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary-accent transition-colors" size={18} />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-xs font-black text-gray-500 uppercase tracking-[0.15em]">
+                        {t('common.phone')}
+                      </label>
+                      <div className="relative group">
+                        <input
+                          type="tel"
+                          value={formData.phone}
+                          onChange={(e) => setFormData({ ...formData, phone: formatPhoneNumber(e.target.value) })}
+                          placeholder={t('leads.enter_phone')}
+                          className={`w-full pl-10 pr-4 py-3 bg-gray-50 border rounded-xl focus:ring-4 focus:ring-primary-accent/10 focus:border-primary-accent focus:bg-white outline-none font-bold text-gray-700 transition-all shadow-sm ${formData.phone && !isValidPhone(formData.phone) ? 'border-red-300' : 'border-gray-200'}`}
+                        />
+                        <IoCall className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary-accent transition-colors" size={18} />
+                      </div>
+                      {formData.phone && !isValidPhone(formData.phone) && (
+                        <p className="text-[10px] text-red-500 font-bold mt-1 uppercase tracking-wider">{t('leads.invalid_phone')}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── Section: Lead Pipeline & Details ── */}
+                <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-300 delay-75">
+                  <div className="flex items-center gap-3 border-b border-gray-100 pb-3">
+                    <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">
+                      <IoLayers size={20} />
+                    </div>
+                    <h3 className="text-lg font-black text-gray-900 tracking-tight">{t('leads.lead_details_label')}</h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="block text-xs font-black text-gray-500 uppercase tracking-[0.15em]">{t('deals.form.pipeline')}</label>
+                      <div className="relative">
+                        <select
+                          value={formData.pipeline_id || (currentPipeline?.id != null ? String(currentPipeline.id) : '')}
+                          onChange={async (e) => {
+                            const pid = e.target.value
+                            if (!pid) {
+                              setFormData((fd) => ({ ...fd, pipeline_id: '', stage_id: '' }))
+                              return
+                            }
+                            try {
+                              const res = await leadPipelinesAPI.getStages(pid)
+                              const list = res.data?.success ? (res.data.data || []) : []
+                              setFormData((fd) => ({ ...fd, pipeline_id: pid, stage_id: list[0]?.id != null ? String(list[0].id) : '' }))
+                            } catch (err) {
+                              console.error(err)
+                              setFormData((fd) => ({ ...fd, pipeline_id: pid }))
+                            }
+                          }}
+                          className="w-full pl-4 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-4 focus:ring-primary-accent/10 focus:border-primary-accent focus:bg-white outline-none appearance-none font-bold text-gray-700 shadow-sm"
+                        >
+                          <option value="">{t('deals.form.select_pipeline')}</option>
+                          {pipelines.map(p => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                          ))}
+                        </select>
+                        <IoChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-xs font-black text-gray-500 uppercase tracking-[0.15em]">{t('leads.columns.source')}</label>
+                      <div className="relative">
+                        <select
+                          value={formData.source}
+                          onChange={(e) => setFormData({ ...formData, source: e.target.value })}
+                          className="w-full pl-4 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-4 focus:ring-primary-accent/10 focus:border-primary-accent focus:bg-white outline-none appearance-none font-bold text-gray-700 shadow-sm"
+                        >
+                          <option value="">{t('leads.select_source')}</option>
+                          {sources.map(source => (
+                            <option key={source} value={source}>{source}</option>
+                          ))}
+                        </select>
+                        <IoChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-xs font-black text-gray-500 uppercase tracking-[0.15em]">{t('deals.form.amount')}</label>
+                      <div className="relative group">
+                        <input
+                          type="number"
+                          value={formData.value}
+                          onChange={(e) => setFormData({ ...formData, value: e.target.value })}
+                          placeholder="0.00"
+                          className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-4 focus:ring-primary-accent/10 focus:border-primary-accent focus:bg-white outline-none font-bold text-gray-700 shadow-sm"
+                        />
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold group-focus-within:text-primary-accent transition-colors">EUR</div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-xs font-black text-gray-500 uppercase tracking-[0.15em]">{t('leads.form.responsible_person')}</label>
+                      <div className="relative">
+                        <select
+                          value={formData.employee}
+                          onChange={(e) => setFormData({ ...formData, employee: e.target.value })}
+                          className="w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-4 focus:ring-primary-accent/10 focus:border-primary-accent focus:bg-white outline-none appearance-none font-bold text-gray-700 shadow-sm"
+                        >
+                          <option value="">{t('leads.form.select_responsible')}</option>
+                          {employees.map((employee) => (
+                            <option key={employeeAssignableUserId(employee)} value={employeeAssignableUserId(employee)}>
+                              {employee.name || employee.email}
+                            </option>
+                          ))}
+                        </select>
+                        <IoPerson className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                        <IoChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="block text-xs font-black text-gray-500 uppercase tracking-[0.15em]">{t('leads.probability')} (%)</label>
+                      <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-sm">
+                        <div className="flex items-center gap-4">
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            step="5"
+                            value={formData.probability || 0}
+                            onChange={(e) => setFormData({ ...formData, probability: e.target.value })}
+                            className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-accent"
+                          />
+                          <span className="w-14 text-center font-black text-primary-accent bg-white px-2 py-1 rounded-lg shadow-sm border border-gray-100">
+                            {formData.probability || 0}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-xs font-black text-gray-500 uppercase tracking-[0.15em]">{t('leads.due_followup')}</label>
+                      <div className="relative group">
+                        <input
+                          type="date"
+                          value={formData.dueFollowup}
+                          onChange={(e) => setFormData({ ...formData, dueFollowup: e.target.value })}
+                          className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-4 focus:ring-primary-accent/10 focus:border-primary-accent focus:bg-white outline-none font-bold text-gray-700 shadow-sm"
+                        />
+                        <IoCalendar className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary-accent transition-colors" size={18} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── Section: Address & Notes ── */}
+                <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-300 delay-150">
+                  <div className="flex items-center gap-3 border-b border-gray-100 pb-3">
+                    <div className="p-2 bg-amber-50 rounded-lg text-amber-600">
+                      <IoLocationOutline size={20} />
+                    </div>
+                    <h3 className="text-lg font-black text-gray-900 tracking-tight">{t('common.address')} & {t('offline_requests.notes')}</h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="block text-xs font-black text-gray-500 uppercase tracking-[0.15em]">{t('common.city')}</label>
+                      <div className="relative group">
+                        <input
+                          type="text"
+                          value={formData.city}
+                          onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                          placeholder={t('common.placeholder_city')}
+                          className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-4 focus:ring-primary-accent/10 focus:border-primary-accent focus:bg-white outline-none font-bold text-gray-700 shadow-sm"
+                        />
+                        <IoLocation className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary-accent transition-colors" size={18} />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-xs font-black text-gray-500 uppercase tracking-[0.15em]">{t('common.labels')}</label>
+                      <div className="relative">
+                        <select
+                          value={formData.label}
+                          onChange={(e) => setFormData({ ...formData, label: e.target.value })}
+                          className="w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-4 focus:ring-primary-accent/10 focus:border-primary-accent focus:bg-white outline-none appearance-none font-bold text-gray-700 shadow-sm"
+                        >
+                          <option value="">{t('leads.select_label')}</option>
+                          {labels.map(l => (
+                            <option key={typeof l === 'object' ? l.name : l} value={typeof l === 'object' ? l.name : l}>
+                              {typeof l === 'object' ? l.name : l}
+                            </option>
+                          ))}
+                        </select>
+                        <IoPricetag className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                        <IoChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block text-xs font-black text-gray-500 uppercase tracking-[0.15em]">{t('common.address')}</label>
+                    <div className="border border-gray-200 rounded-xl overflow-hidden focus-within:ring-4 focus-within:ring-primary-accent/10 focus-within:border-primary-accent transition-all">
+                      <RichTextEditor
+                        value={formData.address}
+                        onChange={(content) => setFormData({ ...formData, address: content })}
+                        placeholder={t('common.placeholder_address')}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block text-xs font-black text-gray-500 uppercase tracking-[0.15em]">{t('offline_requests.notes')}</label>
+                    <div className="border border-gray-200 rounded-xl overflow-hidden focus-within:ring-4 focus-within:ring-primary-accent/10 focus-within:border-primary-accent transition-all">
+                      <RichTextEditor
+                        value={formData.notes}
+                        onChange={(content) => setFormData({ ...formData, notes: content })}
+                        placeholder={t('leads.placeholder_notes')}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── Section: Additional Info (Custom Fields) ── */}
+                {customFields.length > 0 && (
+                  <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-300 delay-175">
+                    <div className="flex items-center gap-3 border-b border-gray-100 pb-3">
+                      <div className="p-2 bg-green-50 rounded-lg text-green-600">
+                        <IoList size={20} />
+                      </div>
+                      <h3 className="text-lg font-black text-gray-900 tracking-tight">{t('leads.additional_info')}</h3>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {customFields.map((field) => (
+                        <div key={field.id} className="space-y-2">
+                          <label className="block text-xs font-black text-gray-500 uppercase tracking-[0.15em]">
+                            {field.label}
+                            {field.required === 1 && <span className="text-red-500 ml-1">*</span>}
+                          </label>
+
+                          {field.type === 'textarea' ? (
+                            <textarea
+                              value={formData.custom_fields?.[field.name] || ''}
+                              onChange={(e) => setFormData({ ...formData, custom_fields: { ...formData.custom_fields, [field.name]: e.target.value } })}
+                              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-4 focus:ring-primary-accent/10 focus:border-primary-accent focus:bg-white outline-none font-bold text-gray-700 transition-all shadow-sm resize-none"
+                              rows={3}
+                              placeholder={field.placeholder || `${t('common.enter')} ${field.label}`}
+                            />
+                          ) : field.type === 'dropdown' ? (
+                            <div className="relative">
                               <select
                                 value={formData.custom_fields?.[field.name] || ''}
                                 onChange={(e) => setFormData({ ...formData, custom_fields: { ...formData.custom_fields, [field.name]: e.target.value } })}
-                                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none bg-white"
+                                className="w-full pl-4 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-4 focus:ring-primary-accent/10 focus:border-primary-accent focus:bg-white outline-none appearance-none font-bold text-gray-700 shadow-sm"
                               >
-                                <option value="">— Select {field.label} —</option>
+                                <option value="">— {t('common.select')} {field.label} —</option>
                                 {(field.options || []).map((opt, idx) => (
                                   <option key={idx} value={opt}>{opt}</option>
                                 ))}
                               </select>
-
-                            ) : field.type === 'multiselect' ? (
-                              /* MULTISELECT */
-                              <div className="space-y-2">
-                                {(field.options || []).map((opt, idx) => {
-                                  const selected = (formData.custom_fields?.[field.name] || '').split(',').filter(Boolean)
-                                  const isChecked = selected.includes(opt)
-                                  return (
-                                    <label key={idx} className="flex items-center gap-2 cursor-pointer">
-                                      <input
-                                        type="checkbox"
-                                        checked={isChecked}
-                                        onChange={(e) => {
-                                          const current = (formData.custom_fields?.[field.name] || '').split(',').filter(Boolean)
-                                          const updated = e.target.checked
-                                            ? [...current, opt]
-                                            : current.filter(v => v !== opt)
-                                          setFormData({ ...formData, custom_fields: { ...formData.custom_fields, [field.name]: updated.join(',') } })
-                                        }}
-                                        className="w-4 h-4 rounded border-gray-300 text-primary-accent focus:ring-primary-accent"
-                                      />
-                                      <span className="text-sm text-secondary-text">{opt}</span>
-                                    </label>
-                                  )
-                                })}
-                              </div>
-
-                            ) : field.type === 'radio' ? (
-                              /* RADIO */
-                              <div className="space-y-2">
-                                {(field.options || []).map((opt, idx) => (
-                                  <label key={idx} className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                      type="radio"
-                                      name={`cf_${field.name}`}
-                                      value={opt}
-                                      checked={formData.custom_fields?.[field.name] === opt}
-                                      onChange={() => setFormData({ ...formData, custom_fields: { ...formData.custom_fields, [field.name]: opt } })}
-                                      className="w-4 h-4 border-gray-300 text-primary-accent focus:ring-primary-accent"
-                                    />
-                                    <span className="text-sm text-secondary-text">{opt}</span>
-                                  </label>
-                                ))}
-                              </div>
-
-                            ) : field.type === 'checkbox' ? (
-                              /* CHECKBOX (single boolean) */
-                              <label className="flex items-center gap-3 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={formData.custom_fields?.[field.name] === 'true' || formData.custom_fields?.[field.name] === true}
-                                  onChange={(e) => setFormData({ ...formData, custom_fields: { ...formData.custom_fields, [field.name]: e.target.checked } })}
-                                  className="w-5 h-5 rounded border-gray-300 text-primary-accent focus:ring-primary-accent cursor-pointer"
-                                />
-                                <span className="text-sm text-secondary-text">{t('common.yes')}, {field.label}</span>
-                              </label>
-
-                            ) : field.type === 'file' ? (
-                              /* FILE UPLOAD */
-                              <div>
-                                <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 hover:border-primary-accent transition-all">
-                                  <div className="flex flex-col items-center justify-center pt-2 pb-2">
-                                    <IoDocumentText size={24} className="text-gray-400 mb-1" />
-                                    {formData.custom_fields?.[field.name] ? (
-                                      <p className="text-sm text-primary-accent font-medium">
-                                        ✅ {typeof formData.custom_fields[field.name] === 'string'
-                                          ? formData.custom_fields[field.name]
-                                          : formData.custom_fields[field.name]?.name || 'Datei ausgewählt'}
-                                      </p>
-                                    ) : (
-                                      <>
-                                        <p className="text-sm text-gray-500">{t('auto.auto_5427b3c0') || 'Klicken zum Hochladen'}<span className="font-semibold text-primary-accent">{field.label}</span></p>
-                                        <p className="text-xs text-gray-400 mt-1">{t('') || ''}</p>
-                                      </>
-                                    )}
-                                  </div>
-                                  <input
-                                    type="file"
-                                    className="hidden"
-                                    onChange={(e) => {
-                                      const file = e.target.files?.[0]
-                                      if (file) {
-                                        setFormData({ ...formData, custom_fields: { ...formData.custom_fields, [field.name]: file } })
-                                      }
-                                    }}
-                                  />
-                                </label>
-                                {formData.custom_fields?.[field.name] && (
-                                  <button
-                                    type="button"
-                                    onClick={() => setFormData({ ...formData, custom_fields: { ...formData.custom_fields, [field.name]: null } })}
-                                    className="mt-1 text-xs text-red-500 hover:text-red-700"
-                                  >
-                                    ✕ Datei entfernen
-                                  </button>
-                                )}
-                              </div>
-
-                            ) : (
-                              /* TEXT / NUMBER / DATE / DATETIME / EMAIL / PHONE / URL */
+                              <IoChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                            </div>
+                          ) : (
+                            <div className="relative group">
                               <input
-                                type={
-                                  field.type === 'number' ? 'number' :
-                                    field.type === 'date' ? 'date' :
-                                      field.type === 'datetime' ? 'datetime-local' :
-                                        field.type === 'email' ? 'email' :
-                                          field.type === 'phone' ? 'tel' :
-                                            field.type === 'url' ? 'url' : 'text'
-                                }
+                                type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}
                                 value={formData.custom_fields?.[field.name] || ''}
                                 onChange={(e) => setFormData({ ...formData, custom_fields: { ...formData.custom_fields, [field.name]: e.target.value } })}
-                                placeholder={field.placeholder || `${t('common.add')} ${field.label.toLowerCase()}`}
-                                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
+                                placeholder={field.placeholder || `${t('common.enter')} ${field.label}`}
+                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-4 focus:ring-primary-accent/10 focus:border-primary-accent focus:bg-white outline-none font-bold text-gray-700 transition-all shadow-sm"
                               />
-                            )}
-
-                            {field.help_text && (
-                              <p className="text-xs text-secondary-text mt-1">{field.help_text}</p>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Ownership Section */}
-              <div className="border-b border-gray-200 pb-4">
-                <h3 className="text-lg font-semibold text-primary-text mb-3">{t('leads.ownership')}</h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-primary-text mb-2">
-                      {t('employees.title')}
-                    </label>
-                    <select
-                      value={formData.employee}
-                      onChange={(e) => setFormData({ ...formData, employee: e.target.value })}
-                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
-                    >
-                      <option value="">{t('employees.select_employee')}</option>
-                      {employees.map(employee => (
-                        <option key={employee.user_id || employee.id} value={employee.user_id || employee.id}>
-                          {employee.name || employee.email}
-                        </option>
+                            </div>
+                          )}
+                          {field.help_text && <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{field.help_text}</p>}
+                        </div>
                       ))}
-                    </select>
-                    {employees.length === 0 && (
-                      <p className="text-xs text-secondary-text mt-1">{t('employees.no_employees_found')}</p>
-                    )}
+                    </div>
                   </div>
-                </div>
-              </div>
+                )}
 
-              {/* Lead Details Section */}
-              <div className="border-b border-gray-200 pb-4">
-                <h3 className="text-lg font-semibold text-primary-text mb-3">{t('leads.lead_details_label')}</h3>
-                <div className="space-y-4">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="block text-sm font-medium text-primary-text">
-                        {t('deals.form.pipeline')}
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => navigate('/app/admin/settings/pipelines')}
-                        className="text-[10px] text-primary-accent font-bold hover:underline"
+                {/* ── Section: Services ── */}
+                <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-300 delay-200 pb-10">
+                  <div className="flex items-center gap-3 border-b border-gray-100 pb-3">
+                    <div className="p-2 bg-purple-50 rounded-lg text-purple-600">
+                      <IoCheckbox size={20} />
+                    </div>
+                    <h3 className="text-lg font-black text-gray-900 tracking-tight">{t('leads.required_services')}</h3>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="relative group">
+                      <select
+                        multiple
+                        value={formData.services}
+                        onChange={(e) => {
+                          const selected = Array.from(e.target.selectedOptions, option => option.value)
+                          setFormData({ ...formData, services: selected })
+                        }}
+                        className="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-4 focus:ring-primary-accent/10 focus:border-primary-accent focus:bg-white outline-none font-bold text-gray-700 shadow-sm min-h-[160px] custom-scrollbar"
                       >
-                        {t('deals.kanban.manage_pipelines')}
-                      </button>
+                        {items.map((item) => (
+                          <option key={item.id} value={item.id} className="py-2 px-2 rounded-lg hover:bg-primary-accent/5">
+                            {item.title} — {formatCurrency(item.rate)}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-[10px] text-gray-400 font-bold mt-2 uppercase tracking-widest text-center">
+                        {t('leads.multi_select_help')}
+                      </p>
                     </div>
-                    <p className="text-xs text-secondary-text mb-2">{t('leads.form.pipeline_stage_hint')}</p>
-                    <select
-                      value={formData.pipeline_id || (currentPipeline?.id != null ? String(currentPipeline.id) : '')}
-                      onChange={async (e) => {
-                        const pid = e.target.value
-                        if (!pid) {
-                          setFormData((fd) => ({ ...fd, pipeline_id: '', stage_id: '' }))
-                          return
-                        }
-                        try {
-                          const res = await leadPipelinesAPI.getStages(pid)
-                          const list = res.data?.success ? (res.data.data || []) : []
-                          setFormData((fd) => ({ ...fd, pipeline_id: pid, stage_id: list[0]?.id != null ? String(list[0].id) : '' }))
-                        } catch (err) {
-                          console.error(err)
-                          setFormData((fd) => ({ ...fd, pipeline_id: pid }))
-                        }
-                      }}
-                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
-                    >
-                      <option value="">{t('deals.form.select_pipeline')}</option>
-                      {pipelines.map(p => (
-                        <option key={p.id} value={p.id}>{['lead pipeline'].includes((p.name||'').replace(/['"]/g, '').toLowerCase().trim()) ? 'Lead-Pipeline' : ['international sales'].includes((p.name||'').replace(/['"]/g, '').toLowerCase().trim()) ? 'Internationaler Vertrieb' : ['sales pipeline'].includes((p.name||'').replace(/['"]/g, '').toLowerCase().trim()) ? 'Vertriebspipeline' : p.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-primary-text mb-2">
-                      {t('leads.columns.source')}
-                    </label>
-                    <select
-                      value={formData.source}
-                      onChange={(e) => setFormData({ ...formData, source: e.target.value })}
-                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
-                    >
-                      <option value="">{t('leads.select_source')}</option>
-                      {sources.map(source => (
-                        <option key={source} value={source}>
-                          {t(source.toLowerCase().replace(' ', '_')) || source}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-primary-text mb-2">
-                      {t('common.labels')}
-                    </label>
-                    <select
-                      value={formData.label}
-                      onChange={(e) => setFormData({ ...formData, label: e.target.value })}
-                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
-                    >
-                      <option value="">{t('leads.select_label')}</option>
-                      {labels.map(labelItem => {
-                        const labelName = typeof labelItem === 'object' ? labelItem.name : labelItem
-                        return (
-                          <option key={labelName} value={labelName}>{labelName}</option>
-                        )
-                      })}
-                    </select>
-                    {labels.length === 0 && (
-                      <p className="text-xs text-secondary-text mt-1">{t('leads.no_labels_found')}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-primary-text mb-2">
-                      {t('leads.address_label')}
-                    </label>
-                    <RichTextEditor
-                      value={formData.address}
-                      onChange={(content) => setFormData({ ...formData, address: content })}
-                      placeholder={t('common.placeholder_address')}
-                    />
-                  </div>
-                  <Input
-                    label={t('common.city') || 'City'}
-                    value={formData.city}
-                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                    placeholder={t('common.placeholder_city') || 'Enter city'}
-                  />
-                  <Input
-                    label={t('deals.form.amount')}
-                    type="number"
-                    value={formData.value}
-                    onChange={(e) => setFormData({ ...formData, value: e.target.value })}
-                    placeholder={t('leads.placeholder_value') || 'Enter lead value'}
-                  />
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-primary-text">
-                      {t('leads.probability') || 'Probability'} (%)
-                    </label>
-                    <div className="flex items-center gap-4">
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="10"
-                        value={formData.probability || 0}
-                        onChange={(e) => setFormData({ ...formData, probability: e.target.value })}
-                        className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-accent"
-                      />
-                      <span className="w-12 text-center font-bold text-primary-accent">{formData.probability || 0}%</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 py-2">
-                    <input
-                      id="callThisWeek"
-                      type="checkbox"
-                      className="w-5 h-5 rounded border-gray-300 text-primary-accent focus:ring-primary-accent"
-                      checked={formData.callThisWeek}
-                      onChange={(e) => setFormData({ ...formData, callThisWeek: e.target.checked })}
-                    />
-                    <label htmlFor="callThisWeek" className="text-sm font-medium text-primary-text cursor-pointer">
-                      {t('leads.call_this_week') || 'Call this week'}
-                    </label>
-                  </div>
-                  <Input
-                    label={t('leads.due_followup') || 'Due Date Follow-up'}
-                    type="date"
-                    value={formData.dueFollowup}
-                    onChange={(e) => setFormData({ ...formData, dueFollowup: e.target.value })}
-                  />
-                  <div>
-                    <label className="block text-sm font-medium text-primary-text mb-2">
-                      {t('offline_requests.notes')}
-                    </label>
-                    <RichTextEditor
-                      value={formData.notes}
-                      onChange={(content) => setFormData({ ...formData, notes: content })}
-                      placeholder={t('leads.placeholder_notes') || 'Add notes...'}
-                    />
-                  </div>
 
-                  {/* Services/Items Dropdown */}
-                  <div>
-                    <label className="block text-sm font-medium text-primary-text mb-2">
-                      {t('leads.required_services') || 'Required Services'}
-                    </label>
-                    <select
-                      multiple
-                      value={formData.services}
-                      onChange={(e) => {
-                        const selected = Array.from(e.target.selectedOptions, option => option.value)
-                        setFormData({ ...formData, services: selected })
-                      }}
-                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none min-h-[120px]"
-                    >
-                      <option value="" disabled>{t('leads.select_services_help') || 'Select services (Hold Ctrl/Cmd for multiple selection)'}</option>
-                      {items.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.title} {item.rate ? `($${parseFloat(item.rate).toFixed(2)})` : `(${t('leads.price_not_set') || 'Price: Not set'})`}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-secondary-text mt-1">
-                      {t('leads.multi_select_help') || 'Hold Ctrl (Windows) or Cmd (Mac) for multiple selection'}
-                    </p>
                     {formData.services.length > 0 && (
-                      <div className="mt-3 space-y-2">
+                      <div className="space-y-4 p-5 bg-gray-50 border border-gray-100 rounded-2xl animate-in zoom-in-95 duration-200 shadow-inner">
                         <div className="flex flex-wrap gap-2">
                           {formData.services.map((serviceId) => {
                             const item = items.find(i => i.id === parseInt(serviceId))
                             return item ? (
-                              <span
+                              <div
                                 key={serviceId}
-                                className="inline-flex items-center gap-2 px-3 py-1.5 bg-purple-50 text-purple-700 border border-purple-200 rounded-lg text-sm"
+                                className="inline-flex items-center gap-3 px-3 py-2 bg-white text-gray-700 border border-gray-200 rounded-xl text-sm font-bold shadow-sm animate-in fade-in slide-in-from-top-1"
                               >
-                                <span className="font-medium">{item.title}</span>
-                                {item.rate && (
-                                  <span className="text-xs bg-purple-100 px-2 py-0.5 rounded">
-                                    ${parseFloat(item.rate).toFixed(2)}
-                                  </span>
-                                )}
+                                <span>{item.title}</span>
+                                <div className="h-4 w-px bg-gray-200"></div>
+                                <span className="text-primary-accent">{formatCurrency(item.rate)}</span>
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    setFormData({
-                                      ...formData,
-                                      services: formData.services.filter(id => id !== serviceId)
-                                    })
-                                  }}
-                                  className="hover:bg-purple-100 rounded-full p-0.5 transition-colors"
+                                  onClick={() => setFormData({ ...formData, services: formData.services.filter(id => id !== serviceId) })}
+                                  className="p-1 hover:bg-red-50 hover:text-red-500 rounded-full transition-all"
                                 >
-                                  <IoClose size={14} />
+                                  <IoClose size={16} />
                                 </button>
-                              </span>
+                              </div>
                             ) : null
                           })}
                         </div>
-                        {/* Total Estimated Value */}
-                        {formData.services.length > 0 && (() => {
-                          const total = formData.services.reduce((sum, serviceId) => {
-                            const item = items.find(i => i.id === parseInt(serviceId))
-                            return sum + (item?.rate ? parseFloat(item.rate) : 0)
-                          }, 0)
-                          return total > 0 ? (
-                            <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
-                              <span className="text-sm font-medium text-green-700">
-                                {t('leads.estimated_total') || 'Estimated Total Value'}:
-                              </span>
-                              <span className="text-lg font-bold text-green-600">
-                                ${total.toFixed(2)}
-                              </span>
-                            </div>
-                          ) : null
-                        })()}
+                        
+                        {/* Summary Block */}
+                        <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                          <span className="text-sm font-black text-gray-500 uppercase tracking-widest">{t('leads.estimated_total')}</span>
+                          <div className="flex items-center gap-3">
+                            <span className="text-2xl font-black text-primary-accent">
+                              {formatCurrency(formData.services.reduce((sum, id) => {
+                                const item = items.find(i => i.id === parseInt(id))
+                                return sum + (item?.rate ? parseFloat(item.rate) : 0)
+                              }, 0))}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-2 sm:gap-3 pt-4 border-t border-gray-200 justify-end">
-                <Button
-                  variant="outline"
+              {/* Sticky Footer */}
+              <div className="flex items-center justify-between px-8 py-6 bg-white border-t border-gray-100 shadow-[0_-4px_20px_rgba(0,0,0,0.03)] z-10">
+                <button
+                  type="button"
                   onClick={() => {
                     setIsAddModalOpen(false)
                     setIsEditModalOpen(false)
                   }}
-                  className="px-4 text-gray-900 hover:text-white min-w-[100px]"
+                  className="px-6 py-3 text-sm font-black text-gray-500 hover:text-gray-900 transition-colors uppercase tracking-widest"
                 >
-                  {t('common.cancel') || 'Cancel'}
-                </Button>
-                <Button variant="primary" onClick={handleSave} className="px-4 min-w-[120px]">
-                  {isAddModalOpen ? (t('leads.save_lead') || 'Save Lead') : (t('leads.update_lead') || 'Update Lead')}
-                </Button>
+                  {t('common.cancel')}
+                </button>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleSave}
+                    className="px-10 py-3 bg-primary-accent text-white rounded-xl text-sm font-black shadow-lg shadow-primary-accent/25 hover:bg-primary-accent-hover hover:-translate-y-0.5 transition-all active:translate-y-0 active:shadow-md"
+                  >
+                    {isAddModalOpen ? t('leads.save_lead') : t('leads.update_lead')}
+                  </button>
+                </div>
               </div>
             </div>
           </RightSideModal>
@@ -3364,344 +3503,251 @@ const Leads = () => {
           <Modal
             isOpen={isViewModalOpen}
             onClose={() => setIsViewModalOpen(false)}
-            size="xl" // Increased size for detailed view
-            title="Lead-Details"
+            size="xl"
+            title={selectedLead?.personName || selectedLead?.companyName || t('leads.view.lead_details')}
           >
             {selectedLead && (
-              <div className="h-full flex flex-col font-sans text-primary-text">
-                {/* Header Section */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-gray-100 pb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded bg-primary-accent text-white flex items-center justify-center text-lg font-bold">
-                      <IoBusiness />
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-bold text-gray-800">{selectedLead.personName || selectedLead.companyName || t('leads.view.lead_details') || 'Lead-Details'}</h2>
-                      <p className="text-sm text-gray-500">{selectedLead.companyName || t('leads.view.no_company') || 'Kein Unternehmen'}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-
-                    <button
-                      onClick={() => { setIsViewModalOpen(false); handleEdit(selectedLead); }}
-                      className="p-2 border border-blue-100 text-blue-600 rounded hover:bg-blue-50" title={t('common.edit')}
-                    >
-                      <IoCreate size={18} />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Tabs */}
-                <div className="flex items-center gap-6 border-b border-gray-200 mb-6 text-sm font-medium text-gray-600 overflow-x-auto">
-                  <button
-                    onClick={() => setActiveDetailTab('overview')}
-                    className={`pb-3 border-b-2 px-1 transition-colors ${activeDetailTab === 'overview' ? 'border-primary-accent text-primary-accent' : 'border-transparent hover:border-gray-300'}`}
-                  >
-                    {t('leads.view.tabs.overview') || 'Overview'}
-                  </button>
-                  <button
-                    onClick={() => setActiveDetailTab('estimates')}
-                    className={`pb-3 border-b-2 px-1 transition-colors ${activeDetailTab === 'estimates' ? 'border-primary-accent text-primary-accent' : 'border-transparent hover:border-gray-300'}`}
-                  >
-                    {t('leads.view.tabs.quotes') || 'Quotes'}
-                  </button>
-                  <button
-                    onClick={() => setActiveDetailTab('proposals')}
-                    className={`pb-3 border-b-2 px-1 transition-colors ${activeDetailTab === 'proposals' ? 'border-primary-accent text-primary-accent' : 'border-transparent hover:border-gray-300'}`}
-                  >
-                    {t('leads.view.tabs.deals') || 'Deals'}
-                  </button>
-                  <button
-                    onClick={() => setActiveDetailTab('contracts')}
-                    className={`pb-3 border-b-2 px-1 transition-colors ${activeDetailTab === 'contracts' ? 'border-primary-accent text-primary-accent' : 'border-transparent hover:border-gray-300'}`}
-                  >
-                    {t('leads.view.tabs.contracts') || 'Contracts'}
-                  </button>
-                  <button
-                    onClick={() => setActiveDetailTab('files')}
-                    className={`pb-3 border-b-2 px-1 transition-colors ${activeDetailTab === 'files' ? 'border-primary-accent text-primary-accent' : 'border-transparent hover:border-gray-300'}`}
-                  >
-                    {t('leads.view.tabs.files') || 'Files'}
-                  </button>
-                </div>
-
-                <div className="flex flex-col lg:flex-row gap-8">
-                  {/* Left Column - Main Content based on Tab */}
-                  <div className="flex-1 space-y-8">
-
-                    {activeDetailTab === 'overview' && (
-                      <>
-                        {/* Stats Row */}
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                          <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 text-center">
-                            <div className="text-2xl font-bold text-gray-700">0</div>
-                            <div className="text-xs text-gray-500 uppercase tracking-wide mt-1">{t('auto.auto_f0f7d233') || 'Angebote'}</div>
-                          </div>
-                          <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 text-center">
-                            <div className="text-2xl font-bold text-gray-700">0</div>
-                            <div className="text-xs text-gray-500 uppercase tracking-wide mt-1">{t('proposals.title') || 'Proposals'}</div>
-                          </div>
-                          <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 text-center">
-                            <div className="text-2xl font-bold text-gray-700">0</div>
-                            <div className="text-xs text-gray-500 uppercase tracking-wide mt-1">Vorschläge</div>
-                          </div>
+              <div className="h-full flex flex-col font-sans text-primary-text bg-gray-50 -m-6 rounded-b-lg overflow-hidden">
+                {/* Premium Header */}
+                <div className="bg-white border-b border-gray-200 p-6 shadow-sm z-10">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="relative">
+                        <div className="w-16 h-16 rounded-2xl bg-primary-accent flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-primary-accent/20">
+                          {(selectedLead.personName || selectedLead.companyName || 'L').charAt(0).toUpperCase()}
                         </div>
-
-                        {/* Contacts Section */}
-                        <div>
-                          <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-bold flex items-center gap-2">
-                              <IoPeopleOutline size={20} />{t("sidebar.contacts")}</h3>
-                            <button className="text-blue-600 text-sm hover:underline flex items-center gap-1">
-                              <IoAdd />{t("common.add_contact")}</button>
-                          </div>
-                          {/* Placeholder Contact */}
-                          <div className="bg-white border border-gray-200 rounded-lg p-4 flex items-center justify-between hover:shadow-sm transition-shadow">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
-                                {(selectedLead.personName?.[0] || 'U').toUpperCase()}
-                              </div>
-                              <div>
-                                <p className="font-semibold text-gray-800">{selectedLead.personName || 'Unbekannt'}</p>
-                                <p className="text-xs text-secondary-text">{selectedLead.email || t("leads.view.no_email")}</p>
-                              </div>
-                            </div>
-                            <div className="flex flex-col items-end gap-1">
-                              <div className="flex items-center gap-1 text-xs text-gray-500">
-                                <IoCall size={12} /> {selectedLead.phone || t('leads.view.no_phone')}
-                              </div>
-                              <button className="text-gray-400 hover:text-red-500" title={t('common.actions.delete')}><IoClose size={16} /></button>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Events Section (Calendar) */}
-                        <div>
-                          <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-bold flex items-center gap-2">
-                              <IoCalendarOutline size={20} />{t("sidebar.calendar")}</h3>
-                            <button className="text-blue-600 text-sm hover:underline flex items-center gap-1">
-                              <IoAdd />{t("common.add_event")}</button>
-                          </div>
-                          {/* Simple Calendar View */}
-                          <div className="border border-gray-200 rounded-lg bg-white p-4 overflow-x-auto scrollbar-hide">
-                            <div className="flex items-center justify-between mb-4 min-w-[500px]">
-                              <div className="flex gap-2">
-                                <button className="p-1 hover:bg-gray-100 rounded"><IoChevronBack /></button>
-                                <button className="p-1 hover:bg-gray-100 rounded"><IoChevronForward /></button>
-                              </div>
-                              <div className="font-semibold text-gray-700">{currentMonth.toLocaleString('de-DE', { month: 'long', year: 'numeric' })}</div>
-                              <button className="text-xs px-2 py-1 bg-gray-100 rounded text-gray-600">today</button>
-                            </div>
-                            <div className="grid grid-cols-7 gap-1 text-center text-sm min-w-[500px]">
-                              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => <div key={d} className="text-gray-400 text-xs font-medium py-2">{d}</div>)}
-                              {/* Mock Calendar Grid */}
-                              {Array.from({ length: 35 }).map((_, i) => (
-                                <div key={i} className={`py-4 border border-transparent hover:bg-gray-50 rounded-lg ${i === 7 ? 'bg-yellow-50' : ''} text-gray-600 hover:text-gray-900 cursor-pointer`}>
-                                  {i + 1 > 31 ? '' : i + 1}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </>
-                    )}
-
-                    {activeDetailTab === 'estimates' && (
+                        <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-green-500 border-4 border-white shadow-sm"></div>
+                      </div>
                       <div>
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="text-lg font-bold flex items-center gap-2">
-                            Angebote
-                          </h3>
-                          <button
-                            onClick={() => {
-                              navigate('/app/admin/estimates/create')
-                            }}
-                            className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm text-sm font-medium"
-                          >
-                            <IoAdd size={16} /> Angebot hinzufügen
-                          </button>
-                        </div>
-
-                        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                          {/* Placeholder for Estimates Table */}
-                          <div className="p-8 text-center text-gray-500">
-                            <IoDocumentTextOutline size={48} className="mx-auto mb-3 text-gray-300" />
-                            <p>Keine Angebote für diesen Lead gefunden.</p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Add other tabs placeholders as needed */}
-                  </div>
-
-                  {/* Right Column - Sidebar Info */}
-                  <div className="w-full lg:w-1/3 space-y-6">
-                    <div className="bg-gray-50 rounded-lg p-5 border border-gray-200">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                          <IoList size={18} /> Lead-Info
-                        </h3>
-                        <button
-                          className="text-gray-400 hover:text-gray-600"
-                          onClick={() => handleEdit(selectedLead)}
-                        >
-                          <IoEllipsisHorizontal />
-                        </button>
-                      </div>
-
-                      <div className="space-y-4">
-                        {/* Organization */}
-                        {selectedLead.companyName && (
-                          <div>
-                            <p className="text-xs text-gray-500 font-medium mb-1">{t('auto.auto_17b83ae3') || 'Organisation'}</p>
-                            <p className="text-sm font-semibold text-gray-800">{selectedLead.companyName}</p>
-                          </div>
-                        )}
-
-                        {/* Status Badge */}
-                        <div className="flex flex-wrap gap-2">
-                          <span className={`px-3 py-1 text-xs font-medium rounded-full border ${selectedLead.status === 'Gewonnen' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-blue-100 text-blue-700 border-blue-200'}`}>
-                            {selectedLead.status || 'Neu'}
-                          </span>
-                          <span className="px-3 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-600 border border-gray-200 flex items-center gap-1">
-                            <IoLogoGoogle size={12} /> Google
-                          </span>
-                          {selectedLead.probability && (
-                            <span className="px-3 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800 border border-yellow-200">
-                              {selectedLead.probability}% Wahrscheinlichkeit
+                        <h2 className="text-2xl font-black text-gray-900 tracking-tight leading-tight">
+                          {selectedLead.personName || selectedLead.companyName}
+                        </h2>
+                        <div className="flex items-center gap-2 mt-1">
+                          <Badge variant="soft" className="font-bold uppercase tracking-wider text-[10px]">
+                            {selectedLead.status || t('leads.stages.new')}
+                          </Badge>
+                          {selectedLead.companyName && selectedLead.personName && (
+                            <span className="flex items-center gap-1.5 text-xs text-gray-500 font-medium">
+                              <IoBusiness size={14} className="text-gray-400" />
+                              {selectedLead.companyName}
                             </span>
                           )}
                         </div>
-
-                        {/* Owner */}
-                        <div className="pt-2">
-                          <p className="text-xs text-gray-500 font-medium mb-2">{t('auto.auto_8b0261a6') || 'Besitzer'}</p>
-                          <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-xs font-bold">
-                              {(selectedLead.employee?.[0] || 'U')}
-                            </div>
-                            <p className="text-sm text-blue-600 hover:underline cursor-pointer">{selectedLead.employee || 'Nicht zugewiesen'}</p>
-                          </div>
-                        </div>
-
-                        {/* Add Managers */}
-                        <div>
-                          <button className="text-xs text-blue-500 flex items-center gap-1 hover:underline">
-                            <IoAdd /> Manager hinzufügen
-                          </button>
-                        </div>
-
-                        {/* Address */}
-                        <div className="pt-2 border-t border-gray-200 mt-2">
-                          <div className="flex items-start gap-2 mt-2">
-                            <IoLocationOutline className="text-gray-400 mt-1" size={16} />
-                            <p className="text-sm text-gray-600">
-                              {stripHtml(selectedLead.address) || 'Keine Adresse'}<br />
-                              {selectedLead.city || 'Keine Stadt'}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2 mt-3">
-                            <IoCallOutline className="text-gray-400" size={16} />
-                            <p className="text-sm text-gray-600">{selectedLead.phone || '(205) 360-2071'}</p>
-                          </div>
-                        </div>
-
                       </div>
                     </div>
+                    <div className="flex items-center gap-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex items-center gap-2 rounded-xl font-bold border-gray-200 hover:bg-gray-50 bg-white"
+                        onClick={() => {
+                          setIsViewModalOpen(false)
+                          handleEdit(selectedLead)
+                        }}
+                      >
+                        <IoPencil size={16} /> {t('common.actions.edit')}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
 
-                    {/* Additional Sections Placeholder */}
-                    {/* Tasks Section */}
-                    <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-bold text-gray-800 text-lg">{t('sidebar.tasks') || 'Aufgaben'}</h3>
-                        <button
-                          onClick={() => setIsTaskModalOpen(true)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 hover:text-primary-accent hover:border-primary-accent transition-colors bg-white shadow-sm"
-                        >
-                          <IoAdd size={14} /> Aufgabe hinzufügen
-                        </button>
-                      </div>
+                {/* Tab Navigation */}
+                <div className="bg-white border-b border-gray-200 px-6 z-10">
+                  <div className="flex gap-8 overflow-x-auto scrollbar-hide">
+                    {[
+                      { key: 'overview', label: t('leads.view.tabs.overview') || 'Overview' },
+                      { key: 'tasks', label: t('sidebar.tasks') || 'Tasks' },
+                      { key: 'estimates', label: t('leads.view.tabs.quotes') || 'Quotes' },
+                      { key: 'notes', label: t('auto.auto_66855ac3') || 'Notes' },
+                    ].map(({ key, label }) => (
+                      <button
+                        key={key}
+                        onClick={() => setActiveDetailTab(key)}
+                        className={`py-4 text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeDetailTab === key
+                          ? 'border-primary-accent text-primary-accent'
+                          : 'border-transparent text-gray-400 hover:text-gray-600'
+                          }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-                      <div className="space-y-2.5">
-                        {tasks.length === 0 ? (
-                          <div className="text-center py-4 text-gray-400 text-sm italic">{t('leads.no_tasks') || 'Noch keine Aufgaben hinzugefügt'}</div>
-                        ) : (
-                          tasks.map((task, idx) => (
-                            <div key={idx} className="group p-3.5 rounded-xl bg-gray-50 border border-gray-100 hover:bg-blue-50/50 hover:border-blue-100 transition-all cursor-pointer">
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center gap-3">
-                                  <div className={`w-2 h-2 rounded-full ${task.status === 'Done' ? 'bg-green-500' :
-                                    task.status === 'Doing' ? 'bg-yellow-500' : 'bg-blue-400'
-                                    }`}></div>
-                                  <span className="text-sm font-bold text-gray-700">{task.title}</span>
+                {/* Content Area */}
+                <div className="flex-1 overflow-y-auto p-6 bg-gray-50/50">
+                  {activeDetailTab === 'overview' && (
+                    <div className="space-y-8">
+                      {/* Priority Activities */}
+                      <PriorityActivities
+                        relatedToType="lead"
+                        relatedToId={selectedLead.id}
+                        companyId={companyId}
+                        t={t}
+                      />
+
+                      <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
+                        {/* Left Info Column */}
+                        <div className="xl:col-span-5 space-y-6">
+                          <Card className="p-6 border border-gray-100 shadow-sm bg-white rounded-2xl">
+                            <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-6">{t('leads.basic_info')}</h3>
+                            <div className="space-y-6">
+                              <div className="flex items-start gap-4">
+                                <div className="w-10 h-10 rounded-xl bg-primary-accent/5 flex items-center justify-center text-primary-accent border border-primary-accent/10">
+                                  <IoMail size={18} />
                                 </div>
-                                <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-md border ${task.status === 'Done' ? 'text-green-600 bg-green-50 border-green-100' :
-                                  task.status === 'Doing' ? 'text-yellow-600 bg-yellow-50 border-yellow-100' :
-                                    'text-blue-600 bg-blue-50 border-blue-100'
-                                  }`}>{task.status || 'Pending'}</span>
+                                <div className="min-w-0">
+                                  <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest mb-0.5">{t('common.email')}</p>
+                                  <p className="text-sm font-bold text-gray-800 break-all">{selectedLead.email || t('leads.view.no_email')}</p>
+                                </div>
                               </div>
-                              <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
-                                <IoCalendarOutline size={12} />
-                                <span className={isDeadlineOverdue(task.deadline || task.due_date) && task.status !== 'Done' ? 'text-red-500 font-bold' : ''}>
-                                  {formatDate(task.deadline || task.due_date)}
-                                </span>
+                              <div className="flex items-start gap-4">
+                                <div className="w-10 h-10 rounded-xl bg-secondary-accent/5 flex items-center justify-center text-secondary-accent border border-secondary-accent/10">
+                                  <IoCall size={18} />
+                                </div>
+                                <div>
+                                  <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest mb-0.5">{t('common.phone')}</p>
+                                  <p className="text-sm font-bold text-gray-800">{selectedLead.phone || t('leads.view.no_phone')}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-start gap-4">
+                                <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-500 border border-indigo-100">
+                                  <IoLocationOutline size={18} />
+                                </div>
+                                <div>
+                                  <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest mb-0.5">{t('common.address')}</p>
+                                  <p className="text-sm font-bold text-gray-800 leading-relaxed">
+                                    {selectedLead.address ? stripHtml(selectedLead.address) : t('common.na')}
+                                    {selectedLead.city && <>, {selectedLead.city}</>}
+                                  </p>
+                                </div>
                               </div>
                             </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
 
-                    {/* Notes Section */}
-                    <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-bold text-gray-800 text-lg">{t('auto.auto_66855ac3') || 'Notizen'}</h3>
-                        <button
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 hover:text-primary-accent hover:border-primary-accent transition-colors bg-white shadow-sm"
-                        >
-                          <IoAdd size={14} /> Notiz hinzufügen
-                        </button>
-                      </div>
+                            <div className="mt-8 pt-6 border-t border-gray-50">
+                              <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest mb-3">{t('leads.source')}</p>
+                              <Badge variant="soft" className="font-bold">{selectedLead.source || 'Direct'}</Badge>
+                            </div>
+                          </Card>
 
-                      <div className="space-y-2.5">
-                        {selectedLead.notes ? (
-                          <div className="group p-4 rounded-xl bg-gray-50 border border-gray-100 hover:bg-blue-50/50 hover:border-blue-100 transition-all">
-                            <p className="text-sm text-gray-700 leading-relaxed font-medium">
-                              {stripHtml(selectedLead.notes)}
-                            </p>
-                            <div className="mt-2.5 pt-2.5 border-t border-gray-200 flex items-center justify-between text-xs text-gray-400">
-                              <span>{new Date().toLocaleDateString()}</span>
-                              <button className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-500 hover:text-red-500">
-                                <IoTrashOutline />
+                          {/* Quick Stats */}
+                          <div className="grid grid-cols-2 gap-4">
+                            <Card className="p-4 bg-white border border-gray-100 rounded-2xl text-center">
+                              <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest mb-1">{t('leads.probability')}</p>
+                              <p className="text-xl font-black text-amber-500">{selectedLead.probability || 0}%</p>
+                            </Card>
+                            <Card className="p-4 bg-white border border-gray-100 rounded-2xl text-center">
+                              <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest mb-1">{t('common.value')}</p>
+                              <p className="text-xl font-black text-green-600">{formatCurrency(selectedLead.value || 0, selectedLead.currency || 'EUR')}</p>
+                            </Card>
+                          </div>
+                        </div>
+
+                        {/* Right Content Column */}
+                        <div className="xl:col-span-7 space-y-6">
+                          {/* Internal Notes Preview */}
+                          <Card className="p-6 border border-gray-100 shadow-sm bg-white rounded-2xl">
+                            <div className="flex items-center justify-between mb-4">
+                              <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">{t('auto.auto_66855ac3')}</h3>
+                              <button
+                                onClick={() => setActiveDetailTab('notes')}
+                                className="text-[10px] font-black text-primary-accent uppercase tracking-widest hover:underline"
+                              >
+                                {t('common.view_all')}
                               </button>
                             </div>
-                          </div>
+                            <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 italic text-sm text-gray-600 leading-relaxed">
+                              {selectedLead.notes ? stripHtml(selectedLead.notes) : t('leads.no_notes')}
+                            </div>
+                          </Card>
+
+                          {/* Custom Fields */}
+                          {selectedLead.custom_fields && Object.keys(selectedLead.custom_fields).length > 0 && (
+                            <Card className="p-6 border border-gray-100 shadow-sm bg-white rounded-2xl">
+                              <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-6">{t('leads.additional_info')}</h3>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                {Object.entries(selectedLead.custom_fields).map(([key, val]) => (
+                                  <div key={key}>
+                                    <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest mb-1">{key}</p>
+                                    <p className="text-sm font-bold text-gray-800">{val || '-'}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </Card>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {activeDetailTab === 'tasks' && (
+                    <Card className="p-6 border border-gray-100 shadow-sm bg-white rounded-2xl h-[500px] flex flex-col">
+                      <div className="flex items-center gap-3 mb-6">
+                        <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-600">
+                          <IoCheckmarkCircleOutline size={20} />
+                        </div>
+                        <h3 className="text-lg font-black text-gray-900 uppercase tracking-wider">{t('sidebar.tasks')}</h3>
+                      </div>
+                      <div className="flex-1 min-h-0">
+                        <Tasks relatedToType="lead" relatedToId={selectedLead.id} />
+                      </div>
+                    </Card>
+                  )}
+
+                  {activeDetailTab === 'estimates' && (
+                    <div className="space-y-6">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-lg font-black text-gray-900 uppercase tracking-wider">{t('leads.view.tabs.quotes')}</h3>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => navigate('/app/admin/estimates/create')}
+                        >
+                          <IoAdd size={18} /> {t('estimates.create')}
+                        </Button>
+                      </div>
+                      <Card className="border border-gray-100 shadow-sm bg-white rounded-2xl overflow-hidden">
+                        {estimates.length > 0 ? (
+                          <DataTable
+                            hideSearch={true}
+                            columns={[
+                              {
+                                key: 'estimate_number',
+                                label: 'Quote #',
+                                render: (val, row) => <span className="font-bold text-primary-accent">{row.estimate_number || `EST-${row.id}`}</span>
+                              },
+                              {
+                                key: 'total_amount',
+                                label: t('common.total'),
+                                render: (val, row) => formatCurrency(row.total_amount || row.total || 0, row.currency || 'EUR')
+                              },
+                              {
+                                key: 'status',
+                                label: t('common.status'),
+                                render: (val) => <Badge variant={val === 'Accepted' ? 'success' : 'warning'}>{val}</Badge>
+                              }
+                            ]}
+                            data={estimates}
+                          />
                         ) : (
-                          <div className="text-center py-6 border-2 border-dashed border-gray-100 rounded-xl bg-gray-50/50">
-                            <p className="text-sm text-gray-400">Noch keine Notizen hinzugefügt</p>
+                          <div className="p-12 text-center text-gray-400 italic">
+                            {t('leads.view.no_quotes')}
                           </div>
                         )}
-                      </div>
+                      </Card>
                     </div>
+                  )}
 
-                    {/* Reminders Section */}
-                    <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-bold text-gray-800 text-lg">{t('leads.reminders') || 'Erinnerungen'}</h3>
-                        <button
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 hover:text-primary-accent hover:border-primary-accent transition-colors bg-white shadow-sm"
-                        >
-                          <IoAdd size={14} /> Erinnerung hinzufügen
-                        </button>
+                  {activeDetailTab === 'notes' && (
+                    <Card className="p-6 border border-gray-100 shadow-sm bg-white rounded-2xl">
+                      <h3 className="text-lg font-black text-gray-900 uppercase tracking-wider mb-6">{t('auto.auto_66855ac3')}</h3>
+                      <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100 min-h-[200px]">
+                        <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+                          {selectedLead.notes ? stripHtml(selectedLead.notes) : t('leads.no_notes')}
+                        </p>
                       </div>
-                      <div className="text-center py-6 border-2 border-dashed border-gray-100 rounded-xl bg-gray-50/50">
-                        <p className="text-sm text-gray-400">{t('leads.no_reminders') || 'Keine Erinnerungen hinzugefügt'}</p>
-                      </div>
-                    </div>
-
-                  </div>
+                    </Card>
+                  )}
                 </div>
               </div>
             )}
@@ -3858,7 +3904,7 @@ const Leads = () => {
               setSelectedFile(null)
               setIsDragging(false)
             }}
-            title="t('leads.import')"
+            title={t('leads.import') || 'Leads importieren'}
             size="md"
           >
             <div className="space-y-4">
@@ -4136,19 +4182,22 @@ const Leads = () => {
               />
               <div>
                 <label className="block text-sm font-medium text-primary-text mb-2">
-                  Zugewiesener Benutzer
+                  {t('leads.form.responsible_person')}
                 </label>
                 <select
                   value={contactFormData.assigned_user_id}
                   onChange={(e) => setContactFormData({ ...contactFormData, assigned_user_id: e.target.value })}
                   className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
                 >
-                  <option value="">Benutzer auswählen</option>
-                  {employees.map(emp => (
-                    <option key={emp.user_id || emp.id} value={emp.user_id || emp.id}>
-                      {emp.name || emp.email}
-                    </option>
-                  ))}
+                  <option value="">{t('leads.form.select_responsible')}</option>
+                  {employees.map((emp) => {
+                    const uid = employeeAssignableUserId(emp)
+                    return (
+                      <option key={uid || emp.email || emp.id} value={uid}>
+                        {emp.name || emp.email}
+                      </option>
+                    )
+                  })}
                 </select>
               </div>
               <div>

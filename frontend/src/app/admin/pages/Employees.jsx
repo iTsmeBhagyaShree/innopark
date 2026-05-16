@@ -6,8 +6,9 @@ import DataTable from '../../../components/ui/DataTable'
 import RightSideModal from '../../../components/ui/RightSideModal'
 import Badge from '../../../components/ui/Badge'
 import Button from '../../../components/ui/Button'
-import { IoPencil, IoTrashOutline, IoEye, IoAdd } from 'react-icons/io5'
+import { IoPencil, IoTrashOutline, IoEye, IoAdd, IoPeople } from 'react-icons/io5'
 import { employeesAPI, departmentsAPI, positionsAPI } from '../../../api'
+import rolesAPI from '../../../api/roles'
 import { useLanguage } from '../../../context/LanguageContext'
 import { FormRow, FormInput, FormSelect, FormTextarea } from '../../../components/ui/FormRow'
 
@@ -54,6 +55,7 @@ const Employees = () => {
     marital_status: 'Single',
     business_address: '',
     about: '',
+    rbac_role_id: '',
   }
 
   const [formData, setFormData] = useState(initialFormState)
@@ -70,6 +72,7 @@ const Employees = () => {
   const [newDeptName, setNewDeptName] = useState('')
   const [newPosName, setNewPosName] = useState('')
   const [quickAddSaving, setQuickAddSaving] = useState(false)
+  const [rbacRoles, setRbacRoles] = useState([])
 
   // Memoize fetch functions
   const fetchDepartments = useCallback(async () => {
@@ -132,6 +135,24 @@ const Employees = () => {
       fetchDepartments()
     ])
   }, [fetchEmployees, fetchDepartments])
+
+  useEffect(() => {
+    if (!isAddModalOpen && !isEditModalOpen) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await rolesAPI.getAll({ company_id: companyId })
+        if (!cancelled && res.data?.success) {
+          setRbacRoles(res.data.data || [])
+        }
+      } catch {
+        if (!cancelled) setRbacRoles([])
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [isAddModalOpen, isEditModalOpen, companyId])
 
   useEffect(() => {
     if (formData.department_id) {
@@ -265,7 +286,8 @@ const Employees = () => {
           joining_date: emp.joining_date ? emp.joining_date.split('T')[0] : '',
           reporting_to: emp.reporting_to?.toString() || '',
           language: emp.language || 'en',
-          user_role: emp.role || 'EMPLOYEE',
+          user_role: emp.user_role || emp.role || 'EMPLOYEE',
+          rbac_role_id: emp.rbac_role_id != null && emp.rbac_role_id !== '' ? String(emp.rbac_role_id) : '',
           address: emp.address || '',
 
           login_allowed: emp.status || 'Active',
@@ -347,6 +369,11 @@ const Employees = () => {
         country: formData.country,
         email_notifications: parseInt(formData.email_notifications),
       }
+
+      employeeData.rbac_role_id =
+        formData.user_role === 'EMPLOYEE'
+          ? (formData.rbac_role_id ? parseInt(formData.rbac_role_id, 10) : null)
+          : null
 
       if (isAddModalOpen) {
         employeeData.password = password
@@ -599,6 +626,23 @@ const Employees = () => {
         </FormRow>
       </div>
 
+      {formData.user_role === 'EMPLOYEE' && (
+        <FormRow label={t('employees.form.access_role_template')}>
+          <FormSelect
+            value={formData.rbac_role_id}
+            onChange={(e) => setFormData({ ...formData, rbac_role_id: e.target.value })}
+          >
+            <option value="">{t('employees.form.access_role_none')}</option>
+            {rbacRoles.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.role_name}{r.description ? ` — ${r.description}` : ''}
+              </option>
+            ))}
+          </FormSelect>
+          <p className="text-xs text-secondary-text mt-1">{t('employees.form.access_role_hint')}</p>
+        </FormRow>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <FormRow label={t('employees.form.salary')}>
           <FormInput type="number" value={formData.salary} onChange={(e) => setFormData({ ...formData, salary: e.target.value })} />
@@ -670,8 +714,9 @@ const Employees = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-primary-text">{t('employees.title')}</h1>
-          <p className="text-secondary-text mt-1">{t('employees.subtitle')}</p>
+          <h1 className="text-xl font-black text-gray-900 flex items-center gap-2">
+            <IoPeople className="text-primary-accent" size={22} /> <span className="notranslate">{t('employees.title')}</span>
+          </h1>
         </div>
         <AddButton onClick={handleAdd} label={t('employees.add_employee')} />
       </div>

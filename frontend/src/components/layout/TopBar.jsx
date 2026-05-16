@@ -6,18 +6,15 @@ import { useNavigate } from "react-router-dom";
 import {
   IoMenu,
   IoSearch,
-  IoDesktopOutline,
-  IoAddCircleOutline,
   IoTime,
   IoNotifications,
   IoChevronDown,
   IoLogOut,
   IoChatbubblesOutline,
   IoPerson,
-  IoAdd,
 } from "react-icons/io5";
 import innoparkLogo from "../../assets/innopark.jpeg";
-import { useLanguage } from "../../context/LanguageContext.jsx";
+import { useLanguage } from "../../context/LanguageContext";
 import NotificationDropdown from "./NotificationDropdown";
 import LanguageDropdown from "./LanguageDropdown";
 import { notificationsAPI } from "../../api";
@@ -33,16 +30,12 @@ const TopBar = ({ onMenuClick, isSidebarCollapsed, onToggleSidebar }) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
-  const [showDashboardMenu, setShowDashboardMenu] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
-  const [showAddMenu, setShowAddMenu] = useState(false);
   const [showLanguage, setShowLanguage] = useState(false);
 
   const profileMenuRef = useRef(null);
-  const dashboardMenuRef = useRef(null);
-  const addMenuRef = useRef(null);
 
   // Synchronize logo and company info with settings
   const companyInfo = getCompanyInfo();
@@ -119,28 +112,16 @@ const TopBar = ({ onMenuClick, isSidebarCollapsed, onToggleSidebar }) => {
       ) {
         setShowProfileMenu(false);
       }
-      if (
-        dashboardMenuRef.current &&
-        !dashboardMenuRef.current.contains(event.target)
-      ) {
-        setShowDashboardMenu(false);
-      }
-      if (
-        addMenuRef.current &&
-        !addMenuRef.current.contains(event.target)
-      ) {
-        setShowAddMenu(false);
-      }
     };
 
-    if (showProfileMenu || showDashboardMenu || showAddMenu) {
+    if (showProfileMenu) {
       document.addEventListener("mousedown", handleClickOutside);
     }
 
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [showProfileMenu, showDashboardMenu, showAddMenu]);
+  }, [showProfileMenu]);
 
   const handleLogout = () => {
     logout();
@@ -199,14 +180,14 @@ const TopBar = ({ onMenuClick, isSidebarCollapsed, onToggleSidebar }) => {
   return (
     <>
       <header
-        className="fixed top-0 left-0 right-0 border-b z-50 w-full h-14 flex items-center shadow-sm"
+        className="fixed top-0 left-0 right-0 z-50 flex h-14 w-full items-center overflow-visible border-b shadow-sm"
         style={{
           zIndex: 1000,
           backgroundColor: isDark ? "#1e1e1e" : "#ffffff",
           borderColor: isDark ? "#404040" : "#e5e7eb",
         }}
       >
-        <div className="px-2 sm:px-3 lg:px-4 py-2 flex items-center justify-between w-full h-full gap-1 sm:gap-3">
+        <div className="flex h-full w-full items-center justify-between gap-1 overflow-visible px-2 py-2 sm:gap-3 sm:px-3 lg:px-4">
           {/* LEFT SIDE */}
           <div className="flex items-center gap-1 sm:gap-2 md:gap-3 flex-shrink-0">
             {/* Logo - Dynamic from Settings */}
@@ -246,143 +227,30 @@ const TopBar = ({ onMenuClick, isSidebarCollapsed, onToggleSidebar }) => {
                   }`}
               />
             </button>
-
-            {/* Dashboard Selector */}
-            <div className="relative ml-1 lg:ml-2" ref={dashboardMenuRef}>
-              <button
-                type="button"
-                onClick={() => setShowDashboardMenu(!showDashboardMenu)}
-                className="flex items-center justify-center w-7 h-7 lg:w-8 lg:h-8 text-secondary-text hover:text-primary-text hover:bg-sidebar-hover rounded-lg transition-all duration-200"
-                title={t('common.dashboards')}
-              >
-                <IoDesktopOutline size={18} />
-              </button>
-              {showDashboardMenu && (
-                <div
-                  className="bg-white rounded-xl shadow-elevated border border-gray-100 py-2 animate-fadeIn"
-                  style={{
-                    position: 'fixed',
-                    top: '3.5rem',
-                    left: '12rem', // Positioned under the desktop icon
-                    width: '16rem',
-                    zIndex: 99999
-                  }}
-                >
-                  <button
-                    type="button"
-                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
-                    onClick={() => {
-                      navigateToDashboard();
-                      setShowDashboardMenu(false);
-                    }}
-                  >
-                    <IoDesktopOutline size={18} className="text-gray-500" />
-                    <span>{t('sidebar.dashboard')}</span>
-                  </button>
-                  <button
-                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
-                    onClick={() => {
-                      setShowDashboardMenu(false);
-                      navigateToDashboard();
-                    }}
-                  >
-                    <IoDesktopOutline size={18} className="text-blue-500" />
-                    <span>{t('common.custom_dashboard')}</span>
-                  </button>
-                  <div className="border-t border-gray-100 my-1"></div>
-                  <button
-                    className="w-full text-left px-4 py-2.5 text-sm text-primary-accent hover:bg-blue-50 flex items-center gap-3 font-medium transition-colors"
-                    onClick={() => {
-                      setShowDashboardMenu(false);
-                      navigateToDashboard();
-                    }}
-                  >
-                    <IoAddCircleOutline size={18} />
-                    <span>{t('common.add_new_dashboard')}</span>
-                  </button>
-                </div>
-              )}
-            </div>
           </div>
 
-          {/* CENTER - Empty spacer */}
-          <div className="flex-1 min-w-0"></div>
+          {/* CENTER - Desktop global search (always visible from md+) */}
+          <div className="hidden min-w-0 flex-1 justify-center overflow-visible px-2 md:flex lg:px-4">
+            <GlobalSearch
+              mode="inline"
+              isOpen
+              dismissOnClickOutside={false}
+              onClose={() => {}}
+            />
+          </div>
 
           {/* RIGHT SIDE */}
-          <div className="flex items-center gap-0.5 sm:gap-1.5 lg:gap-2 flex-shrink-0">
-            {/* Search - Right side with dropdown */}
-            <div className="relative">
-              {!showSearch ? (
-                <button
-                  type="button"
-                  onClick={() => setShowSearch(true)}
-                  className="p-1.5 lg:p-2 rounded-lg transition-all duration-200 flex-shrink-0 text-secondary-text hover:text-primary-text hover:bg-sidebar-hover"
-                  title={t('common.search')}
-                >
-                  <IoSearch size={18} />
-                </button>
-              ) : (
-                <GlobalSearch
-                  mode="inline"
-                  isOpen={true}
-                  onClose={() => setShowSearch(false)}
-                />
-              )}
-            </div>
-
-            {/* Add Button */}
-            <div className="relative hidden sm:block h-full flex items-center flex-shrink-0" ref={addMenuRef}>
+          <div className="flex flex-shrink-0 items-center gap-0.5 sm:gap-1.5 lg:gap-2">
+            {/* Mobile: icon opens full-screen search */}
+            <div className="relative md:hidden">
               <button
                 type="button"
-                onClick={() => setShowAddMenu(!showAddMenu)}
-                className="flex items-center justify-center p-1.5 lg:p-2 text-secondary-text hover:text-primary-text hover:bg-sidebar-hover rounded-lg transition-all duration-200"
-                title={t('common.add_new')}
+                onClick={() => setShowSearch(true)}
+                className="flex-shrink-0 rounded-lg p-1.5 text-secondary-text transition-all duration-200 hover:bg-sidebar-hover hover:text-primary-text lg:p-2"
+                title={t('common.search')}
               >
-                <IoAdd size={20} />
+                <IoSearch size={18} />
               </button>
-              {showAddMenu && (
-                <div
-                  className="bg-white rounded-xl shadow-elevated border border-gray-100 py-2 animate-fadeIn"
-                  style={{
-                    position: 'absolute',
-                    top: 'calc(100% + 0.5rem)',
-                    right: 0,
-                    width: '12rem',
-                    zIndex: 99999
-                  }}
-                >
-                  <button
-                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
-                    onClick={() => {
-                      setShowAddMenu(false);
-                      const role = user?.role?.toLowerCase() || 'admin';
-                      navigate(`/app/${role}/projects`);
-                    }}
-                  >
-                    <span>{t('sidebar.projects')}</span>
-                  </button>
-                  <button
-                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
-                    onClick={() => {
-                      setShowAddMenu(false);
-                      const role = user?.role?.toLowerCase() || 'admin';
-                      navigate(`/app/${role}/${role === 'employee' ? 'my-tasks' : 'tasks'}`);
-                    }}
-                  >
-                    <span>{t('sidebar.tasks')}</span>
-                  </button>
-                  <button
-                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
-                    onClick={() => {
-                      setShowAddMenu(false);
-                      const role = user?.role?.toLowerCase() || 'admin';
-                      navigate(`/app/${role}/leads`);
-                    }}
-                  >
-                    <span>{t('sidebar.crm')}</span>
-                  </button>
-                </div>
-              )}
             </div>
 
             {/* Clock Icon - Time Tracker */}

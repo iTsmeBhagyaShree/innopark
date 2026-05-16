@@ -190,33 +190,38 @@ const Tasks = ({ relatedToType, relatedToId }) => {
     };
 
     return (
-        <div className="flex flex-col h-full bg-white/50 rounded-2xl">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4 px-1">
-                <div className="flex flex-wrap gap-2">
-                    <div className="flex bg-gray-100/80 p-1 rounded-xl border border-gray-200 backdrop-blur-sm">
+        <div className="flex flex-col h-full min-w-0 w-full max-w-full bg-white/50 rounded-2xl">
+            <div className="flex flex-col gap-3 sm:gap-4 mb-6 sm:mb-8 px-1 min-w-0 lg:flex-row lg:items-start lg:justify-between lg:gap-4">
+                <div className="flex flex-wrap gap-2 min-w-0 w-full lg:flex-1 lg:min-w-0 lg:max-w-full">
+                    <div className="flex flex-wrap bg-gray-100/80 p-1 rounded-xl border border-gray-200 backdrop-blur-sm min-w-0 max-w-full">
                         {['All', 'Pending', 'Overdue', 'Completed'].map(status => (
                             <button
                                 key={status}
                                 onClick={() => setFilterStatus(status)}
-                                className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all duration-300 ${filterStatus === status ? 'bg-white text-primary-accent shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                className={`px-3 sm:px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all duration-300 shrink-0 ${filterStatus === status ? 'bg-white text-primary-accent shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                             >
                                 {getTranslatedStatus(status)}
                             </button>
                         ))}
                     </div>
-                    <div className="flex bg-gray-100/80 p-1 rounded-xl border border-gray-200 backdrop-blur-sm">
+                    <div className="flex flex-wrap bg-gray-100/80 p-1 rounded-xl border border-gray-200 backdrop-blur-sm min-w-0 max-w-full">
                         {['All', 'High', 'Medium', 'Low'].map(p => (
                             <button
                                 key={p}
                                 onClick={() => setFilterPriority(p)}
-                                className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all duration-300 ${filterPriority === p ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                className={`px-3 sm:px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all duration-300 shrink-0 ${filterPriority === p ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                             >
                                 {getTranslatedPriority(p)}
                             </button>
                         ))}
                     </div>
                 </div>
-                <Button variant="primary" size="sm" onClick={openCreateModal} className="w-full sm:w-auto h-11 flex items-center justify-center gap-3 px-6 shadow-xl shadow-primary-accent/20 bg-primary-accent border-none rounded-xl hover:brightness-110 active:scale-95 transition-all">
+                <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={openCreateModal}
+                    className="w-full h-11 shrink-0 flex items-center justify-center gap-2 sm:gap-3 px-4 sm:px-6 shadow-xl shadow-primary-accent/20 bg-primary-accent border-none rounded-xl hover:brightness-110 active:scale-95 transition-all lg:w-auto lg:self-start"
+                >
                     <IoAdd size={22} />
                     <span className="font-black text-xs uppercase tracking-widest">{t('tasks.new_mission')}</span>
                 </Button>

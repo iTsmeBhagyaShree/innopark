@@ -18,14 +18,20 @@ export const languageConfig = {
     // ⚠️ CHANGE THIS VALUE TO SWITCH LANGUAGE ⚠️
     // 'en' = English
     // 'de' = German (Deutsch)
-    DEFAULT_LANGUAGE: 'de',  // 👈 Change this to 'en' or 'de'
+    DEFAULT_LANGUAGE: 'de',
+
+    /**
+     * When false: first visit (no saved choice in localStorage) uses DEFAULT_LANGUAGE only.
+     * When true: company settings `default_language` applies when the user has no saved preference (needs SettingsProvider wrapping LanguageProvider).
+     */
+    SYNC_COMPANY_DEFAULT_LANGUAGE: true,
 
     // ⚠️ DISABLE LANGUAGE SWITCHING ⚠️
     // Set to false to hide language dropdown and lock the language
     // Set to true to allow users to change language
     ALLOW_LANGUAGE_CHANGE: true,
 
-    // Available languages in your application
+    // Available languages (German first — matches DEFAULT_LANGUAGE)
     AVAILABLE_LANGUAGES: ['de', 'en', 'fr', 'ar'],
 
     // Language names for display

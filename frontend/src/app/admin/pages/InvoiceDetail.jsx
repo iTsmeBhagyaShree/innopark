@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../context/AuthContext'
+import { useLanguage } from '../../../context/LanguageContext.jsx'
 import { invoicesAPI, projectsAPI, companiesAPI, paymentsAPI, itemsAPI, emailTemplatesAPI } from '../../../api'
 import baseUrl from '../../../api/baseUrl'
 import { useSettings } from '../../../context/SettingsContext'
@@ -52,7 +53,37 @@ const InvoiceDetail = () => {
   const { id } = useParams()
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { t, language } = useLanguage()
   const { formatDate, formatCurrency, getCompanyInfo } = useSettings()
+
+  const locale = useMemo(
+    () => (String(language || '').toLowerCase().startsWith('de') ? 'de-DE' : 'en-GB'),
+    [language]
+  )
+  const numberLocale = useMemo(
+    () => (String(language || '').toLowerCase().startsWith('de') ? 'de-DE' : 'en-US'),
+    [language]
+  )
+
+  const translateComputedStatus = useCallback(
+    (statusEn) => {
+      switch (statusEn) {
+        case 'Draft':
+          return t('invoices.draft')
+        case 'Paid':
+          return t('invoices.paid')
+        case 'Partially Paid':
+          return t('invoices.partiallyPaid')
+        case 'Overdue':
+          return t('invoices.overdue')
+        case 'Not Paid':
+          return t('invoices.notPaid')
+        default:
+          return statusEn || t('invoices.draft')
+      }
+    },
+    [t]
+  )
 
   // Get company_id from localStorage
   const [companyId] = useState(() => {
@@ -154,7 +185,7 @@ const InvoiceDetail = () => {
           description: data.description || '',
           note: data.note || '',
           terms: data.terms || '',
-          currency: data.currency || 'USD',
+          currency: data.currency || 'EUR',
           sub_total: parseFloat(data.sub_total) || 0,
           discount: parseFloat(data.discount) || 0,
           discount_type: data.discount_type || '%',
@@ -223,25 +254,15 @@ const InvoiceDetail = () => {
     if (!dateString || dateString === '--') return '--'
     try {
       const date = new Date(dateString)
-      return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      return date.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' })
     } catch {
       return dateString
     }
   }
 
   const localFormatCurrency = (amount) => {
-    let currencyCode = invoice?.currency || 'USD'
-    if (currencyCode.includes(' ')) {
-      currencyCode = currencyCode.split(' ')[0]
-    }
-    if (currencyCode.length !== 3) {
-      currencyCode = 'USD'
-    }
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currencyCode,
-      minimumFractionDigits: 2,
-    }).format(amount || 0)
+    // Backend-driven currency: use company/system default from SettingsContext
+    return formatCurrency(amount || 0)
   }
 
   const isOverdue = () => {
@@ -432,37 +453,37 @@ const InvoiceDetail = () => {
           <div class="company-info">
             <h1>${companyName}</h1>
             <p>${companyAddress}</p>
-            ${companyPhone ? `<p>Phone: ${companyPhone}</p>` : ''}
-            ${companyEmail ? `<p>Email: ${companyEmail}</p>` : ''}
+            ${companyPhone ? `<p>${t('invoice_detail_page.print_phone')} ${companyPhone}</p>` : ''}
+            ${companyEmail ? `<p>${t('invoice_detail_page.print_email')} ${companyEmail}</p>` : ''}
           </div>
           <div style="text-align: right;">
             <div class="invoice-badge">${invoice.invoice_number}</div>
             <div class="dates">
-              <p>Bill Date: <span>${localFormatDate(invoice.bill_date)}</span></p>
-              <p>Due Date: <span>${localFormatDate(invoice.due_date)}</span></p>
+              <p>${t('invoice_detail_page.print_bill_date')} <span>${localFormatDate(invoice.bill_date)}</span></p>
+              <p>${t('invoice_detail_page.print_due_date')} <span>${localFormatDate(invoice.due_date)}</span></p>
             </div>
           </div>
         </div>
         
         <div class="bill-to">
-          <h3>Bill To</h3>
+          <h3>${t('invoice_detail_page.bill_to')}</h3>
           <p class="client-name">${invoice.client_name}</p>
         </div>
         
         <table>
           <thead>
             <tr>
-              <th style="width: 40%;">Item</th>
-              <th class="text-center" style="width: 15%;">Qty</th>
-              <th class="text-right" style="width: 20%;">Rate</th>
-              <th class="text-right" style="width: 25%;">Total</th>
+              <th style="width: 40%;">${t('invoice_detail_page.col_item')}</th>
+              <th class="text-center" style="width: 15%;">${t('invoice_detail_page.col_qty_short')}</th>
+              <th class="text-right" style="width: 20%;">${t('invoice_detail_page.col_rate')}</th>
+              <th class="text-right" style="width: 25%;">${t('invoice_detail_page.col_total')}</th>
             </tr>
           </thead>
           <tbody>
             ${(invoice.items || []).map(item => `
               <tr>
                 <td>
-                  <div class="item-name">${item.item_name || 'Item'}</div>
+                  <div class="item-name">${item.item_name || t('invoice_detail_page.default_item')}</div>
                   ${item.description ? `<div class="item-desc">${item.description}</div>` : ''}
                 </td>
                 <td class="text-center">${item.quantity || 0} ${item.unit || 'PC'}</td>
@@ -475,39 +496,39 @@ const InvoiceDetail = () => {
         
         <div class="totals">
           <div class="totals-row">
-            <span>Sub Total:</span>
+            <span>${t('invoice_detail_page.print_subtotal')}</span>
             <span>${localFormatCurrency(invoice.sub_total)}</span>
           </div>
           ${invoice.discount_amount > 0 ? `
             <div class="totals-row">
-              <span>Discount:</span>
+              <span>${t('invoice_detail_page.print_discount')}</span>
               <span>-${localFormatCurrency(invoice.discount_amount)}</span>
             </div>
           ` : ''}
           ${invoice.tax_amount > 0 ? `
             <div class="totals-row">
-              <span>Tax:</span>
+              <span>${t('invoice_detail_page.print_tax')}</span>
               <span>${localFormatCurrency(invoice.tax_amount)}</span>
             </div>
           ` : ''}
           <div class="totals-row total">
-            <span>Total:</span>
+            <span>${t('invoice_detail_page.print_total')}</span>
             <span>${localFormatCurrency(invoice.total)}</span>
           </div>
           ${invoice.paid_amount > 0 ? `
             <div class="totals-row">
-              <span>Paid:</span>
+              <span>${t('invoice_detail_page.print_paid')}</span>
               <span>${localFormatCurrency(invoice.paid_amount)}</span>
             </div>
           ` : ''}
           <div class="totals-row balance">
-            <span>Balance Due:</span>
+            <span>${t('invoice_detail_page.print_balance_due')}</span>
             <span>${localFormatCurrency(invoice.due_amount)}</span>
           </div>
         </div>
         
         <div class="footer">
-          <p>Thank you for your business!</p>
+          <p>${t('invoice_detail_page.print_thanks')}</p>
         </div>
       </body>
       </html>
@@ -599,7 +620,7 @@ const InvoiceDetail = () => {
   const handleSendEmail = async () => {
     try {
       if (!emailForm.to) {
-        alert('To email is required')
+        alert(t('invoice_detail_page.alerts.to_email_required'))
         return
       }
       setSendingEmail(true)
@@ -611,15 +632,15 @@ const InvoiceDetail = () => {
         message: emailForm.message
       })
       if (response.data.success) {
-        alert('Email sent successfully!')
+        alert(t('invoice_detail_page.alerts.email_sent'))
         setIsSendEmailModalOpen(false)
         setEmailForm({ to: '', cc: '', bcc: '', subject: '', message: '' })
       } else {
-        alert('Failed to send email')
+        alert(t('invoice_detail_page.alerts.email_failed'))
       }
     } catch (error) {
       console.error('Error sending email:', error)
-      alert(error.response?.data?.error || 'Failed to send email')
+      alert(error.response?.data?.error || t('invoice_detail_page.alerts.email_failed'))
     } finally {
       setSendingEmail(false)
     }
@@ -668,7 +689,7 @@ const InvoiceDetail = () => {
       }
     } catch (error) {
       console.error('Error adding item:', error)
-      alert('Failed to add item')
+      alert(t('invoice_detail_page.alerts.item_add_failed'))
     }
   }
 
@@ -676,7 +697,7 @@ const InvoiceDetail = () => {
   const handleSelectStoredItem = async (item) => {
     try {
       const itemData = {
-        item_name: item.title || item.name || item.item_name || 'Item',
+        item_name: item.title || item.name || item.item_name || t('invoice_detail_page.default_item'),
         description: item.description || '',
         quantity: 1,
         unit: item.unit_type || item.unit || 'PC',
@@ -692,7 +713,7 @@ const InvoiceDetail = () => {
       }
     } catch (error) {
       console.error('Error adding stored item:', error)
-      alert('Failed to add item')
+      alert(t('invoice_detail_page.alerts.item_add_failed'))
     }
   }
 
@@ -709,12 +730,12 @@ const InvoiceDetail = () => {
       }
     } catch (error) {
       console.error('Error editing item:', error)
-      alert('Failed to update item')
+      alert(t('invoice_detail_page.alerts.item_update_failed'))
     }
   }
 
   const handleDeleteItem = async (index) => {
-    if (!window.confirm('Are you sure you want to delete this item?')) return
+    if (!window.confirm(t('invoice_detail_page.alerts.delete_item_confirm'))) return
     try {
       const updatedItems = (invoice.items || []).filter((_, idx) => idx !== index)
       const response = await invoicesAPI.update(id, { items: updatedItems })
@@ -723,7 +744,7 @@ const InvoiceDetail = () => {
       }
     } catch (error) {
       console.error('Error deleting item:', error)
-      alert('Failed to delete item')
+      alert(t('invoice_detail_page.alerts.item_delete_failed'))
     }
   }
 
@@ -736,7 +757,7 @@ const InvoiceDetail = () => {
       }
     } catch (error) {
       console.error('Error updating discount:', error)
-      alert('Failed to update discount')
+      alert(t('invoice_detail_page.alerts.discount_failed'))
     }
   }
 
@@ -760,7 +781,7 @@ const InvoiceDetail = () => {
   }
 
   const handleDeleteTask = (taskId) => {
-    setTasks(tasks.filter(t => t.id !== taskId))
+    setTasks(tasks.filter((task) => task.id !== taskId))
   }
 
   const handleAddReminder = () => {
@@ -778,7 +799,7 @@ const InvoiceDetail = () => {
   const handleCopyPublicUrl = () => {
     const publicUrl = `${window.location.origin}/pay/invoice/${id}`
     navigator.clipboard.writeText(publicUrl)
-    alert('Public pay URL copied to clipboard!')
+    alert(t('invoice_detail_page.alerts.url_copied'))
   }
 
   // Loading state
@@ -787,7 +808,7 @@ const InvoiceDetail = () => {
       <div className="flex items-center justify-center h-screen bg-gray-100">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading invoice details...</p>
+          <p className="text-gray-600">{t('invoice_detail_page.loading')}</p>
         </div>
       </div>
     )
@@ -798,11 +819,11 @@ const InvoiceDetail = () => {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-100">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-primary-accent mb-4">Invoice Not Found</h2>
-          <p className="text-gray-600 mb-4">The invoice you're looking for doesn't exist or has been deleted.</p>
+          <h2 className="text-2xl font-bold text-primary-accent mb-4">{t('invoice_detail_page.not_found_title')}</h2>
+          <p className="text-gray-600 mb-4">{t('invoice_detail_page.not_found_hint')}</p>
           <Button onClick={() => navigate(user?.role === 'EMPLOYEE' ? '/app/employee/invoices' : '/app/admin/invoices')}>
             <IoArrowBack className="mr-2" />
-            Back to Invoices
+            {t('invoice_detail_page.back_to_invoices')}
           </Button>
         </div>
       </div>
@@ -811,68 +832,77 @@ const InvoiceDetail = () => {
 
   return (
     <div className="min-h-screen bg-main-bg text-primary-text">
-      {/* Header */}
-      <div className="bg-card-bg border-b border-border-light px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+      {/* Premium Header with Glassmorphism */}
+      <div className="bg-white border-b border-gray-200 p-6 sm:p-8 shadow-sm sticky top-0 z-30">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+          <div className="flex items-center gap-6">
             <button
               onClick={() => navigate(user?.role === 'EMPLOYEE' ? '/app/employee/invoices' : '/app/admin/invoices')}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-3 bg-white/50 hover:bg-white rounded-2xl transition-all shadow-soft border border-gray-100 text-gray-600 active:scale-95"
             >
-              <IoArrowBack size={20} className="text-gray-600" />
+              <IoArrowBack size={20} />
             </button>
-            <div className="flex items-center gap-3">
-              <IoLink className="text-gray-400" size={20} />
-              <span className="text-lg font-semibold text-gray-800">{invoice.invoice_number}</span>
-            </div>
-            <span
-              className="px-3 py-1 rounded-full text-sm font-semibold border"
-              style={getStatusStyle(getComputedStatus())}
-            >
-              {getComputedStatus()}
-            </span>
-            {invoice.labels?.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {invoice.labels.map((label) => (
-                  <span
-                    key={`label-${label}`}
-                    className="px-2 py-0.5 text-[10px] font-semibold rounded-full border"
-                    style={getLabelStyle(label)}
-                  >
-                    {label}
-                  </span>
-                ))}
+            <div className="flex items-center gap-5">
+              <div className="relative">
+                <div className="w-16 h-16 rounded-2xl bg-primary-accent flex items-center justify-center text-white font-black text-2xl">
+                  <IoDocumentText size={32} />
+                </div>
+                <div className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-full border-4 border-white ${getComputedStatus() === 'Paid' || getComputedStatus() === 'fully paid' ? 'bg-green-500' : (getComputedStatus() === 'Overdue' ? 'bg-red-500' : 'bg-gray-400')}`}></div>
               </div>
-            )}
-            <div className="flex items-center gap-2 text-gray-500 text-sm">
-              <IoCalendar size={16} />
-              <span>{localFormatDate(invoice.bill_date)}</span>
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight uppercase flex items-center gap-3">
+                  {invoice.invoice_number}
+                  {invoice.labels?.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {invoice.labels.map((label) => (
+                        <span
+                          key={`label-${label}`}
+                          className="px-2 py-0.5 text-[10px] font-semibold rounded-full border"
+                          style={getLabelStyle(label)}
+                        >
+                          {label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </h1>
+                <div className="flex items-center gap-3 mt-1.5 text-sm text-gray-500 font-medium">
+                  <span
+                    className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider text-white"
+                    style={getStatusStyle(getComputedStatus())}
+                  >
+                    {translateComputedStatus(getComputedStatus())}
+                  </span>
+                  <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                  <span className="flex items-center gap-1.5"><IoCalendar size={16} className="text-gray-400" />{localFormatDate(invoice.bill_date)}</span>
+                </div>
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <Button
               variant="outline"
+              size="md"
               onClick={handleCopyPublicUrl}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 rounded-2xl font-bold border-gray-200 hover:bg-gray-50 bg-white"
             >
-              <IoOpenOutline size={16} />
-              Invoice URL
+              <IoLink size={18} /> {t('invoice_detail_page.invoice_url')}
             </Button>
             <Button
               onClick={() => setIsSendEmailModalOpen(true)}
-              className="flex items-center gap-2 bg-primary-accent hover:opacity-90 text-white"
+              size="md"
+              className="flex items-center gap-2 rounded-2xl font-bold bg-primary-accent hover:bg-primary-accent/90"
             >
-              <IoMailOutline size={16} />
-              Send to client
+              <IoMail size={22} className="mr-1" /> {t('invoice_detail_page.send_to_client')}
             </Button>
           </div>
         </div>
       </div>
 
-      {/* Main Content - 2 Column Layout */}
-      <div className="flex gap-6 p-6">
-        {/* Left Column - Main Content (70%) */}
-        <div className="flex-1" style={{ maxWidth: '70%' }}>
+      {/* Main Content - Responsive 2 Column Layout */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 p-4 sm:p-6">
+        {/* Left Column - Main Content */}
+        <div className="xl:col-span-8 min-w-0">
           <div className="bg-card-bg rounded-lg shadow-sm border border-border-light p-6">
             {/* Company Info Header */}
             <div className="flex justify-between items-start mb-8">
@@ -889,9 +919,9 @@ const InvoiceDetail = () => {
                   <p className="font-semibold text-gray-800">{company?.name || getCompanyInfo()?.name || 'Developo'}</p>
                   {(company?.address || getCompanyInfo()?.address) && <p>{company?.address || getCompanyInfo()?.address}</p>}
                   {company?.city && <p>{company.city}, {company?.state || ''}</p>}
-                  {(company?.phone || getCompanyInfo()?.phone) && <p>Phone: {company?.phone || getCompanyInfo()?.phone}</p>}
-                  {(company?.email || getCompanyInfo()?.email) && <p>Email: {company?.email || getCompanyInfo()?.email}</p>}
-                  {(company?.website || getCompanyInfo()?.website) && <p>Website: {company?.website || getCompanyInfo()?.website}</p>}
+                  {(company?.phone || getCompanyInfo()?.phone) && <p>{t('invoice_detail_page.phone_label')}: {company?.phone || getCompanyInfo()?.phone}</p>}
+                  {(company?.email || getCompanyInfo()?.email) && <p>{t('invoice_detail_page.email_label')}: {company?.email || getCompanyInfo()?.email}</p>}
+                  {(company?.website || getCompanyInfo()?.website) && <p>{t('invoice_detail_page.website_label')}: {company?.website || getCompanyInfo()?.website}</p>}
                 </div>
               </div>
               <div className="text-right">
@@ -899,16 +929,16 @@ const InvoiceDetail = () => {
                   {invoice.invoice_number}
                 </div>
                 <div className="text-sm text-gray-600 space-y-1">
-                  <p>Bill date: <span className="font-medium">{localFormatDate(invoice.bill_date)}</span></p>
-                  <p>Due date: <span className={`font-medium ${isOverdue() ? 'text-primary-accent' : ''}`}>
-                    {localFormatDate(invoice.due_date)} {isOverdue() && '(Overdue)'}
+                  <p>{t('invoice_detail_page.bill_date_colon')} <span className="font-medium">{localFormatDate(invoice.bill_date)}</span></p>
+                  <p>{t('invoice_detail_page.due_date_colon')} <span className={`font-medium ${isOverdue() ? 'text-primary-accent' : ''}`}>
+                    {localFormatDate(invoice.due_date)} {isOverdue() && t('invoice_detail_page.overdue_suffix')}
                   </span></p>
                 </div>
               </div>
             </div>
 
             <div className="mb-8">
-              <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">Bill To</h3>
+              <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">{t('invoice_detail_page.bill_to')}</h3>
               <div className="text-gray-800">
                 <p className="font-semibold">{invoice.client_name}</p>
               </div>
@@ -919,11 +949,11 @@ const InvoiceDetail = () => {
               <table className="w-full">
                 <thead className="bg-main-bg border-b border-border-light">
                   <tr>
-                    <th className="text-left p-3 text-sm font-semibold text-gray-600">Item</th>
-                    <th className="text-center p-3 text-sm font-semibold text-gray-600">Quantity</th>
-                    <th className="text-right p-3 text-sm font-semibold text-gray-600">Rate</th>
-                    <th className="text-right p-3 text-sm font-semibold text-gray-600">Taxable</th>
-                    <th className="text-right p-3 text-sm font-semibold text-gray-600">Total</th>
+                    <th className="text-left p-3 text-sm font-semibold text-gray-600">{t('invoice_detail_page.col_item')}</th>
+                    <th className="text-center p-3 text-sm font-semibold text-gray-600">{t('invoice_detail_page.col_quantity')}</th>
+                    <th className="text-right p-3 text-sm font-semibold text-gray-600">{t('invoice_detail_page.col_rate')}</th>
+                    <th className="text-right p-3 text-sm font-semibold text-gray-600">{t('invoice_detail_page.col_taxable')}</th>
+                    <th className="text-right p-3 text-sm font-semibold text-gray-600">{t('invoice_detail_page.col_total')}</th>
                     <th className="w-20"></th>
                   </tr>
                 </thead>
@@ -933,7 +963,7 @@ const InvoiceDetail = () => {
                       <tr key={idx} className="border-b border-border-light hover:bg-main-bg">
                         <td className="p-3">
                           <div>
-                            <p className="font-medium text-gray-800">{item.item_name || 'Item'}</p>
+                            <p className="font-medium text-gray-800">{item.item_name || t('invoice_detail_page.default_item')}</p>
                             {item.description && (
                               <p className="text-sm text-gray-500 mt-0.5">{item.description}</p>
                             )}
@@ -946,7 +976,7 @@ const InvoiceDetail = () => {
                           {localFormatCurrency(item.unit_price || 0)}
                         </td>
                         <td className="p-3 text-right text-gray-600">
-                          {item.taxable === false ? 'No' : (item.taxable ? 'Yes' : (invoice.tax_amount > 0 ? 'Yes' : 'No'))}
+                          {item.taxable === false ? t('invoice_detail_page.no') : (item.taxable ? t('invoice_detail_page.yes') : (invoice.tax_amount > 0 ? t('invoice_detail_page.yes') : t('invoice_detail_page.no')))}
                         </td>
                         <td className="p-3 text-right font-semibold text-gray-800">
                           {localFormatCurrency(item.amount || (item.quantity * item.unit_price) || 0)}
@@ -959,14 +989,14 @@ const InvoiceDetail = () => {
                                 setIsEditItemModalOpen(true)
                               }}
                               className="p-1.5 text-gray-500 hover:bg-gray-100 rounded"
-                              title="Edit"
+                              title={t('common.edit')}
                             >
                               <IoCreate size={16} />
                             </button>
                             <button
                               onClick={() => handleDeleteItem(idx)}
                               className="p-1.5 text-red-500 hover:bg-red-50 rounded"
-                              title="Delete"
+                              title={t('common.delete')}
                             >
                               <IoClose size={16} />
                             </button>
@@ -977,7 +1007,7 @@ const InvoiceDetail = () => {
                   ) : (
                     <tr>
                       <td colSpan={6} className="p-8 text-center text-gray-400 italic">
-                        No items found.
+                        {t('invoice_detail_page.no_items')}
                       </td>
                     </tr>
                   )}
@@ -990,7 +1020,7 @@ const InvoiceDetail = () => {
                   onClick={() => setIsAddItemModalOpen(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-primary-accent text-white rounded-lg hover:opacity-90 transition-colors text-sm font-medium"
                 >
-                  <IoAdd size={18} /> Add item
+                  <IoAdd size={18} /> {t('invoice_detail_page.add_item')}
                 </button>
               </div>
 
@@ -998,12 +1028,12 @@ const InvoiceDetail = () => {
               <div className="mt-6 flex justify-end">
                 <div className="w-72 space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Sub Total:</span>
+                    <span className="text-gray-500">{t('invoice_detail_page.sub_total')}</span>
                     <span className="text-gray-800">{localFormatCurrency(invoice.sub_total)}</span>
                   </div>
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-gray-500 flex items-center gap-2">
-                      Discount:
+                      {t('invoice_detail_page.discount')}
                       <button
                         onClick={() => setIsEditDiscountModalOpen(true)}
                         className="p-1 text-gray-400 hover:text-gray-600"
@@ -1019,22 +1049,22 @@ const InvoiceDetail = () => {
                   </div>
                   {invoice.tax_amount > 0 && (
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Tax:</span>
+                      <span className="text-gray-500">{t('invoice_detail_page.tax')}</span>
                       <span className="text-gray-800">{localFormatCurrency(invoice.tax_amount)}</span>
                     </div>
                   )}
                   <div className="flex justify-between text-base font-bold pt-2 border-t border-gray-200">
-                    <span className="text-gray-800">Total:</span>
+                    <span className="text-gray-800">{t('invoice_detail_page.total')}</span>
                     <span className="text-gray-800">{localFormatCurrency(invoice.total)}</span>
                   </div>
                   {invoice.paid_amount > 0 && (
                     <div className="flex justify-between text-sm text-primary-accent">
-                      <span>Paid:</span>
+                      <span>{t('invoice_detail_page.paid')}</span>
                       <span>{localFormatCurrency(invoice.paid_amount)}</span>
                     </div>
                   )}
                   <div className="flex justify-between text-base font-bold text-primary-accent">
-                    <span>Balance Due:</span>
+                    <span>{t('invoice_detail_page.balance_due')}</span>
                     <span>{localFormatCurrency(invoice.due_amount)}</span>
                   </div>
                 </div>
@@ -1044,7 +1074,7 @@ const InvoiceDetail = () => {
             {/* Description Section */}
             {invoice.description && (
               <div className="mt-8 border-t pt-6 overflow-hidden">
-                <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">DESCRIPTION</h3>
+                <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">{t('invoice_detail_page.description_heading')}</h3>
                 <div className="text-gray-700 prose max-w-full break-words overflow-wrap-anywhere text-sm" 
                   style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
                   dangerouslySetInnerHTML={{ __html: invoice.description }} />
@@ -1054,7 +1084,7 @@ const InvoiceDetail = () => {
             {/* Terms Section */}
             {invoice.terms && (
               <div className="mt-6 border-t pt-6 overflow-hidden">
-                <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">TERMS & CONDITIONS</h3>
+                <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">{t('invoice_detail_page.terms_heading')}</h3>
                 <div className="text-gray-700 prose max-w-full break-words overflow-wrap-anywhere text-sm"
                   style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
                   dangerouslySetInnerHTML={{ __html: invoice.terms }} />
@@ -1063,14 +1093,14 @@ const InvoiceDetail = () => {
           </div>
         </div>
 
-        {/* Right Column - Sidebar (30%) */}
-          <div className="w-80 space-y-4">
+        {/* Right Column - Sidebar */}
+          <div className="xl:col-span-4 xl:min-w-[320px] space-y-4">
           {/* Invoice Info Card */}
           <div className="bg-card-bg rounded-lg shadow-sm border border-border-light p-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-gray-800 flex items-center gap-2">
                 <IoDocumentText className="text-gray-500" size={18} />
-                Invoice info
+                {t('invoice_detail_page.invoice_info')}
               </h3>
               <button className="text-gray-400 hover:text-gray-600">
                 <IoEllipsisVertical size={18} />
@@ -1095,25 +1125,25 @@ const InvoiceDetail = () => {
               )}
               <div className="text-sm text-gray-600">
                 <p className="flex justify-between py-1">
-                  <span>Bill date:</span>
+                  <span>{t('invoice_detail_page.bill_date_colon')}</span>
                   <span className="font-medium">{localFormatDate(invoice.bill_date)}</span>
                 </p>
                 <p className="flex justify-between py-1">
-                  <span>Due date:</span>
+                  <span>{t('invoice_detail_page.due_date_colon')}</span>
                   <span className={`font-medium ${isOverdue() ? 'text-primary-accent' : ''}`}>
-                    {localFormatDate(invoice.due_date)} {isOverdue() && '(Overdue)'}
+                    {localFormatDate(invoice.due_date)} {isOverdue() && t('invoice_detail_page.overdue_suffix')}
                   </span>
                 </p>
                 <p className="flex justify-between py-1">
-                  <span>Total:</span>
+                  <span>{t('invoice_detail_page.total')}</span>
                   <span className="font-medium">{localFormatCurrency(invoice.total)}</span>
                 </p>
                 <p className="flex justify-between py-1">
-                  <span>Paid:</span>
+                  <span>{t('invoice_detail_page.paid')}</span>
                   <span className="font-medium text-primary-accent">{localFormatCurrency(invoice.paid_amount)}</span>
                 </p>
                 <p className="flex justify-between py-1">
-                  <span>Balance:</span>
+                  <span>{t('invoice_detail_page.balance')}</span>
                   <span className="font-medium text-primary-accent">{localFormatCurrency(invoice.due_amount)}</span>
                 </p>
               </div>
@@ -1130,7 +1160,7 @@ const InvoiceDetail = () => {
                 <div className="w-8 h-8 rounded-lg bg-primary-accent/10 text-primary-accent flex items-center justify-center group-hover:bg-primary-accent/20 transition-colors">
                   <IoEye size={14} />
                 </div>
-                <span className="text-xs font-semibold text-gray-600">Preview</span>
+                <span className="text-xs font-semibold text-gray-600">{t('invoice_detail_page.preview')}</span>
               </button>
               <button
                 onClick={handlePrint}
@@ -1139,7 +1169,7 @@ const InvoiceDetail = () => {
                 <div className="w-8 h-8 rounded-lg bg-green-50 text-green-600 flex items-center justify-center group-hover:bg-green-100 transition-colors">
                   <IoPrint size={14} />
                 </div>
-                <span className="text-xs font-semibold text-gray-600">Print</span>
+                <span className="text-xs font-semibold text-gray-600">{t('invoice_detail_page.print')}</span>
               </button>
               <button
                 onClick={handleViewPDF}
@@ -1148,7 +1178,7 @@ const InvoiceDetail = () => {
                 <div className="w-8 h-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center group-hover:bg-red-100 transition-colors">
                   <IoDocumentText size={14} />
                 </div>
-                <span className="text-xs font-semibold text-gray-600">View PDF</span>
+                <span className="text-xs font-semibold text-gray-600">{t('invoice_detail_page.view_pdf')}</span>
               </button>
               <button
                 onClick={handleDownloadPDF}
@@ -1157,7 +1187,7 @@ const InvoiceDetail = () => {
                 <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-100 transition-colors">
                   <IoDownload size={14} />
                 </div>
-                <span className="text-xs font-semibold text-gray-600">Download PDF</span>
+                <span className="text-xs font-semibold text-gray-600">{t('invoice_detail_page.download_pdf')}</span>
               </button>
             </div>
           </div>
@@ -1167,7 +1197,7 @@ const InvoiceDetail = () => {
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-gray-800 flex items-center gap-2">
                 <IoLink className="text-gray-500" size={18} />
-                Public Pay URL
+                {t('invoice_detail_page.public_pay_url')}
               </h3>
             </div>
             <div className="flex items-center gap-2">
@@ -1180,7 +1210,7 @@ const InvoiceDetail = () => {
               <button
                 onClick={handleCopyPublicUrl}
                 className="p-2 text-primary-accent hover:bg-main-bg rounded-lg"
-                title="Copy URL"
+                title={t('invoice_detail_page.copy_url')}
               >
                 <IoCopy size={18} />
               </button>
@@ -1189,12 +1219,12 @@ const InvoiceDetail = () => {
 
           {/* Note Section */}
           <div className="bg-card-bg rounded-lg shadow-sm border border-border-light p-4">
-            <h3 className="font-semibold text-gray-800 mb-3">Note</h3>
+            <h3 className="font-semibold text-gray-800 mb-3">{t('invoice_detail_page.note')}</h3>
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
               onBlur={handleSaveNote}
-              placeholder="Add a note..."
+              placeholder={t('invoice_detail_page.note_placeholder')}
               rows={3}
               className="w-full px-3 py-2 text-sm border border-border-light rounded-lg focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none resize-none bg-input-bg"
             />
@@ -1205,12 +1235,12 @@ const InvoiceDetail = () => {
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-gray-800 flex items-center gap-2">
                 <IoCheckmarkCircle className="text-gray-500" size={18} />
-                Tasks
+                {t('invoice_detail_page.tasks')}
               </h3>
             </div>
             <div className="space-y-2 mb-3">
               {tasks.length === 0 ? (
-                <p className="text-sm text-gray-400 italic">No tasks yet</p>
+                <p className="text-sm text-gray-400 italic">{t('invoice_detail_page.no_tasks')}</p>
               ) : (
                 tasks.map(task => (
                   <div key={task.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
@@ -1229,7 +1259,7 @@ const InvoiceDetail = () => {
               onClick={() => setIsAddTaskModalOpen(true)}
               className="flex items-center gap-1 text-sm text-primary-accent hover:underline"
             >
-              <IoAdd size={16} /> Add task
+              <IoAdd size={16} /> {t('invoice_detail_page.add_task')}
             </button>
           </div>
 
@@ -1238,12 +1268,12 @@ const InvoiceDetail = () => {
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-gray-800 flex items-center gap-2">
                 <IoTime className="text-gray-500" size={18} />
-                Reminders (Private)
+                {t('invoice_detail_page.reminders_private')}
               </h3>
             </div>
             <div className="space-y-2 mb-3">
               {reminders.length === 0 ? (
-                <p className="text-sm text-gray-400 italic">No reminders yet</p>
+                <p className="text-sm text-gray-400 italic">{t('invoice_detail_page.no_reminders')}</p>
               ) : (
                 reminders.map(reminder => (
                   <div key={reminder.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
@@ -1262,7 +1292,7 @@ const InvoiceDetail = () => {
               onClick={() => setIsAddReminderModalOpen(true)}
               className="flex items-center gap-1 text-sm text-primary-accent hover:underline"
             >
-              <IoAdd size={16} /> Add reminder
+              <IoAdd size={16} /> {t('invoice_detail_page.add_reminder')}
             </button>
           </div>
         </div>
@@ -1272,7 +1302,7 @@ const InvoiceDetail = () => {
       <Modal
         isOpen={isPreviewModalOpen}
         onClose={() => setIsPreviewModalOpen(false)}
-        title="Invoice Preview"
+        title={t('invoice_detail_page.preview_modal_title')}
         size="lg"
       >
         <div className="bg-white p-6 space-y-6">
@@ -1284,8 +1314,8 @@ const InvoiceDetail = () => {
               </h1>
               <div className="text-sm text-gray-600 space-y-0.5">
                 {(company?.address || getCompanyInfo()?.address) && <p>{company?.address || getCompanyInfo()?.address}</p>}
-                {(company?.phone || getCompanyInfo()?.phone) && <p>Phone: {company?.phone || getCompanyInfo()?.phone}</p>}
-                {(company?.email || getCompanyInfo()?.email) && <p>Email: {company?.email || getCompanyInfo()?.email}</p>}
+                {(company?.phone || getCompanyInfo()?.phone) && <p>{t('invoice_detail_page.phone_label')}: {company?.phone || getCompanyInfo()?.phone}</p>}
+                {(company?.email || getCompanyInfo()?.email) && <p>{t('invoice_detail_page.email_label')}: {company?.email || getCompanyInfo()?.email}</p>}
               </div>
             </div>
             <div className="text-right">
@@ -1293,14 +1323,14 @@ const InvoiceDetail = () => {
                 {invoice.invoice_number}
               </div>
               <div className="text-sm text-gray-600 space-y-0.5">
-                <p>Bill Date: <span className="font-medium text-gray-800">{localFormatDate(invoice.bill_date)}</span></p>
-                <p>Due Date: <span className="font-medium text-gray-800">{localFormatDate(invoice.due_date)}</span></p>
+                <p>{t('invoice_detail_page.print_bill_date')} <span className="font-medium text-gray-800">{localFormatDate(invoice.bill_date)}</span></p>
+                <p>{t('invoice_detail_page.print_due_date')} <span className="font-medium text-gray-800">{localFormatDate(invoice.due_date)}</span></p>
               </div>
             </div>
           </div>
 
           <div>
-            <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Bill To</h3>
+            <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">{t('invoice_detail_page.bill_to')}</h3>
             <p className="font-semibold text-gray-800">{invoice.client_name}</p>
           </div>
 
@@ -1309,17 +1339,17 @@ const InvoiceDetail = () => {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-y">
-                  <th className="text-left p-3 font-semibold text-gray-600">Item</th>
-                  <th className="text-center p-3 font-semibold text-gray-600">Qty</th>
-                  <th className="text-right p-3 font-semibold text-gray-600">Rate</th>
-                  <th className="text-right p-3 font-semibold text-gray-600">Amount</th>
+                  <th className="text-left p-3 font-semibold text-gray-600">{t('invoice_detail_page.col_item')}</th>
+                  <th className="text-center p-3 font-semibold text-gray-600">{t('invoice_detail_page.col_qty_short')}</th>
+                  <th className="text-right p-3 font-semibold text-gray-600">{t('invoice_detail_page.col_rate')}</th>
+                  <th className="text-right p-3 font-semibold text-gray-600">{t('invoice_detail_page.col_amount')}</th>
                 </tr>
               </thead>
               <tbody>
                 {invoice.items.map((item, idx) => (
                   <tr key={idx} className="border-b">
                     <td className="p-3">
-                      <p className="font-medium text-gray-800">{item.item_name || 'Item'}</p>
+                      <p className="font-medium text-gray-800">{item.item_name || t('invoice_detail_page.default_item')}</p>
                       {item.description && <p className="text-xs text-gray-500">{item.description}</p>}
                     </td>
                     <td className="p-3 text-center text-gray-600">{item.quantity || 0} {item.unit || 'PC'}</td>
@@ -1335,33 +1365,33 @@ const InvoiceDetail = () => {
           <div className="flex justify-end">
             <div className="w-64 space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-500">Sub Total:</span>
+                <span className="text-gray-500">{t('invoice_detail_page.sub_total')}</span>
                 <span className="text-gray-800">{localFormatCurrency(invoice.sub_total)}</span>
               </div>
               {invoice.discount_amount > 0 && (
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Discount:</span>
+                  <span className="text-gray-500">{t('invoice_detail_page.discount')}</span>
                   <span className="text-gray-800">-{localFormatCurrency(invoice.discount_amount)}</span>
                 </div>
               )}
               {invoice.tax_amount > 0 && (
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Tax:</span>
+                  <span className="text-gray-500">{t('invoice_detail_page.tax')}</span>
                   <span className="text-gray-800">{localFormatCurrency(invoice.tax_amount)}</span>
                 </div>
               )}
               <div className="flex justify-between font-bold pt-2 border-t">
-                <span>Total:</span>
+                <span>{t('invoice_detail_page.total')}</span>
                 <span>{localFormatCurrency(invoice.total)}</span>
               </div>
               {invoice.paid_amount > 0 && (
                 <div className="flex justify-between text-primary-accent">
-                  <span>Paid:</span>
+                  <span>{t('invoice_detail_page.paid')}</span>
                   <span>{localFormatCurrency(invoice.paid_amount)}</span>
                 </div>
               )}
               <div className="flex justify-between font-bold text-primary-accent">
-                <span>Balance Due:</span>
+                <span>{t('invoice_detail_page.balance_due')}</span>
                 <span>{localFormatCurrency(invoice.due_amount)}</span>
               </div>
             </div>
@@ -1369,14 +1399,14 @@ const InvoiceDetail = () => {
 
           {/* Footer */}
           <div className="text-center text-sm text-gray-500 pt-4 border-t">
-            Thank you for your business!
+            {t('invoice_detail_page.thank_you_footer')}
           </div>
 
           {/* Actions */}
           <div className="flex justify-end gap-3 pt-2">
-            <Button variant="outline" onClick={() => setIsPreviewModalOpen(false)}>Close</Button>
+            <Button variant="outline" onClick={() => setIsPreviewModalOpen(false)}>{t('invoice_detail_page.close')}</Button>
             <Button onClick={handleDownloadPDF} className="bg-primary-accent hover:opacity-90 text-white">
-              <IoDownload size={16} className="mr-2" /> Download PDF
+              <IoDownload size={16} className="mr-2" /> {t('invoice_detail_page.download_pdf')}
             </Button>
           </div>
         </div>
@@ -1386,64 +1416,64 @@ const InvoiceDetail = () => {
       <Modal
         isOpen={isSendEmailModalOpen}
         onClose={() => setIsSendEmailModalOpen(false)}
-        title="Send Invoice"
+        title={t('invoice_detail_page.send_modal_title')}
         size="lg"
       >
         <div className="space-y-4">
           <Input
-            label="To"
+            label={t('invoice_detail_page.label_to')}
             type="email"
             value={emailForm.to}
             onChange={(e) => setEmailForm({ ...emailForm, to: e.target.value })}
-            placeholder="Recipient email"
+            placeholder={t('invoice_detail_page.placeholder_recipient')}
             required
           />
           <Input
-            label="CC"
+            label={t('invoice_detail_page.label_cc')}
             type="email"
             value={emailForm.cc}
             onChange={(e) => setEmailForm({ ...emailForm, cc: e.target.value })}
-            placeholder="CC email (optional)"
+            placeholder={t('invoice_detail_page.placeholder_cc')}
           />
           <Input
-            label="BCC"
+            label={t('invoice_detail_page.label_bcc')}
             type="email"
             value={emailForm.bcc}
             onChange={(e) => setEmailForm({ ...emailForm, bcc: e.target.value })}
-            placeholder="BCC email (optional)"
+            placeholder={t('invoice_detail_page.placeholder_bcc')}
           />
           <Input
-            label="Subject"
+            label={t('invoice_detail_page.label_subject')}
             value={emailForm.subject}
             onChange={(e) => setEmailForm({ ...emailForm, subject: e.target.value })}
-            placeholder="Email subject"
+            placeholder={t('invoice_detail_page.placeholder_subject')}
             required
           />
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Message
+              {t('invoice_detail_page.label_message')}
             </label>
             <textarea
               rows={8}
               value={emailForm.message}
               onChange={(e) => setEmailForm({ ...emailForm, message: e.target.value })}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
-              placeholder="Email message"
+              placeholder={t('invoice_detail_page.placeholder_message')}
             />
             <p className="text-xs text-gray-500 mt-1">
-              Template loaded from Email Templates Settings. You can edit it before sending.
+              {t('invoice_detail_page.template_hint')}
             </p>
           </div>
           <div className="flex gap-3 pt-2">
             <Button variant="outline" onClick={() => setIsSendEmailModalOpen(false)} className="flex-1">
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button 
               onClick={handleSendEmail} 
               disabled={sendingEmail}
               className="flex-1 bg-primary-accent hover:opacity-90 text-white disabled:opacity-50"
             >
-              {sendingEmail ? 'Sending...' : 'Send Email'}
+              {sendingEmail ? t('invoice_detail_page.sending') : t('invoice_detail_page.send_email')}
             </Button>
           </div>
         </div>
@@ -1453,49 +1483,49 @@ const InvoiceDetail = () => {
       <Modal
         isOpen={isAddPaymentModalOpen}
         onClose={() => setIsAddPaymentModalOpen(false)}
-        title="Add Payment"
+        title={t('invoice_detail_page.add_payment_title')}
       >
         <div className="space-y-4">
           <Input
             type="number"
-            label="Amount"
+            label={t('invoice_detail_page.amount')}
             value={paymentFormData.amount}
             onChange={(e) => setPaymentFormData({ ...paymentFormData, amount: e.target.value })}
-            placeholder="Enter amount"
+            placeholder={t('invoice_detail_page.placeholder_amount')}
           />
           <Input
             type="date"
-            label="Payment Date"
+            label={t('invoice_detail_page.payment_date')}
             value={paymentFormData.payment_date}
             onChange={(e) => setPaymentFormData({ ...paymentFormData, payment_date: e.target.value })}
           />
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Payment Method</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">{t('invoice_detail_page.payment_method')}</label>
             <select
               value={paymentFormData.payment_method}
               onChange={(e) => setPaymentFormData({ ...paymentFormData, payment_method: e.target.value })}
               className="w-full px-4 py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none bg-input-bg"
             >
-              <option value="Cash">Cash</option>
-              <option value="Bank Transfer">Bank Transfer</option>
-              <option value="Credit Card">Credit Card</option>
-              <option value="Check">Check</option>
-              <option value="PayPal">PayPal</option>
-              <option value="UPI">UPI</option>
+              <option value="Cash">{t('invoice_detail_page.pay_method_cash')}</option>
+              <option value="Bank Transfer">{t('invoice_detail_page.pay_method_bank')}</option>
+              <option value="Credit Card">{t('invoice_detail_page.pay_method_card')}</option>
+              <option value="Check">{t('invoice_detail_page.pay_method_check')}</option>
+              <option value="PayPal">{t('invoice_detail_page.pay_method_paypal')}</option>
+              <option value="UPI">{t('invoice_detail_page.pay_method_upi')}</option>
             </select>
           </div>
           <Input
-            label="Reference Note"
+            label={t('invoice_detail_page.reference_note')}
             value={paymentFormData.reference_note}
             onChange={(e) => setPaymentFormData({ ...paymentFormData, reference_note: e.target.value })}
-            placeholder="Optional reference note"
+            placeholder={t('invoice_detail_page.placeholder_reference')}
           />
           <div className="flex gap-3 justify-end">
             <Button variant="outline" onClick={() => setIsAddPaymentModalOpen(false)}>
-              Close
+              {t('invoice_detail_page.close')}
             </Button>
             <Button variant="primary" onClick={handleAddPayment} className="bg-primary-accent hover:opacity-90 text-white">
-              Save
+              {t('common.save')}
             </Button>
           </div>
         </div>
@@ -1505,16 +1535,16 @@ const InvoiceDetail = () => {
       <Modal
         isOpen={isAddItemModalOpen}
         onClose={() => { setIsAddItemModalOpen(false); setItemSearchQuery(''); }}
-        title="Add Item"
+        title={t('invoice_detail_page.add_item_title')}
         size="lg"
       >
         <div className="space-y-4">
           {/* Search stored items */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Select from stored items</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">{t('invoice_detail_page.stored_items_label')}</label>
             <div className="relative">
               <Input
-                placeholder="Search items..."
+                placeholder={t('invoice_detail_page.search_items')}
                 value={itemSearchQuery}
                 onChange={(e) => setItemSearchQuery(e.target.value)}
               />
@@ -1540,7 +1570,7 @@ const InvoiceDetail = () => {
                   >
                     <div className="flex-1 min-w-0">
                       <h4 className="font-medium text-gray-800 group-hover:text-primary-accent truncate">
-                        {item.title || item.name || item.item_name || 'Item'}
+                        {item.title || item.name || item.item_name || t('invoice_detail_page.default_item')}
                       </h4>
                       {item.description && (
                         <p className="text-xs text-gray-500 mt-0.5 truncate">{item.description}</p>
@@ -1558,7 +1588,7 @@ const InvoiceDetail = () => {
                 const desc = (item.description || '').toLowerCase()
                 return title.includes(search) || desc.includes(search)
               }).length === 0 && (
-                <div className="p-4 text-center text-gray-400 text-sm">No items found</div>
+                <div className="p-4 text-center text-gray-400 text-sm">{t('invoice_detail_page.no_stored_items')}</div>
               )}
             </div>
           )}
@@ -1566,32 +1596,32 @@ const InvoiceDetail = () => {
           {/* Divider */}
           <div className="flex items-center gap-3 text-gray-400 text-sm">
             <div className="flex-1 border-t border-gray-200"></div>
-            <span>OR add custom item</span>
+            <span>{t('invoice_detail_page.or_custom_item')}</span>
             <div className="flex-1 border-t border-gray-200"></div>
           </div>
 
           {/* Manual entry */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Item Name</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('invoice_detail_page.item_name')}</label>
             <Input
               value={newItem.item_name}
               onChange={(e) => setNewItem({ ...newItem, item_name: e.target.value })}
-              placeholder="Enter item name"
+              placeholder={t('invoice_detail_page.placeholder_item_name')}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('invoice_detail_page.description')}</label>
             <textarea
               value={newItem.description}
               onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
-              placeholder="Enter description"
+              placeholder={t('invoice_detail_page.placeholder_description')}
               rows={2}
               className="w-full px-3 py-2 border border-border-light rounded-lg focus:ring-2 focus:ring-primary-accent outline-none bg-input-bg"
             />
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('invoice_detail_page.quantity')}</label>
               <Input
                 type="number"
                 value={newItem.quantity}
@@ -1599,14 +1629,14 @@ const InvoiceDetail = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('invoice_detail_page.unit')}</label>
               <Input
                 value={newItem.unit}
                 onChange={(e) => setNewItem({ ...newItem, unit: e.target.value })}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Rate</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('invoice_detail_page.rate')}</label>
               <Input
                 type="number"
                 value={newItem.unit_price}
@@ -1616,10 +1646,10 @@ const InvoiceDetail = () => {
           </div>
           <div className="flex gap-3 pt-4">
             <Button variant="outline" onClick={() => { setIsAddItemModalOpen(false); setItemSearchQuery(''); }} className="flex-1">
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button onClick={handleAddItem} className="flex-1 bg-primary-accent hover:opacity-90 text-white">
-              Add Custom Item
+              {t('invoice_detail_page.add_custom_item')}
             </Button>
           </div>
         </div>
@@ -1629,19 +1659,19 @@ const InvoiceDetail = () => {
       <Modal
         isOpen={isEditItemModalOpen}
         onClose={() => setIsEditItemModalOpen(false)}
-        title="Edit Item"
+        title={t('invoice_detail_page.edit_item_title')}
       >
         {editingItem && (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Item Name</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('invoice_detail_page.item_name')}</label>
               <Input
                 value={editingItem.item_name}
                 onChange={(e) => setEditingItem({ ...editingItem, item_name: e.target.value })}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('invoice_detail_page.description')}</label>
               <textarea
                 value={editingItem.description || ''}
                 onChange={(e) => setEditingItem({ ...editingItem, description: e.target.value })}
@@ -1651,7 +1681,7 @@ const InvoiceDetail = () => {
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('invoice_detail_page.quantity')}</label>
                 <Input
                   type="number"
                   value={editingItem.quantity}
@@ -1659,14 +1689,14 @@ const InvoiceDetail = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('invoice_detail_page.unit')}</label>
                 <Input
                   value={editingItem.unit}
                   onChange={(e) => setEditingItem({ ...editingItem, unit: e.target.value })}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Rate</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('invoice_detail_page.rate')}</label>
                 <Input
                   type="number"
                   value={editingItem.unit_price}
@@ -1676,10 +1706,10 @@ const InvoiceDetail = () => {
             </div>
             <div className="flex gap-3 pt-4">
               <Button variant="outline" onClick={() => setIsEditItemModalOpen(false)} className="flex-1">
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button onClick={handleEditItem} className="flex-1 bg-primary-accent hover:opacity-90 text-white">
-                Save Changes
+                {t('invoice_detail_page.save_changes')}
               </Button>
             </div>
           </div>
@@ -1690,24 +1720,26 @@ const InvoiceDetail = () => {
       <Modal
         isOpen={isEditDiscountModalOpen}
         onClose={() => setIsEditDiscountModalOpen(false)}
-        title="Edit Discount"
+        title={t('invoice_detail_page.edit_discount_title')}
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-secondary-text mb-1">Discount ({invoice.discount_type === '%' ? '%' : 'Amount'})</label>
+            <label className="block text-sm font-medium text-secondary-text mb-1">
+              {t('invoices.discount')} ({invoice.discount_type === '%' ? t('invoice_detail_page.discount_percent') : t('invoice_detail_page.discount_amount_label')})
+            </label>
             <Input
               type="number"
               value={discountValue}
               onChange={(e) => setDiscountValue(parseFloat(e.target.value) || 0)}
-              placeholder="Enter discount"
+              placeholder={t('invoice_detail_page.placeholder_discount')}
             />
           </div>
           <div className="flex gap-3 pt-4">
             <Button variant="outline" onClick={() => setIsEditDiscountModalOpen(false)} className="flex-1">
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button onClick={handleUpdateDiscount} className="flex-1 bg-primary-accent hover:opacity-90 text-white">
-              Save
+              {t('common.save')}
             </Button>
           </div>
         </div>
@@ -1729,19 +1761,19 @@ const InvoiceDetail = () => {
       <Modal
         isOpen={isAddReminderModalOpen}
         onClose={() => setIsAddReminderModalOpen(false)}
-        title="Add Reminder"
+        title={t('invoice_detail_page.add_reminder_title')}
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-secondary-text mb-1">Reminder Title</label>
+            <label className="block text-sm font-medium text-secondary-text mb-1">{t('invoice_detail_page.reminder_title')}</label>
             <Input
               value={newReminder.title}
               onChange={(e) => setNewReminder({ ...newReminder, title: e.target.value })}
-              placeholder="Enter reminder title"
+              placeholder={t('invoice_detail_page.placeholder_reminder_title')}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-secondary-text mb-1">Remind At</label>
+            <label className="block text-sm font-medium text-secondary-text mb-1">{t('invoice_detail_page.remind_at')}</label>
             <Input
               type="datetime-local"
               value={newReminder.remind_at}
@@ -1750,10 +1782,10 @@ const InvoiceDetail = () => {
           </div>
           <div className="flex gap-3 pt-4">
             <Button variant="outline" onClick={() => setIsAddReminderModalOpen(false)} className="flex-1">
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button onClick={handleAddReminder} className="flex-1 bg-primary-accent hover:opacity-90 text-white">
-              Add Reminder
+              {t('invoice_detail_page.add_reminder')}
             </Button>
           </div>
         </div>

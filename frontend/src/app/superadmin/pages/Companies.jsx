@@ -28,7 +28,7 @@ const Companies = () => {
     website: '',
     address: '',
     notes: '',
-    currency: 'USD',
+    currency: 'EUR',
     timezone: 'UTC',
     package_id: '',
   })
@@ -99,7 +99,7 @@ const Companies = () => {
       website: company.website || '',
       address: company.address || '',
       notes: company.notes || '',
-      currency: company.currency || 'USD',
+      currency: company.currency || 'EUR',
       timezone: company.timezone || 'UTC',
       package_id: company.package_id || '',
     })
@@ -130,7 +130,7 @@ const Companies = () => {
       website: '',
       address: '',
       notes: '',
-      currency: 'USD',
+      currency: 'EUR',
       timezone: 'UTC',
       package_id: '',
     })
@@ -424,7 +424,7 @@ const Companies = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-secondary-text mb-1">{t('companies.currency')}</label>
-                <p className="text-primary-text">{selectedCompany.currency || 'USD'}</p>
+                <p className="text-primary-text">{selectedCompany.currency || 'EUR'}</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-secondary-text mb-1">{t('companies.timezone')}</label>

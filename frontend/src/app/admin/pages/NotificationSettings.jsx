@@ -109,6 +109,8 @@ const NotificationSettings = () => {
     if (child) {
       if (child.id === 'notifications') {
         setActiveSubMenu('notifications')
+      } else if (child.id === 'access-permission') {
+        navigate('/app/admin/roles-permissions')
       } else if (child.path) {
         navigate(child.path)
       } else {

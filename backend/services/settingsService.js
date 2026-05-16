@@ -228,6 +228,14 @@ const applySettingChange = async (key, value, companyId) => {
         )
         console.log(`Synced ${key} to companies.${companyField} for company ${companyId}`)
       }
+
+      if (key === 'default_currency' && value) {
+        await pool.execute(
+          `UPDATE companies SET currency = ?, updated_at = NOW() WHERE id = ?`,
+          [String(value).trim(), companyId]
+        )
+        console.log(`Synced default_currency to companies.currency for company ${companyId}`)
+      }
     }
 
     return true;

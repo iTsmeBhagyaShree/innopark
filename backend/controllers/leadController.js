@@ -160,7 +160,7 @@ const sanitizeLead = (lead) => {
 
 const getAll = async (req, res) => {
   try {
-    const { status, owner_id, source, city } = req.query;
+    const { status, owner_id, source, city, search } = req.query;
     // Use company_id from auth token (req.companyId) or query param
     const companyId = req.companyId || req.query.company_id || null;
     console.log('🔍 FETCH LEADS DEBUG:');
@@ -195,12 +195,23 @@ const getAll = async (req, res) => {
       params.push(city);
     }
 
+    const searchTrim = search != null && String(search).trim() ? String(search).trim() : '';
+    if (searchTrim) {
+      const pattern = `%${searchTrim}%`;
+      whereClause += ` AND (
+        l.person_name LIKE ? OR IFNULL(l.company_name,'') LIKE ? OR l.email LIKE ?
+        OR l.phone LIKE ? OR IFNULL(l.city,'') LIKE ? OR IFNULL(l.source,'') LIKE ?
+        OR IFNULL(l.notes,'') LIKE ? OR IFNULL(u.name,'') LIKE ?
+      )`;
+      params.push(pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern);
+    }
+
     // Get all leads without pagination
     const [leads] = await pool.execute(
       `SELECT l.*, 
               u.name as owner_name, 
               u.email as owner_email, 
-              c.name as company_name,
+              c.name as tenant_name,
               ls.name as stage_name,
               ls.color as stage_color,
               lp.name as pipeline_name
@@ -216,11 +227,20 @@ const getAll = async (req, res) => {
 
     // Permanent Dummy Fallback: If DB is empty, show beautiful demo leads
     if (leads.length === 0) {
-      const demoLeads = [
+      let demoLeads = [
         { id: 101, person_name: "Aryan Sharma", company_name: "TechNova Solutions", email: "aryan@technova.com", status: "Qualified", value: "25000", owner_name: "Kavya", stage_name: "Proposal", created_at: new Date() },
         { id: 102, person_name: "Sneha Kapoor", company_name: "Creative Mint", email: "sneha@creativemint.in", status: "New", value: "12000", owner_name: "Devesh", stage_name: "Discovery", created_at: new Date() },
         { id: 103, person_name: "Vikram Malhotra", company_name: "Elite Realty", email: "v.malhotra@eliterealty.com", status: "Won", value: "45000", owner_name: "Kavya", stage_name: "Closed Won", created_at: new Date() }
       ];
+      if (searchTrim) {
+        const q = searchTrim.toLowerCase();
+        demoLeads = demoLeads.filter(
+          (row) =>
+            String(row.person_name || '').toLowerCase().includes(q) ||
+            String(row.company_name || '').toLowerCase().includes(q) ||
+            String(row.email || '').toLowerCase().includes(q)
+        );
+      }
       return res.json({ success: true, data: demoLeads });
     }
 
@@ -290,7 +310,7 @@ const getById = async (req, res) => {
     let query = `SELECT l.*, 
               u.name as owner_name, 
               u.email as owner_email, 
-              c.name as company_name,
+              c.name as tenant_name,
               ls.name as stage_name,
               ls.color as stage_color,
               lp.name as pipeline_name
@@ -366,7 +386,7 @@ const create = async (req, res) => {
       lead_type, company_name, person_name, email, phone,
       owner_id, status, source, address,
       city, state, zip, country, value, due_followup,
-      notes, probability, call_this_week, labels = [], services = [], custom_fields = {}
+      notes, probability, call_this_week, currency, labels = [], services = [], custom_fields = {}
     } = req.body;
 
     // Default Pipeline & Stage Logic for Leads
@@ -429,8 +449,8 @@ const create = async (req, res) => {
         company_id, lead_type, company_name, person_name, email, phone,
         owner_id, status, source, address, city, state, zip, country,
         value, due_followup, notes, probability, call_this_week, created_by,
-        pipeline_id, stage_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        pipeline_id, stage_id, currency
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         companyId,
         lead_type || 'Organization',
@@ -453,7 +473,8 @@ const create = async (req, res) => {
         call_this_week ?? false,
         userId,
         pipeline_id ?? null,
-        stage_id ?? null
+        stage_id ?? null,
+        currency || 'EUR'
       ]
     );
 
@@ -492,7 +513,7 @@ const create = async (req, res) => {
 
     // Get created lead with company name and owner details
     const [leads] = await pool.execute(
-      `SELECT l.*, u.name as owner_name, u.email as owner_email, c.name as company_name
+      `SELECT l.*, u.name as owner_name, u.email as owner_email, c.name as tenant_name
        FROM leads l
        LEFT JOIN users u ON l.owner_id = u.id
        LEFT JOIN companies c ON l.company_id = c.id
@@ -583,7 +604,8 @@ const update = async (req, res) => {
     const allowedFields = [
       'lead_type', 'company_name', 'person_name', 'email', 'phone',
       'owner_id', 'status', 'source', 'address', 'city', 'state',
-      'zip', 'country', 'value', 'due_followup', 'notes', 'probability', 'call_this_week'
+      'zip', 'country', 'value', 'due_followup', 'notes', 'probability', 'call_this_week', 'currency',
+      'pipeline_id', 'stage_id'
     ];
 
     const updates = [];
@@ -608,10 +630,16 @@ const update = async (req, res) => {
       updates.push('updated_at = CURRENT_TIMESTAMP');
       values.push(id, companyId);
 
-      await pool.execute(
+      const [updateResult] = await pool.execute(
         `UPDATE leads SET ${updates.join(', ')} WHERE id = ? AND company_id = ?`,
         values
       );
+      
+      console.log(`Lead Update - ID: ${id}, CompanyID: ${companyId}, AffectedRows: ${updateResult.affectedRows}`);
+      
+      if (updateResult.affectedRows === 0) {
+        console.warn(`Lead Update Warning: No rows affected for ID ${id} and CompanyID ${companyId}`);
+      }
     }
 
     // Update labels if provided
@@ -665,7 +693,7 @@ const update = async (req, res) => {
 
     // Get updated lead with company name
     const [updatedLeads] = await pool.execute(
-      `SELECT l.*, u.name as owner_name, u.email as owner_email, c.name as company_name
+      `SELECT l.*, u.name as owner_name, u.email as owner_email, c.name as tenant_name
        FROM leads l
        LEFT JOIN users u ON l.owner_id = u.id
        LEFT JOIN companies c ON l.company_id = c.id
@@ -1818,7 +1846,7 @@ const updateStage = async (req, res) => {
     const [stages] = await pool.execute('SELECT name FROM lead_pipeline_stages WHERE id = ?', [stage_id]);
     if (stages.length > 0) {
       updates.push('status = ?');
-      values.push(stages[0].name);
+      values.push(normalizeLeadStatus(stages[0].name));
     }
 
     updates.push('updated_at = CURRENT_TIMESTAMP');

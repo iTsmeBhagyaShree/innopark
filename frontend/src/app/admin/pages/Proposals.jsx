@@ -1106,8 +1106,9 @@ const Proposals = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-primary-text">Deals</h1>
-          <p className="text-gray-500 text-sm mt-1">Track revenue & pipeline opportunities</p>
+          <h1 className="text-xl font-black text-gray-900 flex items-center gap-2">
+            <IoLayers className="text-primary-accent" size={22} /> <span className="notranslate">Deals</span>
+          </h1>
         </div>
         <AddButton onClick={handleAdd} label="Add Deal" />
       </div>

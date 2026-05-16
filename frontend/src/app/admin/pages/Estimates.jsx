@@ -35,6 +35,7 @@ import {
   IoCamera,
   IoCalendar,
   IoGrid,
+  IoList,
   IoCheckmark,
   IoChevronBack,
   IoChevronForward
@@ -164,13 +165,14 @@ const Estimates = () => {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(10)
+  const [estimateViewMode, setEstimateViewMode] = useState('list') // 'list' | 'tile'
 
   const [formData, setFormData] = useState({
     company: '',
     estimateNumber: '',
     estimateDate: new Date().toISOString().split('T')[0],
     validTill: '',
-    currency: 'USD',
+    currency: 'EUR',
     project: '',
     calculateTax: 'After Discount',
     tax: '',
@@ -223,6 +225,7 @@ const Estimates = () => {
             company_id: estimate.company_id,
             company_name: estimate.company_name || '--',
             project: estimate.project_name || '--',
+            currency: estimate.currency || null,
             total: parseFloat(estimate.total || estimate.total_amount || 0),
             validTill: estimate.valid_till ? estimate.valid_till.split('T')[0] : '',
             created: estimate.proposal_date || estimate.created_at || estimate.estimate_date || '',
@@ -524,7 +527,7 @@ const Estimates = () => {
       estimateNumber: generateEstimateNumber(),
       estimateDate: today.toISOString().split('T')[0],
       validTill: validTillDate.toISOString().split('T')[0],
-      currency: 'USD',
+      currency: 'EUR',
       project: '',
       calculateTax: 'After Discount',
       description: '',
@@ -931,9 +934,26 @@ const Estimates = () => {
             <div className="flex flex-wrap items-center justify-between gap-4">
               {/* Left side - Add new filter */}
               <div className="flex items-center gap-3">
-                <button className="flex items-center gap-2 px-2 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50">
-                  <IoGrid size={14} className="text-gray-500" />
-                </button>
+                <div className="inline-flex rounded-md border border-gray-300 bg-white p-0.5" role="group" aria-label={t('Quotes')}>
+                  <button
+                    type="button"
+                    title={t('common.list')}
+                    onClick={() => setEstimateViewMode('list')}
+                    className={`px-2.5 py-1.5 text-xs font-medium rounded transition-colors ${estimateViewMode === 'list' ? 'bg-primary-accent text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                  >
+                    <IoList size={14} className="inline-block sm:mr-1 align-middle" />
+                    <span className="hidden sm:inline">{t('common.list')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    title={t('common.tile')}
+                    onClick={() => setEstimateViewMode('tile')}
+                    className={`px-2.5 py-1.5 text-xs font-medium rounded transition-colors ${estimateViewMode === 'tile' ? 'bg-primary-accent text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                  >
+                    <IoGrid size={14} className="inline-block sm:mr-1 align-middle" />
+                    <span className="hidden sm:inline">{t('common.tile')}</span>
+                  </button>
+                </div>
                 <button
                   onClick={() => setShowFilterPanel(!showFilterPanel)}
                   className={`flex items-center gap-2 px-2.5 py-1.5 text-xs border rounded-lg transition-colors ${showFilterPanel ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-300 hover:bg-gray-50 text-gray-600'}`}
@@ -1138,8 +1158,9 @@ const Estimates = () => {
             )}
           </div>
 
-          {/* Estimates Table */}
+          {/* Estimates Table / Tiles */}
           <Card className="p-0 overflow-hidden bg-card-bg border border-border-light">
+            {estimateViewMode === 'list' ? (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[900px] text-xs sm:text-sm">
                 <thead className="bg-main-bg border-b border-border-light">
@@ -1217,7 +1238,7 @@ const Estimates = () => {
                           )}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-primary-text font-semibold text-xs sm:text-sm align-top">
-                          {formatCurrency(estimate.total)}
+                          {formatCurrency(estimate.total, estimate.currency)}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap align-top">
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold border whitespace-nowrap" style={getStatusStyle(estimate.status)}>
@@ -1277,6 +1298,99 @@ const Estimates = () => {
                 )}
               </table>
             </div>
+            ) : (
+            <div className="p-4">
+              {loading ? (
+                <div className="py-12 text-center text-secondary-text">{t('common.loading')}</div>
+              ) : filteredEstimates.length === 0 ? (
+                <div className="py-12 text-center text-secondary-text">{t('estimates.no_estimates_found')}</div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {paginatedEstimates.map((estimate) => (
+                      <div
+                        key={estimate.id}
+                        className="rounded-lg border border-border-light bg-card-bg p-4 shadow-sm hover:shadow-md transition-shadow"
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <button
+                            type="button"
+                            onClick={() => handleView(estimate)}
+                            className="text-left font-semibold text-primary-accent hover:underline text-sm"
+                          >
+                            {estimate.estimateNumber}
+                          </button>
+                          <span
+                            className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border shrink-0"
+                            style={getStatusStyle(estimate.status)}
+                          >
+                            {estimate.status}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleView(estimate)}
+                          className="text-left w-full text-xs font-medium text-primary-text hover:underline mb-2 truncate"
+                        >
+                          {estimate.client?.name || 'Unknown Client'}
+                        </button>
+                        <div className="space-y-1.5 text-xs text-secondary-text mb-3">
+                          <div className="flex justify-between gap-2">
+                            <span>{t('common.date')}</span>
+                            <span className="text-primary-text">{formatDate(estimate.created)}</span>
+                          </div>
+                          <div className="flex justify-between gap-2">
+                            <span>{t('common.amount')}</span>
+                            <span className="text-primary-text font-semibold">{formatCurrency(estimate.total, estimate.currency)}</span>
+                          </div>
+                          {estimate.created_by_name && estimate.created_by_name !== '-' && (
+                            <div className="flex items-center gap-2 pt-1 border-t border-border-light">
+                              <div className="w-6 h-6 rounded-full bg-primary-accent/10 flex items-center justify-center shrink-0">
+                                <span className="text-[10px] font-bold text-primary-accent">
+                                  {estimate.created_by_name.substring(0, 2).toUpperCase()}
+                                </span>
+                              </div>
+                              <span className="truncate">{estimate.created_by_name}</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-end gap-1 pt-3 border-t border-border-light">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleCopy(estimate); }}
+                            className="p-1.5 text-gray-500 hover:bg-gray-100 rounded transition-colors"
+                            title={t('common.copy')}
+                          >
+                            <IoCopy size={16} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleEdit(estimate); }}
+                            className="p-1.5 text-gray-500 hover:bg-gray-100 rounded transition-colors"
+                            title={t('common.edit')}
+                          >
+                            <IoCreate size={16} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleDelete(estimate); }}
+                            className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"
+                            title={t('common.delete')}
+                          >
+                            <IoTrash size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-center justify-end gap-2 text-sm font-semibold text-gray-800 border-t border-border-light pt-4">
+                    <span className="text-gray-700">{t('common.total')}:</span>
+                    <span>{formatCurrency(filteredEstimates.reduce((sum, est) => sum + (parseFloat(est.total) || 0), 0))}</span>
+                  </div>
+                </>
+              )}
+            </div>
+            )}
             <div className="px-4 py-3 border-t border-border-light flex items-center justify-between bg-main-bg">
               <div className="flex items-center gap-2 text-sm text-gray-600">
                 <select

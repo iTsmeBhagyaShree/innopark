@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import ActivityTimeline from '../../../components/ui/ActivityTimeline'
 import { leadsAPI, estimatesAPI, proposalsAPI, contractsAPI, documentsAPI, eventsAPI, contactsAPI, tasksAPI, notesAPI, employeesAPI, companiesAPI, invoicesAPI } from '../../../api'
 import { useAuth } from '../../../context/AuthContext'
-import { useSettings } from '../../../context/SettingsContext'
+import { useSettings, normalizeCurrencyCode } from '../../../context/SettingsContext'
 import Card from '../../../components/ui/Card'
 import Button from '../../../components/ui/Button'
 import Badge from '../../../components/ui/Badge'
@@ -130,6 +130,12 @@ const LeadDetail = () => {
   const [isViewProposalModalOpen, setIsViewProposalModalOpen] = useState(false)
   const [isEditProposalModalOpen, setIsEditProposalModalOpen] = useState(false)
 
+  const stripHtmlTags = (value) =>
+    String(value || '')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+
   const [selectedContract, setSelectedContract] = useState(null)
   const [selectedProposal, setSelectedProposal] = useState(null)
   const [proposalTemplate, setProposalTemplate] = useState('professional')
@@ -155,7 +161,7 @@ const LeadDetail = () => {
     website: '',
     vatNumber: '',
     gstNumber: '',
-    currency: 'USD',
+    currency: 'EUR',
     currencySymbol: '€',
     disableOnlinePayment: false,
   })
@@ -230,7 +236,7 @@ const LeadDetail = () => {
     estimate_number: '',
     estimate_date: new Date().toISOString().split('T')[0],
     valid_till: '',
-    currency: 'USD',
+    currency: 'EUR',
     calculate_tax: 'After Discount',
     description: '',
     note: '',
@@ -246,7 +252,7 @@ const LeadDetail = () => {
   const [proposalFormData, setProposalFormData] = useState({
     title: '',
     valid_till: '',
-    currency: 'USD',
+    currency: 'EUR',
     description: '',
     note: '',
     terms: 'Thank you for your business.',
@@ -1197,8 +1203,7 @@ const LeadDetail = () => {
   // Add Estimate handler
   const handleAddEstimate = async () => {
     try {
-      // Extract currency code from format like "USD ($)" -> "USD"
-      const currencyCode = estimateFormData.currency ? estimateFormData.currency.split(' ')[0] : 'USD'
+      const currencyCode = normalizeCurrencyCode(estimateFormData.currency) || 'EUR'
 
       const estimateData = {
         estimate_number: estimateFormData.estimate_number || null,
@@ -1224,7 +1229,7 @@ const LeadDetail = () => {
         setIsAddEstimateModalOpen(false)
         setEstimateFormData({
           estimate_number: '', estimate_date: new Date().toISOString().split('T')[0], valid_till: '',
-          currency: 'USD', calculate_tax: 'After Discount', description: '', note: '',
+          currency: 'EUR', calculate_tax: 'After Discount', description: '', note: '',
           terms: 'Thank you for your business.', discount: 0, discount_type: '%', amount: '', status: 'draft', client_id: null, project_id: null, items: []
         })
         fetchOffers()
@@ -1240,8 +1245,7 @@ const LeadDetail = () => {
   // Add Proposal handler
   const handleAddProposal = async () => {
     try {
-      // Extract currency code from format like "USD ($)" -> "USD"
-      const currencyCode = proposalFormData.currency ? proposalFormData.currency.split(' ')[0] : 'USD'
+      const currencyCode = normalizeCurrencyCode(proposalFormData.currency) || 'EUR'
 
       const proposalData = {
         title: proposalFormData.title || null,
@@ -1265,7 +1269,7 @@ const LeadDetail = () => {
         const createdProposal = response.data.data
         setIsAddProposalModalOpen(false)
         setProposalFormData({
-          title: '', valid_till: '', currency: 'USD', description: '', note: '',
+          title: '', valid_till: '', currency: 'EUR', description: '', note: '',
           terms: 'Thank you for your business.', discount: 0, discount_type: '%', amount: '', status: 'draft', client_id: null, project_id: null, items: []
         })
         fetchDeals()
@@ -1294,7 +1298,7 @@ const LeadDetail = () => {
     setProposalFormData({
       title: proposal.title || '',
       valid_till: proposal.valid_till ? proposal.valid_till.split('T')[0] : '',
-      currency: proposal.currency || 'USD',
+      currency: proposal.currency || 'EUR',
       description: proposal.description || '',
       note: proposal.note || '',
       terms: proposal.terms || 'Thank you for your business.',
@@ -1314,7 +1318,7 @@ const LeadDetail = () => {
     if (!selectedProposal) return
 
     try {
-      const currencyCode = proposalFormData.currency ? proposalFormData.currency.split(' ')[0] : 'USD'
+      const currencyCode = normalizeCurrencyCode(proposalFormData.currency) || 'EUR'
 
       const proposalData = {
         valid_till: proposalFormData.valid_till || null,
@@ -1770,7 +1774,10 @@ const LeadDetail = () => {
                     <div className="flex items-start gap-3 px-5 py-3">
                       <IoLocation className="text-gray-500 mt-0.5" size={18} />
                       <div className="text-sm text-gray-800">
-                        {[lead.address, lead.city, lead.country].filter(Boolean).join(', ') || 'N/A'}
+                        {[lead.address, lead.city, lead.country]
+                          .map(stripHtmlTags)
+                          .filter(Boolean)
+                          .join(', ') || 'N/A'}
                       </div>
                     </div>
                     <div className="border-t border-gray-100" />
@@ -1996,7 +2003,7 @@ const LeadDetail = () => {
 
           {activeTab === 'activity' && (
             <div className="max-w-4xl mx-auto py-6">
-              <ActivityTimeline entityType="lead" entityId={id} />
+              <ActivityTimeline entityType="lead" entityId={id} leadId={id} showReferenceTag={false} />
             </div>
           )}
 
@@ -3353,89 +3360,46 @@ const LeadDetail = () => {
       >
         <div className="space-y-4">
           <Input
+            label="Title"
             value={noteFormData.title}
             onChange={(e) => setNoteFormData({ ...noteFormData, title: e.target.value })}
-            onChange={(e) => setNoteFormData({ ...noteFormData, title: e.target.value })}>
-
-          <select
-            value={noteFormData.category}
-            onChange={(e) => setNoteFormData({ ...noteFormData, category: e.target.value })}
-            className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
-          >
-            <option value="">- Category -</option>
-            <option value="General">{t('') || ''}</option>
-            <option value="Follow-up">{t('') || ''}</option>
-            <option value="Meeting">{t('') || ''}</option>
-            <option value="Call">{t('') || ''}</option>
-            <option value="Other">{t('') || ''}</option>
-          </select>
+            placeholder="Note title"
+          />
 
           <div>
-            <label className="block text-sm font-medium text-primary-text mb-2">{t('') || ''}</label>
-            <div className="flex flex-wrap gap-2 p-3 border border-gray-300 rounded-lg bg-gray-50">
-              {(noteFormData.labels || []).length === 0 ? (
-                <span className="text-sm text-gray-400">{t('') || ''}</span>
-              ) : (
-                (noteFormData.labels || []).map((labelName, idx) => {
-                  const labelObj = getLabelByName(labelName)
-                  const style = getLabelChipStyle(labelObj?.color)
-                  return (
-                    <span key={`${labelName}-${idx}`} className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm" style={style}>
-                      {labelName}
-                      <button
-                        type="button"
-                        onClick={() => setNoteFormData({ ...noteFormData, labels: (noteFormData.labels || []).filter((_, i) => i !== idx) })}
-                        className="hover:text-red-600"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  )
-                })
-              )}
-            </div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Description <span className="text-red-500">*</span></label>
+            <textarea
+              value={noteFormData.description}
+              onChange={(e) => setNoteFormData({ ...noteFormData, description: e.target.value })}
+              rows={4}
+              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none resize-none text-sm"
+              placeholder="Write your note here..."
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
             <select
-              value=""
-              onChange={(e) => {
-                const val = e.target.value
-                if (val && !(noteFormData.labels || []).includes(val)) {
-                  setNoteFormData({ ...noteFormData, labels: [...(noteFormData.labels || []), val] })
-                }
-                e.target.value = ''
-              }}
-              className="w-full mt-2 px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
+              value={noteFormData.category}
+              onChange={(e) => setNoteFormData({ ...noteFormData, category: e.target.value })}
+              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
             >
-              <option value="">+ Add Label</option>
-              {availableLabels
-                .filter(l => !(noteFormData.labels || []).includes(l.name))
-                .map(l => (
-                  <option key={l.name} value={l.name}>{l.name}</option>
-                ))}
+              <option value="">- Category -</option>
+              <option value="General">General</option>
+              <option value="Follow-up">Follow-up</option>
+              <option value="Meeting">Meeting</option>
+              <option value="Call">Call</option>
+              <option value="Other">Other</option>
             </select>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-primary-text mb-2">{t('auto.auto_cb5feb1b') || 'Color'}</label>
-            <div className="flex items-center gap-2">
-              <ColorPicker
-                value={noteFormData.color}
-                onChange={(color) => setNoteFormData({ ...noteFormData, color })}
-              />
-              <Input
-                value={noteFormData.color}
-                onChange={(e) => setNoteFormData({ ...noteFormData, color: e.target.value })}
-                placeholder="#3b82f6"
-                className="flex-1"
-              />
-            </div>
-          </div>
-
           <div className="space-y-3">
+            <label className="block text-sm font-medium text-gray-700">Attach Files</label>
             <div className="flex items-center gap-3">
               <label className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors bg-white shadow-sm">
                 <span className="text-sm text-gray-700 font-medium flex items-center gap-2">
                   <IoAdd size={16} />
-                  Attach Files
+                  Choose Files
                 </span>
                 <input
                   type="file"
@@ -3451,7 +3415,6 @@ const LeadDetail = () => {
                 />
               </label>
             </div>
-            {/* Selected Files List */}
             {noteFormData.files && noteFormData.files.length > 0 && (
               <div className="grid grid-cols-1 gap-2">
                 {Array.from(noteFormData.files).map((file, idx) => (
@@ -3474,10 +3437,10 @@ const LeadDetail = () => {
 
           <div className="flex gap-3 pt-4 border-t border-gray-200">
             <Button variant="outline" onClick={() => setIsAddNoteModalOpen(false)} className="flex-1">
-              Close
+              {t('common.cancel')}
             </Button>
             <Button variant="primary" onClick={handleSaveNote} className="flex-1">
-              Save
+              {t('common.save')}
             </Button>
           </div>
         </div>
@@ -3494,6 +3457,11 @@ const LeadDetail = () => {
             label="Title"
             value={reminderFormData.title}
             onChange={(e) => setReminderFormData({ ...reminderFormData, title: e.target.value })}
+          />
+          <Input
+            label="Date"
+            type="date"
+            value={reminderFormData.date}
             onChange={(e) => setReminderFormData({ ...reminderFormData, date: e.target.value })}
           />
           <Input
@@ -3503,11 +3471,18 @@ const LeadDetail = () => {
             onChange={(e) => setReminderFormData({ ...reminderFormData, time: e.target.value })}
           />
           <div>
-            <label className="block text-sm font-medium text-primary-text mb-2">{t('') || ''}</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
             <textarea
               value={reminderFormData.description}
-              onChange={(e) => setReminderFormData({ ...reminderFormData, description: e.target.value })} className="flex-1">
-              Cancel
+              onChange={(e) => setReminderFormData({ ...reminderFormData, description: e.target.value })}
+              rows={3}
+              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none resize-none text-sm"
+              placeholder="Reminder details..."
+            />
+          </div>
+          <div className="flex gap-3 pt-4 border-t border-gray-200">
+            <Button variant="outline" onClick={() => setIsAddReminderModalOpen(false)} className="flex-1">
+              {t('common.cancel')}
             </Button>
             <Button variant="primary" onClick={handleAddReminder} className="flex-1">
               Add Reminder
@@ -3547,13 +3522,15 @@ const LeadDetail = () => {
             required
           />
           <div>
-            <label className="block text-sm font-medium text-primary-text mb-2">{t('') || ''}</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
             <textarea
               value={followUpFormData.notes}
-              onChange={(e) => setFollowUpFormData({ ...followUpFormData, notes: e.target.value })}</strong> {new Date(lead.due_followup).toLocaleDateString()}
-              </p>
-            </div>
-          )}
+              onChange={(e) => setFollowUpFormData({ ...followUpFormData, notes: e.target.value })}
+              rows={3}
+              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none resize-none text-sm"
+              placeholder="Follow-up notes..."
+            />
+          </div>
           <div className="flex gap-3 pt-4">
             <Button
               variant="outline"
@@ -3636,97 +3613,133 @@ const LeadDetail = () => {
           setIsAddEstimateModalOpen(false)
           setEstimateFormData({
             estimate_number: '', estimate_date: new Date().toISOString().split('T')[0], valid_till: '',
-            currency: 'USD', calculate_tax: 'After Discount', description: '', note: '',
+            currency: 'EUR', calculate_tax: 'After Discount', description: '', note: '',
             terms: 'Thank you for your business.', discount: 0, discount_type: '%', amount: '', status: 'Draft'
           })
         }}
         title={<span className="notranslate">{t('') || ''}</span>}
       >
         <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
-          <Input
-            label="Offer Number"
-            value={estimateFormData.estimate_number}
-            onChange={(e) => setEstimateFormData({ ...estimateFormData, estimate_number: e.target.value })}
-              onChange={(e) => setEstimateFormData({ ...estimateFormData, estimate_date: e.target.value })}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Offer Number"
+              value={estimateFormData.estimate_number}
+              onChange={(e) => setEstimateFormData({ ...estimateFormData, estimate_number: e.target.value })}
             />
             <Input
-              label="Valid Till"
+              label="Estimate date"
               type="date"
-              value={estimateFormData.valid_till}
-              onChange={(e) => setEstimateFormData({ ...estimateFormData, valid_till: e.target.value })}
+              value={estimateFormData.estimate_date}
+              onChange={(e) => setEstimateFormData({ ...estimateFormData, estimate_date: e.target.value })}
             />
           </div>
+          <Input
+            label="Valid Till"
+            type="date"
+            value={estimateFormData.valid_till}
+            onChange={(e) => setEstimateFormData({ ...estimateFormData, valid_till: e.target.value })}
+          />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-primary-text mb-2">{t('') || ''}</label>
+            <div className="hidden">
+              <label className="block text-sm font-medium text-primary-text mb-2">{t('common.currency')}</label>
               <select
                 value={estimateFormData.currency}
                 onChange={(e) => setEstimateFormData({ ...estimateFormData, currency: e.target.value })}
                 className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
               >
-                <option value="USD ($)">USD ($)</option>
-                <option value="EUR (€)">EUR (€)</option>
-                <option value="GBP (£)">GBP (£)</option>
-                <option value="INR (€)">INR (€)</option>
+                <option value="EUR">EUR (€)</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-primary-text mb-2">{t('') || ''}</label>
+              <label className="block text-sm font-medium text-primary-text mb-2">{t('estimates.calculate_tax')}</label>
               <select
                 value={estimateFormData.calculate_tax}
                 onChange={(e) => setEstimateFormData({ ...estimateFormData, calculate_tax: e.target.value })}
                 className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
               >
-                <option value="Before Discount">{t('') || ''}</option>
-                <option value="After Discount">{t('') || ''}</option>
+                <option value="Before Discount">{t('estimates.before_discount')}</option>
+                <option value="After Discount">{t('estimates.after_discount')}</option>
               </select>
             </div>
           </div>
-          <Input
-            label="Amount"
-            type="number"
-            value={estimateFormData.amount}
-            onChange={(e) => setEstimateFormData({ ...estimateFormData, amount: e.target.value })}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Amount"
+              type="number"
+              value={estimateFormData.amount}
+              onChange={(e) => setEstimateFormData({ ...estimateFormData, amount: e.target.value })}
+              placeholder="0"
+            />
+            <Input
+              label="Discount"
+              type="number"
+              value={estimateFormData.discount}
               onChange={(e) => setEstimateFormData({ ...estimateFormData, discount: e.target.value })}
               placeholder="0"
             />
-            <div>
-              <label className="block text-sm font-medium text-primary-text mb-2">{t('') || ''}</label>
-              <select
-                value={estimateFormData.discount_type}
-                onChange={(e) => setEstimateFormData({ ...estimateFormData, discount_type: e.target.value })}
-                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
-              >
-                <option value="%">Percentage (%)</option>
-                <option value="flat">{t('') || ''}</option>
-              </select>
-            </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-primary-text mb-2">{t('') || ''}</label>
+            <label className="block text-sm font-medium text-primary-text mb-2">{t('estimates.discount_type')}</label>
+            <select
+              value={estimateFormData.discount_type}
+              onChange={(e) => setEstimateFormData({ ...estimateFormData, discount_type: e.target.value })}
+              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
+            >
+              <option value="%">Percentage (%)</option>
+              <option value="flat">{t('estimates.flat')}</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-primary-text mb-2">{t('common.status')}</label>
             <select
               value={estimateFormData.status}
               onChange={(e) => setEstimateFormData({ ...estimateFormData, status: e.target.value })}
               className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
             >
-              <option value="Draft">{t('') || ''}</option>
-              <option value="Sent">{t('') || ''}</option>
-              <option value="Accepted">{t('') || ''}</option>
-              <option value="Declined">{t('') || ''}</option>
-              <option value="Expired">{t('') || ''}</option>
+              <option value="draft">Draft</option>
+              <option value="sent">Sent</option>
+              <option value="accepted">Accepted</option>
+              <option value="declined">Declined</option>
+              <option value="expired">Expired</option>
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-primary-text mb-2">{t('') || ''}</label>
+            <label className="block text-sm font-medium text-primary-text mb-2">{t('common.description')}</label>
             <textarea
               value={estimateFormData.description}
-              onChange={(e) => setEstimateFormData({ ...estimateFormData, description: e.target.value })}</label>
+              onChange={(e) => setEstimateFormData({ ...estimateFormData, description: e.target.value })}
+              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent outline-none"
+              rows={3}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-primary-text mb-2">{t('common.note')}</label>
             <textarea
               value={estimateFormData.note}
-              onChange={(e) => setEstimateFormData({ ...estimateFormData, note: e.target.value })}</label>
+              onChange={(e) => setEstimateFormData({ ...estimateFormData, note: e.target.value })}
+              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent outline-none"
+              rows={2}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-primary-text mb-2">{t('common.terms')}</label>
             <textarea
               value={estimateFormData.terms}
-              onChange={(e) => setEstimateFormData({ ...estimateFormData, terms: e.target.value })})
+              onChange={(e) => setEstimateFormData({ ...estimateFormData, terms: e.target.value })}
+              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent outline-none"
+              rows={2}
+            />
+          </div>
+          <div className="flex gap-3 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsAddEstimateModalOpen(false)
+                setEstimateFormData({
+                  estimate_number: '', estimate_date: new Date().toISOString().split('T')[0], valid_till: '',
+                  currency: 'EUR', calculate_tax: 'After Discount', description: '', note: '',
+                  terms: 'Thank you for your business.', discount: 0, discount_type: '%', amount: '', status: 'draft', project_id: null, items: []
+                })
               }}
               className="flex-1"
             >
@@ -3745,7 +3758,7 @@ const LeadDetail = () => {
         onClose={() => {
           setIsAddProposalModalOpen(false)
           setProposalFormData({
-            title: '', valid_till: '', currency: 'USD', description: '', note: '',
+            title: '', valid_till: '', currency: 'EUR', description: '', note: '',
             terms: 'Thank you for your business.', discount: 0, discount_type: '%', amount: '', status: 'Draft'
           })
         }}
@@ -3756,67 +3769,102 @@ const LeadDetail = () => {
             label="Deal Title"
             value={proposalFormData.title}
             onChange={(e) => setProposalFormData({ ...proposalFormData, title: e.target.value })}
-              onChange={(e) => setProposalFormData({ ...proposalFormData, valid_till: e.target.value })}
-            />
-            <div>
-              <label className="block text-sm font-medium text-primary-text mb-2">{t('') || ''}</label>
+          />
+          <Input
+            label="Valid Till"
+            type="date"
+            value={proposalFormData.valid_till}
+            onChange={(e) => setProposalFormData({ ...proposalFormData, valid_till: e.target.value })}
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="hidden">
+              <label className="block text-sm font-medium text-primary-text mb-2">{t('common.currency')}</label>
               <select
                 value={proposalFormData.currency}
                 onChange={(e) => setProposalFormData({ ...proposalFormData, currency: e.target.value })}
                 className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
               >
-                <option value="USD ($)">USD ($)</option>
-                <option value="EUR (€)">EUR (€)</option>
-                <option value="GBP (£)">GBP (£)</option>
-                <option value="INR (€)">INR (€)</option>
+                <option value="EUR">EUR (€)</option>
               </select>
             </div>
-          </div>
-          <Input
-            label="Amount"
-            type="number"
-            value={proposalFormData.amount}
-            onChange={(e) => setProposalFormData({ ...proposalFormData, amount: e.target.value })}
-              onChange={(e) => setProposalFormData({ ...proposalFormData, discount: e.target.value })}
-              placeholder="0"
-            />
             <div>
-              <label className="block text-sm font-medium text-primary-text mb-2">{t('') || ''}</label>
+              <label className="block text-sm font-medium text-primary-text mb-2">{t('estimates.discount_type')}</label>
               <select
                 value={proposalFormData.discount_type}
                 onChange={(e) => setProposalFormData({ ...proposalFormData, discount_type: e.target.value })}
                 className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
               >
                 <option value="%">Percentage (%)</option>
-                <option value="flat">{t('') || ''}</option>
+                <option value="flat">{t('estimates.flat')}</option>
               </select>
             </div>
           </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Amount"
+              type="number"
+              value={proposalFormData.amount}
+              onChange={(e) => setProposalFormData({ ...proposalFormData, amount: e.target.value })}
+              placeholder="0"
+            />
+            <Input
+              label="Discount"
+              type="number"
+              value={proposalFormData.discount}
+              onChange={(e) => setProposalFormData({ ...proposalFormData, discount: e.target.value })}
+              placeholder="0"
+            />
+          </div>
           <div>
-            <label className="block text-sm font-medium text-primary-text mb-2">{t('') || ''}</label>
+            <label className="block text-sm font-medium text-primary-text mb-2">{t('common.status')}</label>
             <select
               value={proposalFormData.status}
               onChange={(e) => setProposalFormData({ ...proposalFormData, status: e.target.value })}
               className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
             >
-              <option value="Draft">{t('') || ''}</option>
-              <option value="Sent">{t('') || ''}</option>
-              <option value="Accepted">{t('') || ''}</option>
-              <option value="Declined">{t('') || ''}</option>
-              <option value="Expired">{t('') || ''}</option>
+              <option value="draft">Draft</option>
+              <option value="sent">Sent</option>
+              <option value="accepted">Accepted</option>
+              <option value="declined">Declined</option>
+              <option value="expired">Expired</option>
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-primary-text mb-2">{t('') || ''}</label>
+            <label className="block text-sm font-medium text-primary-text mb-2">{t('common.description')}</label>
             <textarea
               value={proposalFormData.description}
-              onChange={(e) => setProposalFormData({ ...proposalFormData, description: e.target.value })}</label>
+              onChange={(e) => setProposalFormData({ ...proposalFormData, description: e.target.value })}
+              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent outline-none"
+              rows={3}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-primary-text mb-2">{t('common.note')}</label>
             <textarea
               value={proposalFormData.note}
-              onChange={(e) => setProposalFormData({ ...proposalFormData, note: e.target.value })}</label>
+              onChange={(e) => setProposalFormData({ ...proposalFormData, note: e.target.value })}
+              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent outline-none"
+              rows={2}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-primary-text mb-2">{t('common.terms')}</label>
             <textarea
               value={proposalFormData.terms}
-              onChange={(e) => setProposalFormData({ ...proposalFormData, terms: e.target.value })})
+              onChange={(e) => setProposalFormData({ ...proposalFormData, terms: e.target.value })}
+              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent outline-none"
+              rows={2}
+            />
+          </div>
+          <div className="flex gap-3 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsAddProposalModalOpen(false)
+                setProposalFormData({
+                  title: '', valid_till: '', currency: 'EUR', description: '', note: '',
+                  terms: 'Thank you for your business.', discount: 0, discount_type: '%', amount: '', status: 'draft', project_id: null, items: []
+                })
               }}
               className="flex-1"
             >
@@ -3846,6 +3894,12 @@ const LeadDetail = () => {
             label="Contract Title"
             value={contractFormData.title}
             onChange={(e) => setContractFormData({ ...contractFormData, title: e.target.value })}
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Contract date"
+              type="date"
+              value={contractFormData.contract_date}
               onChange={(e) => setContractFormData({ ...contractFormData, contract_date: e.target.value })}
             />
             <Input
@@ -3859,7 +3913,12 @@ const LeadDetail = () => {
             label="Amount"
             type="number"
             value={contractFormData.amount}
-            onChange={(e) => setContractFormData({ ...contractFormData, amount: e.target.value })}</label>
+            onChange={(e) => setContractFormData({ ...contractFormData, amount: e.target.value })}
+            placeholder="0"
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-primary-text mb-2">{t('invoices.tax')}</label>
               <select
                 value={contractFormData.tax}
                 onChange={(e) => setContractFormData({ ...contractFormData, tax: e.target.value })}
@@ -3873,7 +3932,7 @@ const LeadDetail = () => {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-primary-text mb-2">{t('') || ''}</label>
+              <label className="block text-sm font-medium text-primary-text mb-2">{t('invoices.second_tax')}</label>
               <select
                 value={contractFormData.second_tax}
                 onChange={(e) => setContractFormData({ ...contractFormData, second_tax: e.target.value })}
@@ -3888,30 +3947,43 @@ const LeadDetail = () => {
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-primary-text mb-2">{t('') || ''}</label>
+            <label className="block text-sm font-medium text-primary-text mb-2">{t('common.status')}</label>
             <select
               value={contractFormData.status}
               onChange={(e) => setContractFormData({ ...contractFormData, status: e.target.value })}
               className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
             >
-              <option value="Draft">{t('') || ''}</option>
-              <option value="Sent">{t('') || ''}</option>
-              <option value="Accepted">{t('') || ''}</option>
-              <option value="Rejected">{t('') || ''}</option>
+              <option value="draft">Draft</option>
+              <option value="sent">Sent</option>
+              <option value="accepted">Accepted</option>
+              <option value="rejected">Rejected</option>
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-primary-text mb-2">{t('') || ''}</label>
+            <label className="block text-sm font-medium text-primary-text mb-2">{t('common.note')}</label>
             <textarea
               value={contractFormData.note}
-              onChange={(e) => setContractFormData({ ...contractFormData, note: e.target.value })})
+              onChange={(e) => setContractFormData({ ...contractFormData, note: e.target.value })}
+              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent outline-none"
+              rows={3}
+            />
+          </div>
+          <div className="flex gap-3 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsAddContractModalOpen(false)
+                setContractFormData({
+                  title: '', contract_date: new Date().toISOString().split('T')[0], valid_until: '',
+                  tax: '', second_tax: '', note: '', amount: '', status: 'draft', client_id: null, project_id: null
+                })
               }}
               className="flex-1"
             >
               Cancel
             </Button>
             <Button variant="primary" onClick={handleAddContract} className="flex-1">
-              {selectedContract ? 'Update Contract' : 'Create Contract'}
+              Create Contract
             </Button>
           </div>
         </div>
@@ -3948,7 +4020,7 @@ const LeadDetail = () => {
               </div>
               <div>
                 <p className="text-sm text-secondary-text">{t('') || ''}</p>
-                <p className="text-primary-text font-medium">${selectedContract.amount || 0}</p>
+                <p className="text-primary-text font-medium">{formatCurrency(selectedContract.amount || 0)}</p>
               </div>
               <div>
                 <p className="text-sm text-secondary-text">{t('') || ''}</p>

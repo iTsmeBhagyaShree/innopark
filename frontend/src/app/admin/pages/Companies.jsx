@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AddButton from '../../../components/ui/AddButton'
 import DataTable from '../../../components/ui/DataTable'
@@ -8,6 +8,7 @@ import Input from '../../../components/ui/Input'
 import Button from '../../../components/ui/Button'
 import Card from '../../../components/ui/Card'
 import { companiesAPI } from '../../../api'
+import CustomFieldsSection from '../../../components/ui/CustomFieldsSection'
 import { useAuth } from '../../../context/AuthContext'
 import { useLanguage } from '../../../context/LanguageContext'
 import {
@@ -64,18 +65,31 @@ const Companies = () => {
 
   // Form Data - matches CRM specification
   const [formData, setFormData] = useState({
-    companyName: '',       // Company Name (required)
-    industry: '',          // Industry type
-    website: '',           // Website URL
-    address: '',           // Full address
-    city: '',              // City
-    state: '',             // State/Province
-    country: '',           // Country
-    phone: '',             // Phone number
-    notes: '',             // Notes
+    companyName: '',
+    industry: '',
+    website: '',
+    address: '',
+    city: '',
+    state: '',
+    country: '',
+    phone: '',
+    notes: '',
+    custom_fields: {},
   })
 
   const [companies, setCompanies] = useState([])
+
+  const industrySlugs = (v) => (v || '').toLowerCase().replace(/\s+/g, '_')
+
+  const industryLabel = useCallback(
+    (v) => {
+      if (!v) return t('companies.detail_page.no_industry')
+      const key = `companies.industries.${industrySlugs(v)}`
+      const translated = t(key)
+      return translated === key ? v : translated
+    },
+    [t]
+  )
 
   // Industry options
   const industries = [
@@ -148,6 +162,23 @@ const Companies = () => {
     )
   })
 
+  const industryFilterOptions = useMemo(
+    () =>
+      industries.map((ind) => ({
+        value: ind,
+        label: t(`companies.industries.${industrySlugs(ind)}`),
+      })),
+    [t]
+  )
+
+  const statusFilterOptions = useMemo(
+    () => [
+      { value: 'Active', label: t('common.status.active') },
+      { value: 'Inactive', label: t('common.status.inactive') },
+    ],
+    [t]
+  )
+
   // Table columns
   const columns = [
     {
@@ -183,7 +214,7 @@ const Companies = () => {
       label: t('companies.columns.industry'),
       render: (value) => (
         <Badge variant="info" className="text-xs">
-          {value || t('common.noData')}
+          {value ? industryLabel(value) : t('companies.detail_page.no_industry')}
         </Badge>
       ),
     },
@@ -214,7 +245,7 @@ const Companies = () => {
       label: t('companies.columns.status'),
       render: (value) => (
         <Badge variant={value === 'Active' ? 'success' : 'danger'}>
-          {value === 'Active' ? t('companies.active') : t('status.inactive')}
+          {value === 'Active' ? t('common.status.active') : t('common.status.inactive')}
         </Badge>
       ),
     },
@@ -232,6 +263,7 @@ const Companies = () => {
       country: '',
       phone: '',
       notes: '',
+      custom_fields: {},
     })
     setIsAddModalOpen(true)
   }
@@ -252,6 +284,7 @@ const Companies = () => {
           country: fullData.country || '',
           phone: fullData.phone || '',
           notes: fullData.notes || '',
+          custom_fields: fullData.custom_fields && typeof fullData.custom_fields === 'object' ? { ...fullData.custom_fields } : {},
         })
         setIsEditModalOpen(true)
       }
@@ -269,6 +302,7 @@ const Companies = () => {
         country: company.country || '',
         phone: company.phone || '',
         notes: company.notes || '',
+        custom_fields: {},
       })
       setIsEditModalOpen(true)
     }
@@ -297,6 +331,7 @@ const Companies = () => {
         phone: formData.phone || null,
         notes: formData.notes || null,
         company_id: companyId,
+        custom_fields: formData.custom_fields && typeof formData.custom_fields === 'object' ? formData.custom_fields : {},
       }
 
       if (isEditModalOpen && selectedCompany) {
@@ -369,30 +404,55 @@ const Companies = () => {
 
   return (
     <div className="p-3 sm:p-6 space-y-6 sm:space-y-8 bg-[#F8FAFC] min-h-full">
-      {/* Header Section with Glassmorphism Effect */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6 bg-white p-4 sm:p-6 rounded-2xl border border-gray-200 shadow-sm sticky top-0 z-10 mx-[-4px]">
-        <div>
-          <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight notranslate">{t('companies.title')}</h1>
-          <p className="text-gray-500 mt-1 font-medium italic notranslate">{t('companies.subtitle')}</p>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="relative group">
-            <IoSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary-accent transition-colors" size={20} />
-            <input
-              type="text"
-              placeholder={t('companies.search_placeholder')}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-12 pr-6 py-3 border-0 bg-gray-100/50 rounded-2xl text-sm focus:ring-2 focus:ring-primary-accent/30 focus:bg-white outline-none w-72 shadow-inner transition-all duration-300"
-            />
+      {/* ── Ultra-Compact Header ── */}
+      <div className="bg-white border-b border-gray-200 px-4 py-2 z-20 shadow-sm sticky top-0">
+        <div className="max-w-full mx-auto flex flex-col gap-2">
+          {/* Row 1: Brand, Search, Primary Actions */}
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-primary-accent/10 flex items-center justify-center text-primary-accent shrink-0">
+                <IoBusiness size={18} />
+              </div>
+              <h1 className="text-xl font-black text-gray-900 tracking-tight shrink-0">{t('companies.title')}</h1>
+
+              <div className="hidden md:flex items-center gap-1 p-1 bg-gray-100 rounded-lg shadow-inner ml-2">
+                {[
+                  { id: 'list', icon: IoList, label: t('common.list') || 'Liste' },
+                  { id: 'grid', icon: IoGrid, label: t('common.grid') || 'Raster' }
+                ].map(v => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => setViewMode(v.id)}
+                    className={`flex items-center gap-1.5 px-2 py-1 text-[10px] font-black rounded-md transition-all ${viewMode === v.id ? 'bg-white text-primary-accent shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                  >
+                    <v.icon size={12} /> {v.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Search - Flexible */}
+            <div className="flex-1 max-w-md relative group">
+              <input
+                type="text"
+                placeholder={t('companies.search_placeholder') || 'Search...'}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent text-sm transition-all"
+              />
+              <IoSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleAdd}
+                className="flex items-center gap-1.5 px-4 py-1.5 bg-primary-accent text-white rounded-lg text-xs font-black shadow-md shadow-primary-accent/20 hover:bg-primary-accent-hover transition-all whitespace-nowrap"
+              >
+                <IoAdd size={16} /> {t('companies.add_company')}
+              </button>
+            </div>
           </div>
-          <button
-            onClick={handleAdd}
-            className="flex items-center gap-2 bg-primary-accent hover:bg-primary-accent/90 text-white px-4 py-2 rounded-2xl font-bold transition-all active:scale-95 group"
-          >
-            <IoAdd size={22} className="group-hover:rotate-90 transition-transform duration-300" />
-            <span className="notranslate">{t('companies.add_company')}</span>
-          </button>
         </div>
       </div>
 
@@ -406,8 +466,8 @@ const Companies = () => {
             actions={actions}
             searchPlaceholder={t("companies.search_placeholder")}
             filterConfig={[
-              { key: 'industry', label: t('companies.columns.industry'), type: 'select', options: industries },
-              { key: 'status', label: t('common.status'), type: 'select', options: ['Active', 'Inactive'] },
+              { key: 'industry', label: t('companies.columns.industry'), type: 'select', options: industryFilterOptions },
+              { key: 'status', label: t('common.status'), type: 'select', options: statusFilterOptions },
               { key: 'country', label: t('common.country'), type: 'text' },
               { key: 'city', label: t('common.city'), type: 'text' },
             ]}
@@ -426,7 +486,7 @@ const Companies = () => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-gray-800 truncate">{company.companyName}</h3>
-                    <p className="text-sm text-gray-500 truncate">{company.industry || 'Keine Branche'}</p>
+                    <p className="text-sm text-gray-500 truncate">{industryLabel(company.industry)}</p>
                     {company.website && (
                       <p className="text-xs text-blue-500 truncate mt-1">{company.website}</p>
                     )}
@@ -442,7 +502,7 @@ const Companies = () => {
                     </span>
                   </div>
                   <Badge variant={company.status === 'Active' ? 'success' : 'danger'}>
-                    {company.status}
+                    {company.status === 'Active' ? t('common.status.active') : t('common.status.inactive')}
                   </Badge>
                 </div>
               </Card>
@@ -478,7 +538,7 @@ const Companies = () => {
             >
               <option value="">{t('companies.form.select_industry')}</option>
               {industries.map((ind) => (
-                <option key={ind} value={ind}>{t('companies.industries.' + ind.toLowerCase().replace(' ', '_'))}</option>
+                <option key={ind} value={ind}>{t(`companies.industries.${industrySlugs(ind)}`)}</option>
               ))}
             </select>
           </div>
@@ -536,6 +596,18 @@ const Companies = () => {
               placeholder={t('companies.form.notes') + '...'}
             />
           </div>
+
+          <CustomFieldsSection
+            module={user?.role === 'SUPERADMIN' ? "Companies" : "Clients"}
+            companyId={companyId}
+            values={formData.custom_fields || {}}
+            onChange={(name, value) =>
+              setFormData((prev) => ({
+                ...prev,
+                custom_fields: { ...(prev.custom_fields || {}), [name]: value },
+              }))
+            }
+          />
 
           <div className="flex gap-3 pt-4 justify-end border-t border-gray-100">
             <Button

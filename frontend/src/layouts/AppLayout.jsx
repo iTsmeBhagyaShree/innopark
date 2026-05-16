@@ -9,13 +9,15 @@ const AppLayout = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const location = useLocation()
 
-  // Detect any detail page (project, lead, client, task, employee)
-  const isDetailPage = /\/app\/admin\/(projects|leads|clients|tasks|employees)\/\d+/.test(location.pathname)
+  // Full-bleed detail pages (avoid double horizontal padding + help nested grids shrink)
+  const isDetailPage = /\/app\/(admin|employee)\/(projects|leads|clients|tasks|employees|contacts|companies|deals)\/[^/]+/.test(
+    location.pathname
+  )
 
   // Removed auto-close logic to keep sidebar persistent
 
   return (
-    <div className="min-h-screen w-full overflow-x-hidden bg-main-bg">
+    <div className="min-h-screen w-full bg-main-bg">
 
       {/* TopBar – show menu button always */}
       <TopBar
@@ -38,7 +40,7 @@ const AppLayout = () => {
             : 'ml-0 lg:ml-56'
             }`}
         >
-          <main className={`flex-1 w-full max-w-full overflow-x-auto overflow-y-auto relative z-10 scrollbar-hide ${isDetailPage ? 'p-0' : 'p-3 lg:p-4'
+          <main className={`flex-1 w-full min-w-0 max-w-full overflow-x-auto overflow-y-auto relative z-10 scrollbar-hide ${isDetailPage ? 'p-0' : 'p-3 lg:p-4'
             }`}
           >
             <Outlet />

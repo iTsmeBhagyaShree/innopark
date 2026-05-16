@@ -1,8 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const controller = require('../controllers/taskController');
+const { verifyToken } = require('../middleware/auth');
 
 // Base path: /api/v1/tasks
+
+router.use(verifyToken);
 
 router.get('/', controller.getAll);
 router.post('/', controller.create);

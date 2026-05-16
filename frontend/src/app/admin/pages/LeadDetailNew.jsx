@@ -17,17 +17,20 @@ import {
 import { leadsAPI, companiesAPI, contactsAPI } from '../../../api'
 import { useAuth } from '../../../context/AuthContext'
 import { useLanguage } from '../../../context/LanguageContext'
+import { useSettings } from '../../../context/SettingsContext.jsx'
 import Card from '../../../components/ui/Card'
 import Button from '../../../components/ui/Button'
 import Badge from '../../../components/ui/Badge'
 import Modal from '../../../components/ui/Modal'
 import ActivityTimeline from '../../../components/ui/ActivityTimeline'
+import PriorityActivities from '../../../components/shared/PriorityActivities'
 
 const LeadDetailNew = () => {
     const { id } = useParams()
     const { t } = useLanguage()
     const navigate = useNavigate()
     const { user } = useAuth()
+    const { formatCurrency } = useSettings()
     const companyId = useMemo(() => {
         const cid = user?.company_id || localStorage.getItem('companyId') || '1'
         return parseInt(cid, 10) || 1
@@ -98,12 +101,7 @@ const LeadDetailNew = () => {
         }
     }
 
-    const formatCurrency = (amount, currency = 'USD') => {
-        return new Intl.NumberFormat('de-DE', {
-            style: 'currency',
-            currency: currency
-        }).format(amount || 0)
-    }
+
 
     const getStatusColor = (status) => {
         const statusColors = {
@@ -157,24 +155,24 @@ const LeadDetailNew = () => {
                             <h1 className="text-2xl font-black text-gray-900 tracking-tight leading-tight">
                                 {lead.person_name || lead.company_name || 'Unnamed Lead'}
                             </h1>
-                            <div className="flex items-center gap-3 mt-1 text-sm text-gray-500 font-medium">
-                                <span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded border border-purple-100">
-                                    {lead.lead_number || `LEAD-${id}`}
-                                </span>
-                            </div>
                         </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                        <Button variant="outline" onClick={() => navigate(user?.role === 'EMPLOYEE' ? `/app/employee/leads/${id}/edit` : `/app/admin/leads/${id}/edit`)}>
-                            {t('common.edit_lead')}
-                        </Button>
-                    </div>
+
                 </div>
             </div>
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
-                <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
+                <div className="max-w-7xl mx-auto space-y-8">
+                    {/* Priority Activities */}
+                    <PriorityActivities
+                        relatedToType="lead"
+                        relatedToId={id}
+                        companyId={companyId}
+                        t={t}
+                    />
+
+                    <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
 
                     {/* LEFT PANEL */}
                     <div className="lg:col-span-4 space-y-6">
@@ -292,12 +290,13 @@ const LeadDetailNew = () => {
                     {/* RIGHT PANEL - Activity Timeline */}
                     <div className="lg:col-span-8">
                         <Card className="p-6 h-full min-h-[600px]">
-                            <h3 className="text-lg font-bold text-gray-800 mb-6 border-b border-gray-100 pb-4">{t('leads.detail.recent_activities')}</h3>
                             <ActivityTimeline entityType="lead" entityId={id} companyId={companyId} />
                         </Card>
                     </div>
                 </div>
             </div>
+        </div>
+
 
             {/* Add Contact Modal */}
             <Modal

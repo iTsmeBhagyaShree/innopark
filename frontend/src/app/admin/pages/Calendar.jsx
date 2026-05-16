@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useLocation } from 'react-router-dom'
 import RightSideModal from '../../../components/ui/RightSideModal'
 import Modal from '../../../components/ui/Modal'
@@ -8,6 +8,7 @@ import Card from '../../../components/ui/Card'
 import Badge from '../../../components/ui/Badge'
 import { eventsAPI, employeesAPI, departmentsAPI } from '../../../api'
 import { useAuth } from '../../../context/AuthContext'
+import { useLanguage } from '../../../context/LanguageContext'
 import {
   IoAdd,
   IoSearch,
@@ -25,6 +26,7 @@ import {
 } from 'react-icons/io5'
 
 const CalendarPage = () => {
+  const { t } = useLanguage()
   const location = useLocation()
   const { user } = useAuth()
   const companyId = user?.company_id || localStorage.getItem('companyId') || 1
@@ -165,7 +167,15 @@ const CalendarPage = () => {
     }
   }
 
-  const statuses = ['Pending', 'Confirmed', 'Cancelled', 'Completed']
+  const statusOptions = useMemo(
+    () => [
+      { value: 'Pending', label: t('calendar_page.status_pending') },
+      { value: 'Confirmed', label: t('calendar_page.status_confirmed') },
+      { value: 'Cancelled', label: t('calendar_page.status_cancelled') },
+      { value: 'Completed', label: t('calendar_page.status_completed') },
+    ],
+    [t]
+  )
 
   // Generate calendar days for December 2025
   const getCalendarDays = () => {
@@ -381,7 +391,7 @@ const CalendarPage = () => {
             onChange={(e) => setEmployeeFilter(e.target.value)}
             className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
           >
-            <option value="All">Mitarbeiter Alle</option>
+            <option value="All">{t('calendar_page.filter_employees_all')}</option>
             {employees.map(emp => (
               <option key={emp.id} value={emp.id}>{emp.name || emp.email}</option>
             ))}
@@ -392,9 +402,9 @@ const CalendarPage = () => {
             onChange={(e) => setStatusFilter(e.target.value)}
             className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
           >
-            <option value="All">Status Alle</option>
-            {statuses.map(status => (
-              <option key={status} value={status}>{status}</option>
+            <option value="All">{t('calendar_page.filter_status_all')}</option>
+            {statusOptions.map(({ value, label }) => (
+              <option key={value} value={value}>{label}</option>
             ))}
           </select>
           <select
@@ -942,7 +952,7 @@ const CalendarPage = () => {
 
           <div>
             <label className="block text-sm font-medium text-primary-text mb-2">
-              Status
+              {t('calendar_page.field_status')}
             </label>
             <select
               value={formData.status}
@@ -950,8 +960,8 @@ const CalendarPage = () => {
               className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
             >
               <option value="">--</option>
-              {statuses.map(status => (
-                <option key={status} value={status}>{status}</option>
+              {statusOptions.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
               ))}
             </select>
           </div>

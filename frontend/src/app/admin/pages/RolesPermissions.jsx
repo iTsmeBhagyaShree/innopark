@@ -35,14 +35,24 @@ const RolesPermissions = () => {
   // Structure: { [module]: { view: bool, add: bool, edit: bool, delete: bool, expanded: bool } }
   const [permissionsData, setPermissionsData] = useState({})
 
-  const modules = [
-    'leads', 'projects', 'tasks',
-    'products', 'invoices', 'estimates', 'proposals',
-    'payments', 'expenses', 'contracts',
-    'employees', 'attendance', 'leaves',
-    'events', 'messages', 'tickets',
-    'reports', 'settings', 'notice_board'
+  const moduleDefinitions = [
+    { key: 'dashboard', label: 'Dashboard' },
+    { key: 'leads', label: 'Leads' },
+    { key: 'deals', label: 'Deals' },
+    { key: 'tasks', label: 'Tasks' },
+    { key: 'contacts', label: 'Contacts' },
+    { key: 'companies', label: 'Companies' },
+    { key: 'offers', label: 'Offers' },
+    { key: 'invoices', label: 'Invoices' },
+    { key: 'projects', label: 'Projects' },
+    { key: 'messages', label: 'Messages' },
+    { key: 'reports', label: 'Reports' },
   ]
+  const modules = moduleDefinitions.map((m) => m.key)
+  const moduleLabels = moduleDefinitions.reduce((acc, item) => {
+    acc[item.key] = item.label
+    return acc
+  }, {})
 
   useEffect(() => {
     fetchRoles()
@@ -210,11 +220,11 @@ const RolesPermissions = () => {
 
   const columns = [
     {
-      key: 'role_name', label: 'Role Name',
+      key: 'role_name', label: t('roles.fields.role_name') || 'Role Name',
       render: (val) => <span className="font-semibold text-primary-text">{val}</span>
     },
     {
-      key: 'description', label: 'Description',
+      key: 'description', label: t('roles.fields.description') || 'Description',
       render: (val) => <span className="text-secondary-text">{val || '-'}</span>
     },
   ]
@@ -312,7 +322,7 @@ const RolesPermissions = () => {
       <RightSideModal
         isOpen={isPermissionModalOpen}
         onClose={() => setIsPermissionModalOpen(false)}
-        title={`Permissions: ${selectedRole?.role_name}`}
+        title={`${t('roles.permissions_title') || 'Permissions'}: ${selectedRole?.role_name}`}
         width="w-[800px]"
       >
         <div className="space-y-6">
@@ -323,10 +333,10 @@ const RolesPermissions = () => {
           <div className="divide-y divide-gray-100 border border-gray-200 rounded-lg overflow-hidden">
             {/* Header */}
             <div className="bg-gray-50 px-4 py-3 grid grid-cols-12 gap-4 font-semibold text-xs text-gray-500 uppercase tracking-wider">
-              <div className="col-span-4">{t('auto.auto_e55f75a2') || 'Module'}</div>
+              <div className="col-span-4">{t('common.module') || 'Module'}</div>
               <div className="col-span-8 flex justify-between items-center">
-                <span>{t('') || ''}</span>
-                <span className="text-xs normal-case font-normal text-gray-400">{t('') || ''}</span>
+                <span>Permission Type</span>
+                <span className="text-xs normal-case font-normal text-gray-400">Choose what users can do inside this menu</span>
               </div>
             </div>
 
@@ -352,7 +362,7 @@ const RolesPermissions = () => {
                         onChange={(e) => toggleModuleAll(module, e.target.checked)}
                         title="Full Access - Enable all permissions"
                       />
-                      <span className="font-medium text-gray-900 capitalize">{module.replace('_', ' ')}</span>
+                      <span className="font-medium text-gray-900">{moduleLabels[module] || module.replace('_', ' ')}</span>
                     </div>
 
                     <div className="col-span-8 flex justify-end">
@@ -363,7 +373,7 @@ const RolesPermissions = () => {
                             : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                           }`}
                       >
-                        {data.expanded ? 'Hide Details' : 'More Options'}
+                        {data.expanded ? 'Hide Details' : 'Set CRUD Permissions'}
                         {data.expanded ? <IoChevronUp /> : <IoChevronDown />}
                       </button>
                     </div>
@@ -380,8 +390,8 @@ const RolesPermissions = () => {
                           className="rounded border-gray-300 text-primary-accent h-4 w-4"
                         />
                         <div>
-                          <span className="text-sm font-medium block">{t('') || ''}</span>
-                          <span className="text-xs text-gray-500">{t('') || ''}</span>
+                          <span className="text-sm font-medium block">View</span>
+                          <span className="text-xs text-gray-500">Can open and read records</span>
                         </div>
                       </label>
                       <label className="flex items-center gap-2 cursor-pointer p-3 rounded-lg hover:bg-green-50 border border-gray-200 transition-colors">
@@ -392,8 +402,8 @@ const RolesPermissions = () => {
                           className="rounded border-gray-300 text-primary-accent h-4 w-4"
                         />
                         <div>
-                          <span className="text-sm font-medium block">{t('') || ''}</span>
-                          <span className="text-xs text-gray-500">{t('') || ''}</span>
+                          <span className="text-sm font-medium block">Add</span>
+                          <span className="text-xs text-gray-500">Can create new records</span>
                         </div>
                       </label>
                       <label className="flex items-center gap-2 cursor-pointer p-3 rounded-lg hover:bg-yellow-50 border border-gray-200 transition-colors">
@@ -404,8 +414,8 @@ const RolesPermissions = () => {
                           className="rounded border-gray-300 text-primary-accent h-4 w-4"
                         />
                         <div>
-                          <span className="text-sm font-medium block">{t('') || ''}</span>
-                          <span className="text-xs text-gray-500">{t('') || ''}</span>
+                          <span className="text-sm font-medium block">Edit</span>
+                          <span className="text-xs text-gray-500">Can update existing records</span>
                         </div>
                       </label>
                       <label className="flex items-center gap-2 cursor-pointer p-3 rounded-lg hover:bg-red-50 border border-gray-200 transition-colors">
@@ -416,8 +426,8 @@ const RolesPermissions = () => {
                           className="rounded border-gray-300 text-primary-accent h-4 w-4"
                         />
                         <div>
-                          <span className="text-sm font-medium block">{t('') || ''}</span>
-                          <span className="text-xs text-gray-500">{t('') || ''}</span>
+                          <span className="text-sm font-medium block">Delete</span>
+                          <span className="text-xs text-gray-500">Can remove records</span>
                         </div>
                       </label>
                     </div>
@@ -428,8 +438,8 @@ const RolesPermissions = () => {
           </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
-            <Button variant="outline" onClick={() => setIsPermissionModalOpen(false)}>{t('') || ''}</Button>
-            <Button onClick={savePermissions}>{t('auto.auto_b939b52f') || 'Save Permission Settings'}</Button>
+            <Button variant="outline" onClick={() => setIsPermissionModalOpen(false)}>{t('common.cancel') || 'Cancel'}</Button>
+            <Button onClick={savePermissions}>{t('common.save') || 'Save'}</Button>
           </div>
         </div>
       </RightSideModal>

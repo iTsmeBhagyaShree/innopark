@@ -136,6 +136,38 @@ const Packages = () => {
     setSelectedPackage(null)
   }
 
+  const normalizeCycle = (raw) => String(raw || '').trim().toLowerCase()
+  const cycleLabel = (raw) => {
+    const cycle = normalizeCycle(raw)
+    if (cycle === 'monthly') return t('packages.monthly')
+    if (cycle === 'quarterly') return t('packages.quarterly')
+    if (cycle === 'yearly') return t('packages.yearly')
+    return raw || '-'
+  }
+  const cycleShort = (raw) => {
+    const cycle = normalizeCycle(raw)
+    if (cycle === 'monthly') return t('packages.monthly_short') || 'Mo'
+    if (cycle === 'quarterly') return t('packages.quarterly_short') || (t('locale') === 'de' ? 'Qrtl' : 'Qtr')
+    if (cycle === 'yearly') return t('packages.yearly_short') || (t('locale') === 'de' ? 'Jr' : 'Yr')
+    return ''
+  }
+
+  const isNoFeaturesValue = (value) => {
+    const v = String(value || '').trim().toLowerCase()
+    return !v || v === 'no features' || v === 'keine funktionen' || v === 'none' || v === 'null'
+  }
+
+  const isNoAssignedCompaniesValue = (value) => {
+    const v = String(value || '').trim().toLowerCase()
+    return (
+      !v ||
+      v === 'no companies assigned' ||
+      v === 'keine unternehmen zugewiesen' ||
+      v === 'none' ||
+      v === 'null'
+    )
+  }
+
   const columns = [
     { key: 'package_name', label: t('packages.package_name') },
     {
@@ -143,14 +175,14 @@ const Packages = () => {
       label: t('packages.price'),
       render: (value, row) => (
         <span className="font-semibold">
-          ${value}/{row.billing_cycle === 'Monthly' ? (t('packages.monthly_short') || 'Mo') : (t('packages.yearly_short') || 'Jr')}
+          ${value}/{cycleShort(row.billing_cycle)}
         </span>
       ),
     },
     {
       key: 'billing_cycle',
       label: t('packages.billing_cycle'),
-      render: (value) => <Badge variant="info">{t(`packages.${value.toLowerCase()}`) || value}</Badge>,
+      render: (value) => <Badge variant="info">{cycleLabel(value)}</Badge>,
     },
     {
       key: 'features',
@@ -158,10 +190,14 @@ const Packages = () => {
       render: (value, row) => {
         let featuresArray = []
         if (typeof value === 'string') {
+          if (isNoFeaturesValue(value)) {
+            featuresArray = []
+          } else {
           try {
             featuresArray = JSON.parse(value)
           } catch {
             featuresArray = value ? value.split(',').map(f => f.trim()) : []
+          }
           }
         } else if (Array.isArray(value)) {
           featuresArray = value
@@ -192,7 +228,7 @@ const Packages = () => {
       key: 'assigned_companies',
       label: t('packages.assigned_companies'),
       render: (value, row) => {
-        if (value && value.trim()) {
+        if (value && value.trim() && !isNoAssignedCompaniesValue(value)) {
           return (
             <div className="flex flex-wrap gap-1">
               {value.split(', ').map((company, idx) => (

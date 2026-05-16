@@ -4,30 +4,57 @@ import {
     IoArrowBack,
     IoBriefcase,
     IoBusiness,
-    IoPerson,
     IoAdd,
     IoCalendar,
     IoCash,
     IoTrendingUp,
     IoCheckmarkCircle,
-    IoTime,
-    IoTrash,
-    IoCheckmarkCircleOutline
+    IoMail,
+    IoCall,
+    IoLocation,
+    IoPeople
 } from 'react-icons/io5'
-import { dealsAPI, companiesAPI, tasksAPI, employeesAPI } from '../../../api'
-import Tasks from '../../../components/Tasks'
-import Meetings from '../../../components/Meetings'
+import { dealsAPI, contactsAPI } from '../../../api'
 import { useAuth } from '../../../context/AuthContext'
+import { useLanguage } from '../../../context/LanguageContext.jsx'
+import { useSettings } from '../../../context/SettingsContext.jsx'
 import Card from '../../../components/ui/Card'
 import Button from '../../../components/ui/Button'
 import Badge from '../../../components/ui/Badge'
 import Modal from '../../../components/ui/Modal'
 import ActivityTimeline from '../../../components/ui/ActivityTimeline'
+import PriorityActivities from '../../../components/shared/PriorityActivities'
+
+function translateDealStatus(status, t) {
+    const s = String(status || '').trim().toLowerCase()
+    if (s === 'active') return t('common.status.active')
+    if (s === 'inactive') return t('common.status.inactive')
+    if (s === 'won') return t('deals.stages.won')
+    if (s === 'lost') return t('deals.stages.lost')
+    if (s === 'draft') return t('deals.detail.status_draft')
+    if (s === 'sent') return t('deals.detail.status_sent')
+    if (s === 'accepted') return t('deals.detail.status_accepted')
+    if (s === 'declined') return t('deals.detail.status_declined')
+    if (s === 'expired') return t('deals.detail.status_expired')
+    return String(status || '').trim()
+}
+
+function dealStatusBadgeVariant(status) {
+    const s = String(status || '').trim().toLowerCase()
+    if (s === 'accepted' || s === 'won' || s === 'active') return 'success'
+    if (s === 'declined' || s === 'lost') return 'danger'
+    if (s === 'expired') return 'warning'
+    if (s === 'sent') return 'info'
+    return 'default'
+}
 
 const DealDetail = () => {
     const { id } = useParams()
     const navigate = useNavigate()
     const { user } = useAuth()
+    const { t, language } = useLanguage()
+    const { formatCurrency } = useSettings()
+
     const companyId = useMemo(() => {
         const cid = user?.company_id || localStorage.getItem('companyId') || '1'
         return parseInt(cid, 10) || 1
@@ -36,8 +63,10 @@ const DealDetail = () => {
     const [deal, setDeal] = useState(null)
     const [loading, setLoading] = useState(true)
     const [contacts, setContacts] = useState([])
-    const [availableContacts, setAvailableContacts] = useState([]) // For adding contacts
+    const [availableContacts, setAvailableContacts] = useState([])
     const [isAddContactModalOpen, setIsAddContactModalOpen] = useState(false)
+
+    const dealsListPath = user?.role === 'EMPLOYEE' ? '/app/employee/deals' : '/app/admin/deals'
 
     useEffect(() => {
         fetchDealData()
@@ -46,12 +75,8 @@ const DealDetail = () => {
     const formatDate = (dateString) => {
         if (!dateString) return '-'
         const date = new Date(dateString)
-        return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-')
-    }
-
-    const isDeadlineOverdue = (deadline) => {
-        if (!deadline) return false
-        return new Date(deadline) < new Date()
+        const locale = String(language || '').toLowerCase().startsWith('de') ? 'de-DE' : 'en-GB'
+        return date.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' })
     }
 
     const fetchDealData = async () => {
@@ -60,10 +85,6 @@ const DealDetail = () => {
             const response = await dealsAPI.getById(id, { company_id: companyId })
             if (response.data.success) {
                 setDeal(response.data.data)
-                // Fetch linked contacts
-                // Assuming dealsAPI.getById returns linked_contacts, if not we might need a separate call
-                // But per controller read earlier, it tries to include them.
-                // Let's also fetch explicitly to be safe or if controller structure is different
                 const contactsRes = await dealsAPI.getDealContacts(id)
                 if (contactsRes.data.success) {
                     setContacts(contactsRes.data.data || [])
@@ -79,7 +100,6 @@ const DealDetail = () => {
     const handleAddContactToDeal = async (contactId) => {
         try {
             await dealsAPI.addContact(id, { contact_id: contactId })
-            // Refresh contacts
             const contactsRes = await dealsAPI.getDealContacts(id)
             if (contactsRes.data.success) {
                 setContacts(contactsRes.data.data || [])
@@ -87,22 +107,15 @@ const DealDetail = () => {
             setIsAddContactModalOpen(false)
         } catch (error) {
             console.error('Error adding contact:', error)
-            alert('Failed to add contact')
+            alert(t('deals.detail.add_contact_failed'))
         }
     }
 
     const fetchAvailableContacts = async () => {
         try {
             setIsAddContactModalOpen(true)
-
-            // Fetch all contacts from master list
-            const { contactsAPI } = await import('../../../api')
             const res = await contactsAPI.getMasterList({ company_id: companyId })
-
-            console.log('Contacts response:', res)
-
             if (res && res.data) {
-                // Handle different response formats
                 const contactsList = res.data.data || res.data || []
                 setAvailableContacts(Array.isArray(contactsList) ? contactsList : [])
             } else {
@@ -112,13 +125,6 @@ const DealDetail = () => {
             console.error('Error fetching contacts:', e)
             setAvailableContacts([])
         }
-    }
-
-    const formatCurrency = (amount, currency = 'USD') => {
-        return new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency: currency
-        }).format(amount || 0)
     }
 
     if (loading) {
@@ -133,9 +139,9 @@ const DealDetail = () => {
         return (
             <div className="flex flex-col items-center justify-center h-screen bg-gray-50">
                 <IoBriefcase size={64} className="text-gray-300 mb-4" />
-                <h2 className="text-2xl font-bold text-gray-800">Deal Not Found</h2>
-                <Button variant="primary" className="mt-4" onClick={() => navigate(user?.role === 'EMPLOYEE' ? '/app/employee/deals' : '/app/admin/deals')}>
-                    Back to Deals
+                <h2 className="text-2xl font-bold text-gray-800">{t('deals.detail.not_found')}</h2>
+                <Button variant="primary" className="mt-4" onClick={() => navigate(dealsListPath)}>
+                    {t('deals.detail.back_to_deals')}
                 </Button>
             </div>
         )
@@ -148,71 +154,69 @@ const DealDetail = () => {
                 <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-6">
                     <div className="flex items-center gap-6">
                         <button
-                            onClick={() => navigate(user?.role === 'EMPLOYEE' ? '/app/employee/deals' : '/app/admin/deals')}
+                            onClick={() => navigate(dealsListPath)}
                             className="p-2 hover:bg-gray-100 rounded-xl transition-colors text-gray-400 hover:text-gray-600"
                         >
                             <IoArrowBack size={24} />
                         </button>
-                        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-blue-200">
+                        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-lg shadow-indigo-200">
                             <IoBriefcase size={32} />
                         </div>
                         <div>
-                            <h1 className="text-2xl font-black text-gray-900 tracking-tight leading-tight">{deal.title}</h1>
-                            <div className="flex items-center gap-3 mt-1 text-sm text-gray-500 font-medium">
-                                <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-100">{deal.deal_number}</span>
-                            </div>
+                            <h1 className="text-2xl font-black text-gray-900 tracking-tight leading-tight">
+                                {deal.title || t('deals.detail.title')}
+                            </h1>
                         </div>
+                    </div>
+                    <div className="flex items-center gap-3">
                     </div>
                 </div>
             </div>
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
-                <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
+                <div className="max-w-7xl mx-auto space-y-8">
+                    {/* Priority Activities */}
+                    <PriorityActivities
+                        relatedToType="deal"
+                        relatedToId={id}
+                        companyId={companyId}
+                        t={t}
+                    />
+
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
                     {/* LEFT PANEL */}
                     <div className="lg:col-span-4 space-y-6">
                         {/* Deal Info */}
                         <Card className="p-6">
-                            <h3 className="text-lg font-bold text-gray-800 mb-4 border-b border-gray-100 pb-2 notranslate">Deal Information</h3>
+                            <h3 className="text-lg font-bold text-gray-800 mb-4 border-b border-gray-100 pb-2">{t('deals.detail.deal_information')}</h3>
                             <div className="space-y-4">
                                 <div className="flex justify-between items-center py-2 border-b border-dashed border-gray-100">
-                                    <span className="text-gray-500 text-sm flex items-center gap-2"><IoCash /> <span className="notranslate">Amount</span></span>
-                                    <span className="font-bold text-gray-900 text-lg">{formatCurrency(deal.total, deal.currency)}</span>
+                                    <span className="text-gray-500 text-sm flex items-center gap-2"><IoCash /> {t('deals.detail.amount')}</span>
+                                    <span className="font-bold text-gray-900 text-lg">
+                                        {deal.total ? formatCurrency(deal.total, deal.currency) : 'N/A'}
+                                    </span>
                                 </div>
                                 <div className="flex justify-between items-center py-2 border-b border-dashed border-gray-100">
-                                    <span className="text-gray-500 text-sm flex items-center gap-2"><IoTrendingUp /> <span className="notranslate">Stage</span></span>
-                                    <Badge variant="neutral">{deal.pipeline_stage || 'Unknown'}</Badge>
+                                    <span className="text-gray-500 text-sm flex items-center gap-2"><IoTrendingUp /> {t('deals.detail.status')}</span>
+                                    <Badge variant={dealStatusBadgeVariant(deal.status)}>{translateDealStatus(deal.status, t)}</Badge>
                                 </div>
                                 <div className="flex justify-between items-center py-2 border-b border-dashed border-gray-100">
-                                    <span className="text-gray-500 text-sm flex items-center gap-2"><IoCalendar /> <span className="notranslate">Closing Date</span></span>
-                                    <span className="font-medium text-gray-700">{deal.valid_till ? new Date(deal.valid_till).toLocaleDateString() : 'N/A'}</span>
+                                    <span className="text-gray-500 text-sm flex items-center gap-2"><IoCalendar /> {t('deals.detail.closing_date')}</span>
+                                    <span className="font-medium text-gray-700">{deal.valid_till ? formatDate(deal.valid_till) : 'N/A'}</span>
                                 </div>
                                 <div className="flex justify-between items-center py-2">
-                                    <span className="text-gray-500 text-sm flex items-center gap-2"><IoCheckmarkCircle /> <span className="notranslate">Status</span></span>
-                                    <Badge variant={deal.status === 'Active' ? 'success' : 'default'}>{deal.status}</Badge>
+                                    <span className="text-gray-500 text-sm flex items-center gap-2"><IoBusiness /> {t('common.company')}</span>
+                                    <span className="font-medium text-gray-700">{deal.company_name || deal.client_name || 'N/A'}</span>
                                 </div>
                             </div>
                         </Card>
 
-                        {/* Company Info */}
-                        <Card className="p-6">
-                            <h3 className="text-lg font-bold text-gray-800 mb-4 border-b border-gray-100 pb-2 notranslate">Company</h3>
-                            <div className="flex items-start gap-4">
-                                <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-gray-500">
-                                    <IoBusiness size={24} />
-                                </div>
-                                <div>
-                                    <h4 className="font-bold text-gray-900">{deal.company_name || 'No Company Linked'}</h4>
-                                    {/* Add website or other details here if available in deal object or separate fetch */}
-                                </div>
-                            </div>
-                        </Card>
-
-                        {/* Contacts */}
+                        {/* Linked Contacts */}
                         <Card className="p-6">
                             <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-2">
-                                <h3 className="text-lg font-bold text-gray-800"><span className="notranslate">Contacts</span> ({contacts.length})</h3>
+                                <h3 className="text-lg font-bold text-gray-800">{t('sidebar.contacts')} ({contacts.length})</h3>
                                 <button
                                     onClick={fetchAvailableContacts}
                                     className="p-1 hover:bg-gray-100 rounded-full text-primary-accent transition-colors"
@@ -222,7 +226,7 @@ const DealDetail = () => {
                             </div>
                             <div className="space-y-3">
                                 {contacts.length === 0 ? (
-                                    <p className="text-sm text-gray-400 italic">No contacts linked.</p>
+                                    <p className="text-sm text-gray-400 italic">{t('common.no_data')}</p>
                                 ) : (
                                     contacts.map(contact => (
                                         <div key={contact.id} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors group relative">
@@ -231,7 +235,7 @@ const DealDetail = () => {
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <p className="text-sm font-bold text-gray-900 truncate">{contact.name}</p>
-                                                <p className="text-xs text-gray-500 truncate">{contact.job_title || 'No Title'}</p>
+                                                <p className="text-xs text-gray-500 truncate">{contact.email || 'No email'}</p>
                                             </div>
                                             {contact.is_primary === 1 && (
                                                 <div className="text-yellow-500 text-xs" title="Primary Contact">⭐</div>
@@ -241,75 +245,35 @@ const DealDetail = () => {
                                 )}
                             </div>
                         </Card>
-
-                        {/* Deal Items Summary if needed, per screenshot description */}
-                        {deal.items && deal.items.length > 0 && (
-                            <Card className="p-6">
-                                <h3 className="text-lg font-bold text-gray-800 mb-4 border-b border-gray-100 pb-2">Deal Items</h3>
-                                <div className="space-y-2">
-                                    {deal.items.map((item, idx) => (
-                                        <div key={idx} className="flex justify-between text-sm">
-                                            <span className="text-gray-600">{item.item_name}</span>
-                                            <span className="font-medium">{formatCurrency(item.amount, deal.currency)}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </Card>
-                        )}
                     </div>
 
-                    {/* RIGHT PANEL - Activity Timeline & Tasks */}
-                    <div className="lg:col-span-8 space-y-6">
-                        {/* Tasks Section */}
-                        {/* Tasks Section */}
-                        <Card className="p-6 h-[500px] flex flex-col">
-                            <div className="flex items-center gap-3 mb-4">
-                                <div className="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center text-white">
-                                    <IoCheckmarkCircleOutline size={20} />
-                                </div>
-                                <h3 className="text-lg font-bold text-gray-800 notranslate">Deal Tasks</h3>
-                            </div>
-                            <div className="flex-1 min-h-0">
-                                <Tasks relatedToType="deal" relatedToId={id} />
-                            </div>
-                        </Card>
-
-                        {/* Meetings Section */}
-                        <Card className="p-6 h-[500px] flex flex-col">
-                            <div className="flex items-center gap-3 mb-4">
-                                <div className="w-10 h-10 rounded-xl bg-purple-500 flex items-center justify-center text-white">
-                                    <IoCalendar size={20} />
-                                </div>
-                                <h3 className="text-lg font-bold text-gray-800 notranslate">Meetings</h3>
-                            </div>
-                            <div className="flex-1 min-h-0">
-                                <Meetings relatedToType="deal" relatedToId={id} />
-                            </div>
-                        </Card>
-
-                        <Card className="p-6 h-full min-h-[400px]">
-                            <h3 className="text-lg font-bold text-gray-800 mb-6 border-b border-gray-100 pb-4 notranslate">Recent Activities</h3>
-                            <ActivityTimeline entityType="deal" entityId={id} companyId={companyId} />
+                    {/* RIGHT PANEL - Activity Timeline */}
+                    <div className="lg:col-span-8">
+                        <Card className="p-6 h-full min-h-[600px]">
+                            <ActivityTimeline entityType="deal" entityId={id} companyId={companyId} dealId={id} />
                         </Card>
                     </div>
                 </div>
             </div>
+        </div>
+
 
             {/* Add Contact Modal */}
             <Modal
                 isOpen={isAddContactModalOpen}
                 onClose={() => setIsAddContactModalOpen(false)}
-                title={<span className="notranslate">Link Contact to Deal</span>}
+                title={t('deals.detail.modal_link_contact_title')}
             >
                 <div className="space-y-4">
-                    <p className="text-sm text-gray-500">Select a contact to link to this deal.</p>
+                    <p className="text-sm text-gray-500">{t('deals.detail.modal_link_contact_hint')}</p>
                     <div className="max-h-60 overflow-y-auto space-y-2">
                         {availableContacts.length === 0 ? (
-                            <p className="text-center text-gray-500 py-4">No available contacts found.</p>
+                            <p className="text-center text-gray-500 py-4">{t('common.no_data')}</p>
                         ) : (
                             availableContacts.map(c => (
                                 <button
                                     key={c.id}
+                                    type="button"
                                     onClick={() => handleAddContactToDeal(c.id)}
                                     className="w-full text-left p-3 rounded-lg hover:bg-gray-50 flex items-center justify-between border border-transparent hover:border-gray-200 transition-all"
                                 >
@@ -324,8 +288,6 @@ const DealDetail = () => {
                     </div>
                 </div>
             </Modal>
-
-
         </div>
     )
 }

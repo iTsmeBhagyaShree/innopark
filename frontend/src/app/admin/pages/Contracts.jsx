@@ -37,9 +37,11 @@ import {
   IoMic,
 } from "react-icons/io5";
 import { useLanguage } from "../../../context/LanguageContext.jsx";
+import { useSettings } from "../../../context/SettingsContext.jsx";
 
 const Contracts = () => {
   const { t } = useLanguage();
+  const { formatCurrency } = useSettings();
   const navigate = useNavigate();
   const companyId = parseInt(localStorage.getItem("companyId") || 1, 10);
   const userId = parseInt(localStorage.getItem("userId") || 1, 10);
@@ -489,13 +491,6 @@ const Contracts = () => {
       month: "2-digit",
       year: "numeric",
     }).replace(/\//g, "-");
-  };
-
-  const formatCurrency = (amount) => {
-    return `$${parseFloat(amount || 0).toLocaleString("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
   };
 
   // Status styles

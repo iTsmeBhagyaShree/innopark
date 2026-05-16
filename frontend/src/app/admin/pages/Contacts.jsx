@@ -55,13 +55,14 @@ const Contacts = () => {
         email: '',
         phone: '',
         job_title: '',
-        company_id: '',      // For multi-tenant
-        client_id: '',       // Linked Organization ID (The "Company")
-        company_name: '',    // Display name of organization
+        company_id: '',
+        client_id: '',
+        company_name: '',
         lead_source: '',
         status: 'Active',
         tags: '',
         notes: '',
+        assigned_user_id: '',
         custom_fields: {},
     })
 
@@ -121,6 +122,7 @@ const Contacts = () => {
             status: 'Active',
             tags: '',
             notes: '',
+            assigned_user_id: '',
             custom_fields: {},
         })
         setIsAddModalOpen(true)
@@ -139,6 +141,7 @@ const Contacts = () => {
             status: contact.status || 'Active',
             tags: Array.isArray(contact.tags) ? contact.tags.join(', ') : (contact.tags || ''),
             notes: contact.notes || '',
+            assigned_user_id: contact.assigned_user_id || '',
             custom_fields: contact.custom_fields && typeof contact.custom_fields === 'object' ? { ...contact.custom_fields } : {},
         })
         setIsEditModalOpen(true)
@@ -153,6 +156,7 @@ const Contacts = () => {
         try {
             const payload = {
                 ...formData,
+                company: formData.company_name, // Map company_name to company for backend
                 company_id: companyId,
                 custom_fields: formData.custom_fields && typeof formData.custom_fields === 'object' ? formData.custom_fields : {},
                 // Ensure tags are handled as array or string as per backend
@@ -265,30 +269,39 @@ const Contacts = () => {
     return (
         <div className="p-3 sm:p-6 space-y-6 sm:space-y-8 bg-[#F8FAFC] min-h-full">
             {/* Header Section with Glassmorphism Effect */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6 bg-white p-4 sm:p-6 rounded-2xl border border-gray-200 shadow-sm sticky top-0 z-10 mx-[-4px]">
-                <div>
-                    <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight notranslate">{t('contacts.title')}</h1>
-                    <p className="text-gray-500 mt-1 font-medium italic notranslate">{t('contacts.subtitle')}</p>
-                </div>
-                <div className="flex flex-col sm:flex-row sm:items-center gap-4 w-full md:w-auto">
-                    <div className="relative group w-full sm:w-auto">
-                        <IoSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary-accent transition-colors" size={20} />
-                        <input
-                            type="text"
-                            placeholder={t('contacts.search_placeholder')}
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full sm:w-72 pr-6 py-3 border-0 bg-gray-100/50 rounded-2xl text-sm focus:ring-2 focus:ring-primary-accent/30 focus:bg-white outline-none shadow-inner transition-all duration-300"
-                            style={{ paddingLeft: '3rem' }}
-                        />
+            {/* ── Ultra-Compact Header ── */}
+            <div className="bg-white border-b border-gray-200 px-4 py-2 z-20 shadow-sm sticky top-0">
+                <div className="max-w-full mx-auto flex flex-col gap-2">
+                    {/* Row 1: Brand, Search, Primary Actions */}
+                    <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-primary-accent/10 flex items-center justify-center text-primary-accent shrink-0">
+                                <IoPeople size={18} />
+                            </div>
+                            <h1 className="text-xl font-black text-gray-900 tracking-tight shrink-0">{t('contacts.title')}</h1>
+                        </div>
+
+                        {/* Search - Flexible */}
+                        <div className="flex-1 max-w-md relative group">
+                            <input
+                                type="text"
+                                placeholder={t('contacts.search_placeholder') || 'Search...'}
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full pl-9 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent text-sm transition-all"
+                            />
+                            <IoSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={handleAdd}
+                                className="flex items-center gap-1.5 px-4 py-1.5 bg-primary-accent text-white rounded-lg text-xs font-black shadow-md shadow-primary-accent/20 hover:bg-primary-accent-hover transition-all whitespace-nowrap"
+                            >
+                                <IoAdd size={16} /> {t('contacts.add_contact')}
+                            </button>
+                        </div>
                     </div>
-                    <button
-                        onClick={handleAdd}
-                        className="flex items-center justify-center gap-2 bg-primary-accent hover:bg-primary-accent/90 text-white px-4 py-3 sm:py-2 w-full sm:w-auto rounded-2xl font-bold transition-all active:scale-95 group"
-                    >
-                        <IoAdd size={22} className="group-hover:rotate-90 transition-transform duration-300" />
-                        <span className="notranslate">{t('contacts.add_contact')}</span>
-                    </button>
                 </div>
             </div>
 
@@ -420,6 +433,26 @@ const Contacts = () => {
                                 </select>
                                 <IoChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                             </div>
+                        </div>
+                    </div>
+
+                    {/* Assigned To */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('common.assigned_to') || 'Assigned To'}</label>
+                        <div className="relative">
+                            <select
+                                className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none appearance-none bg-white shadow-sm"
+                                value={formData.assigned_user_id}
+                                onChange={(e) => setFormData({ ...formData, assigned_user_id: e.target.value })}
+                            >
+                                <option value="">-- {t('common.not_assigned') || 'Not Assigned'} --</option>
+                                {employees.map((emp) => (
+                                    <option key={emp.id} value={emp.user_id || emp.id}>
+                                        {emp.name}
+                                    </option>
+                                ))}
+                            </select>
+                            <IoChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                         </div>
                     </div>
 

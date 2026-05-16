@@ -173,7 +173,7 @@ const EmployeeDashboard = () => {
   const statsList = [
     { label: t('sidebar.leads'), value: dashboardStats.my_leads?.toString() || '0', subtitle: t('common.total'), icon: IoPeople, color: 'text-teal-600', bgColor: 'bg-teal-100', path: '/app/employee/leads' },
     { label: t('sidebar.deals'), value: dashboardStats.my_deals?.toString() || '0', subtitle: formatCurrency(dashboardStats.my_deals_value || 0), icon: IoBriefcase, color: 'text-blue-600', bgColor: 'bg-blue-100', path: '/app/employee/deals' },
-    { label: t('sidebar.tasks'), value: dashboardStats.my_tasks?.toString() || '0', subtitle: `${t('tasks.pending')}: ${dashboardStats.pending_tasks || 0} | ${t('tasks.completed')}: ${dashboardStats.completed_tasks || 0}`, icon: IoCheckbox, color: 'text-primary-accent', bgColor: 'bg-primary-accent/10', path: '/app/employee/my-tasks' },
+    { label: t('sidebar.tasks'), value: dashboardStats.my_tasks?.toString() || '0', subtitle: `${t('tasks.pending')}: ${dashboardStats.pending_tasks || 0} | ${t('tasks.completed')}: ${dashboardStats.completed_tasks || 0}`, icon: IoCheckbox, color: 'text-primary-accent', bgColor: 'bg-primary-accent/10', path: '/app/employee/tasks' },
     { label: t('sidebar.estimates'), value: dashboardStats.my_offers?.toString() || '0', subtitle: t('status.draft'), icon: IoReceipt, color: 'text-violet-600', bgColor: 'bg-violet-100', path: '/app/employee/offers' },
     { label: t('sidebar.invoices'), value: dashboardStats.my_invoices?.toString() || '0', subtitle: t('invoices.unpaid'), icon: IoCash, color: 'text-green-600', bgColor: 'bg-green-100', path: '/app/employee/invoices' },
     { label: t('sidebar.messages'), value: dashboardStats.unread_messages?.toString() || '0', subtitle: t('status.pending'), icon: IoChatbubbles, color: 'text-orange-600', bgColor: 'bg-orange-100', path: '/app/employee/messages' },
@@ -182,7 +182,7 @@ const EmployeeDashboard = () => {
   const quickAccessMenus = [
     { category: t('sidebar.crm'), items: [
       { label: t('my_leads'), icon: IoLayers, path: '/app/employee/leads', color: 'text-teal-600', bgColor: 'bg-teal-100', count: t('view') },
-      { label: t('my_tasks'), icon: IoCheckbox, path: '/app/employee/my-tasks', color: 'text-orange-600', bgColor: 'bg-orange-100', count: dashboardStats.my_tasks?.toString() || '0' },
+      { label: t('my_tasks'), icon: IoCheckbox, path: '/app/employee/tasks', color: 'text-orange-600', bgColor: 'bg-orange-100', count: dashboardStats.my_tasks?.toString() || '0' },
       { label: t('sidebar.calendar'), icon: IoCalendar, path: '/app/employee/calendar', color: 'text-violet-600', bgColor: 'bg-violet-100', count: `${dashboardStats.upcoming_events || 0}` },
     ]},
     { category: t('sidebar.employees'), items: [{ label: t('sidebar.my_profile'), icon: IoPerson, path: '/app/employee/my-profile', color: 'text-pink-600', bgColor: 'bg-pink-100', count: t('view') }]},
@@ -206,7 +206,7 @@ const EmployeeDashboard = () => {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="primary" onClick={() => navigate('/app/employee/leads')} className="flex items-center gap-2 shadow-lg shadow-teal-500/30 bg-teal-600 hover:bg-teal-700 border-none"><IoAdd size={18} /><span className="hidden sm:inline">{t('leads.add_lead')}</span><span className="sm:hidden">{t('leads.title')}</span></Button>
-          <Button variant="primary" onClick={() => navigate('/app/employee/my-tasks')} className="flex items-center gap-2 shadow-lg shadow-primary-accent/30"><IoAdd size={18} /><span className="hidden sm:inline">{t('tasks.add_task')}</span><span className="sm:hidden">{t('tasks.title')}</span></Button>
+          <Button variant="primary" onClick={() => navigate('/app/employee/tasks')} className="flex items-center gap-2 shadow-lg shadow-primary-accent/30"><IoAdd size={18} /><span className="hidden sm:inline">{t('tasks.add_task')}</span><span className="sm:hidden">{t('tasks.title')}</span></Button>
           <Button variant="outline" onClick={() => fetchDashboardData()} className="flex items-center gap-2"><IoRefresh size={18} /><span className="hidden sm:inline">{t('common.refresh')}</span></Button>
         </div>
       </div>
@@ -232,7 +232,7 @@ const EmployeeDashboard = () => {
       <Card className="p-4 sm:p-5 md:p-6 bg-white rounded-lg shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg sm:text-xl font-semibold text-primary-text flex items-center gap-2"><IoCheckbox className="text-primary-accent" size={24} />{t('dashboard.pendingTasks')}</h2>
-          <Button variant="ghost" onClick={() => navigate('/app/employee/my-tasks')} className="text-sm flex items-center gap-1">{t('common.view_all')}<IoArrowForward size={16} /></Button>
+          <Button variant="ghost" onClick={() => navigate('/app/employee/tasks')} className="text-sm flex items-center gap-1">{t('common.view_all')}<IoArrowForward size={16} /></Button>
         </div>
         <div className="space-y-3">
           {todayTasks.length === 0 ? <div className="text-center py-8 text-secondary-text"><IoCheckbox size={36} className="mx-auto mb-2 opacity-30" /><p className="text-sm">{t('common.no_data_found')}</p></div> : todayTasks.slice(0, 5).map((task) => (

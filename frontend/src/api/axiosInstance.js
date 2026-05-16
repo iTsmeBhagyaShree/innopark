@@ -19,10 +19,18 @@ axiosInstance.interceptors.request.use(
     const companyId =
       localStorage.getItem('companyId') || localStorage.getItem('company_id')
     const user = JSON.parse(localStorage.getItem('user') || '{}')
+    const method = (config.method || 'get').toLowerCase()
 
     // Add JWT token to headers
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
+    }
+
+    const uiLang = localStorage.getItem('language')
+    if (uiLang) {
+      config.headers['X-Language'] = uiLang
+      config.headers['Accept-Language'] =
+        uiLang === 'de' ? 'de-DE,de;q=0.9,en;q=0.8' : `${uiLang};q=0.9,en;q=0.8`
     }
     
     // Remove Content-Type for FormData to let browser set it with boundary
@@ -41,14 +49,14 @@ axiosInstance.interceptors.request.use(
       // Only add if valid
       if (!isNaN(parsedCompanyId) && parsedCompanyId > 0) {
         // For GET requests, add to params
-        if (config.method === 'get') {
+        if (method === 'get') {
           config.params = {
             ...config.params,
             company_id: config.params?.company_id ?? parsedCompanyId
           }
         }
         // For POST, PUT, PATCH requests, add to body (only if body exists and company_id not already set)
-        else if (['post', 'put', 'patch'].includes(config.method)) {
+        else if (['post', 'put', 'patch'].includes(method)) {
           // Don't modify FormData - it handles company_id separately
           if (config.data instanceof FormData) {
             // FormData already has company_id appended by the caller

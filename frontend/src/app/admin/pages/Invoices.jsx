@@ -50,6 +50,9 @@ import {
   IoCopy,
   IoWarning,
   IoColorPalette,
+  IoList,
+  IoGrid,
+  IoReceipt,
 } from "react-icons/io5";
 
 const resolveCompanyId = (u) => {
@@ -170,6 +173,7 @@ const Invoices = () => {
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [invoiceViewMode, setInvoiceViewMode] = useState("list"); // 'list' | 'tile'
 
   // Invoice items state
   const [invoiceItems, setInvoiceItems] = useState([]);
@@ -219,7 +223,7 @@ const Invoices = () => {
     billDate: new Date().toISOString().split("T")[0],
     dueDate: "",
     project: "",
-    currency: "USD",
+    currency: "EUR",
     tax: "",
     taxRate: 0,
     secondTax: "",
@@ -354,7 +358,7 @@ const Invoices = () => {
       billDate: today.toISOString().split("T")[0],
       dueDate: dueDate.toISOString().split("T")[0],
       project: "",
-      currency: "USD",
+      currency: "EUR",
       tax: "",
       taxRate: 0,
       secondTax: "",
@@ -974,90 +978,72 @@ const Invoices = () => {
 
   return (
     <div className="space-y-3 sm:space-y-4 bg-main-bg min-h-screen p-2 sm:p-4 text-primary-text">
-      {/* Top Bar */}
+      {/* Header - quote like */}
       <div className="bg-card-bg rounded-lg shadow-soft border border-border-light overflow-visible">
-        {/* Header with tabs and action buttons */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 sm:p-4">
-          {/* Tabs */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
-            <button
-              onClick={() => setActiveTab("invoices")}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${activeTab === "invoices"
-                ? "bg-primary-accent text-white"
-                : "text-secondary-text hover:bg-main-bg border border-border-light"
-                }`}
-            >
-              {t('Invoices')}
-            </button>
-            <button
-              onClick={() => setActiveTab("recurring")}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${activeTab === "recurring"
-                ? "bg-primary-accent text-white"
-                : "text-secondary-text hover:bg-main-bg border border-border-light"
-                }`}
-            >
-              {t('Recurring')}
-            </button>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 p-4 sm:p-5 border-b border-border-light">
+          <div>
+            <h1 className="text-xl font-black text-gray-900 flex items-center gap-2">
+              <IoReceipt className="text-primary-accent" size={22} /> <span className="notranslate">{t('Invoices') || 'Rechnungen'}</span>
+            </h1>
           </div>
-          {/* Action buttons */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
-            <button
-              onClick={() => setIsManageLabelsModalOpen(true)}
-              className="flex items-center gap-1.5 px-2 py-1.5 text-xs border border-border-light rounded-lg hover:bg-main-bg text-secondary-text whitespace-nowrap"
-            >
-              <IoPricetag size={13} /> <span className="hidden xs:inline">{t('common.labels')}</span>
-            </button>
-            <button
-              onClick={() => setIsAddPaymentModalOpen(true)}
-              className="flex items-center gap-1.5 px-2 py-1.5 text-xs border border-border-light rounded-lg hover:bg-main-bg text-secondary-text whitespace-nowrap"
-            >
-              <IoCash size={13} /> <span className="hidden xs:inline">{t('common.add_payment')}</span>
-            </button>
-            <button
-              onClick={() => {
-                resetForm();
-                setIsAddModalOpen(true);
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-primary-accent text-white rounded-lg hover:opacity-90 whitespace-nowrap shadow-sm"
-            >
-              <IoAdd size={14} /> <span className="hidden xs:inline">{t('common.add')}</span> {t('Invoices')}
-            </button>
-          </div>
+          <button
+            onClick={() => {
+              resetForm();
+              setIsAddModalOpen(true);
+            }}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors shadow-sm"
+          >
+            <IoAdd size={18} /> {t('invoices.addInvoice') || 'Hinzufügen Rechnungen'}
+          </button>
         </div>
-        {/* Filter bar */}
-        <div className="flex flex-col xs:flex-row xs:items-center justify-between gap-2 sm:gap-3 border-t border-border-light px-3 sm:px-4 py-2 sm:py-3">
+
+        {/* Controls row - quote like */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-3 sm:px-4 py-3">
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowFilterPanel((prev) => !prev)}
-              className="flex items-center gap-1.5 px-2 py-1.5 text-xs border border-border-light rounded-lg hover:bg-main-bg text-secondary-text"
-            >
-              <IoFilter size={13} /> {t('common.filter')}
-              {showFilterPanel ? <IoChevronUp size={13} /> : <IoChevronDown size={13} />}
-            </button>
+            <div className="inline-flex rounded-md border border-border-light bg-input-bg p-0.5" role="group" aria-label={t("Invoices")}>
+              <button
+                type="button"
+                title={t("common.list")}
+                onClick={() => setInvoiceViewMode("list")}
+                className={`px-2.5 py-1.5 text-xs font-medium rounded transition-colors ${invoiceViewMode === "list" ? "bg-primary-accent text-white shadow-sm" : "text-secondary-text hover:text-primary-text"}`}
+              >
+                <IoList size={14} className="inline-block sm:mr-1 align-middle" />
+                <span className="hidden sm:inline">{t("common.list")}</span>
+              </button>
+              <button
+                type="button"
+                title={t("common.tile")}
+                onClick={() => setInvoiceViewMode("tile")}
+                className={`px-2.5 py-1.5 text-xs font-medium rounded transition-colors ${invoiceViewMode === "tile" ? "bg-primary-accent text-white shadow-sm" : "text-secondary-text hover:text-primary-text"}`}
+              >
+                <IoGrid size={14} className="inline-block sm:mr-1 align-middle" />
+                <span className="hidden sm:inline">{t("common.tile")}</span>
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2 flex-1 xs:flex-initial justify-end">
-            <button
-              onClick={handleExportExcel}
-              className="px-2 py-1.5 text-xs border border-border-light rounded-lg hover:bg-main-bg text-secondary-text hidden xs:block"
-            >
-              {t('common.export')}
-            </button>
-            <button
-              onClick={handlePrint}
-              className="px-2 py-1.5 text-xs border border-border-light rounded-lg hover:bg-main-bg text-secondary-text hidden xs:block"
-            >
-              {t('common.print')}
-            </button>
-            <div className="relative flex-1 xs:flex-initial max-w-[160px] sm:max-w-[180px]">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="relative flex-1 sm:min-w-[280px]">
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t('common.search')}
-                className="pl-8 pr-3 py-1.5 text-xs border border-border-light rounded-lg w-full focus:ring-2 focus:ring-primary-accent outline-none bg-input-bg text-primary-text"
+                placeholder={t('invoices.searchPlaceholder') || 'Rechnungen suchen...'}
+                className="pl-8 pr-3 py-2 text-sm border border-border-light rounded-lg w-full focus:ring-2 focus:ring-primary-accent outline-none bg-input-bg text-primary-text"
               />
-              <IoSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-text" size={13} />
+              <IoSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-text" size={14} />
             </div>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3 py-2 border border-border-light rounded-lg bg-white text-sm min-w-[130px]"
+            >
+              <option value="All">{t('common.all_status') || 'Alle Status'}</option>
+              <option value="Paid">{t('invoices.paid')}</option>
+              <option value="Partially Paid">{t('invoices.partiallyPaid')}</option>
+              <option value="Not Paid">{t('invoices.notPaid')}</option>
+              <option value="Overdue">{t('invoices.overdue')}</option>
+              <option value="Draft">{t('invoices.draft')}</option>
+            </select>
           </div>
         </div>
         {/* Filter Panel */}
@@ -1208,8 +1194,10 @@ const Invoices = () => {
         )}
       </div>
 
-      {/* Invoices Table */}
+      {/* Invoices list (table + mobile rows) or tile grid */}
       <Card className="p-0 overflow-hidden bg-card-bg border border-border-light">
+        {invoiceViewMode === "list" ? (
+        <>
         {/* Desktop Table - hidden on mobile */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full min-w-[900px] text-xs sm:text-sm">
@@ -1368,6 +1356,108 @@ const Invoices = () => {
             ))
           )}
         </div>
+        </>
+        ) : (
+        <div className="p-3 sm:p-4">
+          {loading ? (
+            <div className="py-10 text-center text-secondary-text text-sm">{t("common.loading")}</div>
+          ) : paginatedInvoices.length === 0 ? (
+            <div className="py-10 text-center text-secondary-text text-sm">{t("common.no_data")}</div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {paginatedInvoices.map((invoice) => (
+                <div
+                  key={`tile-${invoice.id}`}
+                  className="rounded-lg border border-border-light bg-card-bg p-4 shadow-sm hover:shadow-md transition-shadow flex flex-col"
+                >
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <button
+                      type="button"
+                      onClick={() => handleView(invoice)}
+                      className="text-left font-semibold text-primary-accent hover:underline text-sm"
+                    >
+                      {invoice.invoiceNumber}
+                    </button>
+                    <span
+                      className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border shrink-0"
+                      style={getStatusStyle(invoice.status)}
+                    >
+                      {t(
+                        "invoices." +
+                          (() => {
+                            const s = invoice.status?.toLowerCase().replace(/\s+/g, "") || "unpaid";
+                            const map = {
+                              partiallypaid: "partiallyPaid",
+                              notpaid: "unpaid",
+                              fullypaid: "paid",
+                              unpaid: "unpaid",
+                              paid: "paid",
+                              overdue: "overdue",
+                            };
+                            return map[s] || s;
+                          })()
+                      )}
+                    </span>
+                  </div>
+                  {invoice.labels?.length > 0 && (
+                    <div className="flex flex-wrap gap-0.5 mb-2">
+                      {invoice.labels.slice(0, 3).map((label) => (
+                        <span
+                          key={`${invoice.id}-${label}`}
+                          className="px-1.5 py-0.5 text-[9px] font-semibold rounded-full border"
+                          style={getLabelStyle(label)}
+                        >
+                          {label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="space-y-1.5 text-xs text-secondary-text flex-1 mb-3">
+                    <div className="flex justify-between gap-2">
+                      <span>{t("common.project")}</span>
+                      <span className="text-primary-text text-right truncate max-w-[55%]">{invoice.project || "—"}</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span>{t("common.bill_date")}</span>
+                      <span className="text-primary-text">{formatDate(invoice.invoiceDate)}</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span>{t("common.due_date")}</span>
+                      <span className="text-primary-text">{formatDate(invoice.dueDate)}</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span>{t("common.total")}</span>
+                      <span className="text-primary-text font-semibold">{formatCurrency(invoice.total, invoice.currency)}</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span>{t("invoices.paid")}</span>
+                      <span className="text-primary-text">{formatCurrency(invoice.paid, invoice.currency)}</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span>{t("common.balance")}</span>
+                      <span className="text-primary-text">{formatCurrency(invoice.unpaid, invoice.currency)}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-end gap-0.5 pt-3 border-t border-border-light">
+                    <button type="button" onClick={() => handleCopy(invoice)} className="p-1.5 text-secondary-text hover:bg-main-bg rounded" title={t("common.copy")}>
+                      <IoCopy size={14} />
+                    </button>
+                    <button type="button" onClick={() => handleEdit(invoice)} className="p-1.5 text-secondary-text hover:bg-main-bg rounded" title={t("common.edit")}>
+                      <IoCreate size={14} />
+                    </button>
+                    <button type="button" onClick={() => handleDelete(invoice)} className="p-1.5 text-secondary-text hover:bg-main-bg rounded" title={t("common.delete")}>
+                      <IoClose size={14} />
+                    </button>
+                    <button type="button" onClick={() => handleView(invoice)} className="p-1.5 text-secondary-text hover:bg-main-bg rounded" title={t("common.view")}>
+                      <IoEllipsisVertical size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        )}
 
         {/* Footer with Pagination and Total */}
         <div className="px-3 sm:px-4 py-2 sm:py-3 border-t border-border-light flex flex-wrap items-center justify-between gap-2 sm:gap-3 bg-main-bg">

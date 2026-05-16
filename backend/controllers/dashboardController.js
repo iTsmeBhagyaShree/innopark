@@ -5,26 +5,26 @@
 const pool = require('../config/db');
 
 // Safe query helper - returns default array on error/empty
-const safeQuery = async (query, params, defaultValue = [{ total: 0 }]) => {
+const safeQuery = async (query, params, defaultValue = []) => {
   try {
     const response = await pool.execute(query, params);
     
     // Safety check for the response itself
     if (!response || !Array.isArray(response)) {
-      return Array.isArray(defaultValue) ? defaultValue : [defaultValue];
+      return defaultValue;
     }
 
     const result = response[0];
     
     // Ensure the result is an array
     if (!result || !Array.isArray(result)) {
-      return Array.isArray(defaultValue) ? defaultValue : [defaultValue];
+      return defaultValue;
     }
     
     return result;
   } catch (error) {
     console.warn('Dashboard query warning:', error.message, 'Query:', query.substring(0, 50));
-    return Array.isArray(defaultValue) ? defaultValue : [defaultValue];
+    return defaultValue;
   }
 };
 
@@ -256,9 +256,10 @@ const getCompleteDashboard = async (req, res) => {
       timeline: timeline.map(t => ({ 
         id: t.id, 
         user: t.user || 'System', 
+        message: `${t.user || 'System'} ${t.title || t.action || 'updated a task'}`,
         action: t.title || t.action || 'System Update', 
         status: t.status || 'Active', 
-        time: new Date() 
+        time: new Date().toLocaleTimeString() 
       })),
       openProjects: projects.map(p => ({ id: p.id, name: p.name, deadline: p.deadline, progress: p.progress || 0 })),
       todos: todos.map(t => ({ id: t.id, text: t.text, completed: !!t.completed }))
@@ -378,7 +379,13 @@ const getAdminDashboard = async (req, res) => {
       safeQuery(`SELECT COUNT(*) as total FROM leads WHERE company_id = ? AND is_deleted = 0`, [companyId]),
       safeQuery(`SELECT COUNT(*) as total FROM users WHERE company_id = ? AND role = 'EMPLOYEE' AND is_deleted = 0`, [companyId]),
       safeQuery(`SELECT COUNT(*) as total FROM projects WHERE company_id = ? AND is_deleted = 0`, [companyId]),
-      safeQuery(`SELECT COUNT(*) as total, SUM(total) as amount FROM invoices WHERE company_id = ? AND is_deleted = 0`, [companyId]),
+      safeQuery(
+        `SELECT COUNT(*) AS invoice_count,
+                COALESCE(SUM(paid), 0) AS paid_sum,
+                COALESCE(SUM(total), 0) AS total_sum
+         FROM invoices WHERE company_id = ? AND is_deleted = 0`,
+        [companyId]
+      ),
       safeQuery(`SELECT source, COUNT(*) as count FROM leads WHERE company_id = ? AND is_deleted = 0 GROUP BY source`, [companyId]),
       safeQuery(`SELECT status as stage, SUM(value) as value FROM leads WHERE company_id = ? AND is_deleted = 0 GROUP BY status`, [companyId]),
       safeQuery(`SELECT COUNT(*) as total FROM events WHERE company_id = ? AND DATE(starts_on_date) = CURDATE() AND is_deleted = 0`, [companyId])
@@ -392,16 +399,20 @@ const getAdminDashboard = async (req, res) => {
     res.json({
       success: true,
       data: {
-        leads: getVal(0, [{total: 25}])[0]?.total || 25,
-        employees: getVal(1, [{total: 12}])[0]?.total || 12,
-        projects: getVal(2, [{total: 8}])[0]?.total || 8,
-        invoices: {
-          total: getVal(3, [{total: 15}])[0]?.total || 15,
-          amount: getVal(3, [{amount: 12500}])[0]?.amount || 12500
-        },
+        leads: getVal(0, [{total: 25}])[0]?.total || 0,
+        employees: getVal(1, [{total: 12}])[0]?.total || 0,
+        projects: getVal(2, [{total: 8}])[0]?.total || 0,
+        invoices: (() => {
+          const row = getVal(3, [{ invoice_count: 15, paid_sum: 12500, total_sum: 48000 }])[0] || {};
+          return {
+            total: Number(row.invoice_count) || 0,
+            paid_amount: parseFloat(row.paid_sum) || 0,
+            total_amount: parseFloat(row.total_sum) || 0,
+          };
+        })(),
         leadsBySource: getVal(4, [{source: 'Google', count: 18}, {source: 'Facebook', count: 12}]).map(r => ({ source: r.source || 'Others', count: r.count })),
         pipelineStages: getVal(5, [{stage: 'New', value: 5000}, {stage: 'Won', value: 12000}]).map(r => ({ stage: r.stage, value: r.value })),
-        events_today: getVal(6, [{total: 2}])[0]?.total || 2
+        events_today: getVal(6, [{total: 2}])[0]?.total || 0
       }
     });
 
@@ -411,7 +422,7 @@ const getAdminDashboard = async (req, res) => {
       success: true,
       data: {
         leads: 45, employees: 12, projects: 8,
-        invoices: { total: 15, amount: 12500 },
+        invoices: { total: 15, paid_amount: 12500, total_amount: 48000 },
         leadsBySource: [ { source: "Google", count: 25 }, { source: "Direct", count: 20 } ],
         pipelineStages: [ { stage: "New", value: 5000 }, { stage: "Won", value: 8500 } ],
         events_today: 3

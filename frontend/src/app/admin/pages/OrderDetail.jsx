@@ -40,10 +40,33 @@ import {
   IoCash
 } from 'react-icons/io5'
 
+const orderStatusKey = (status) => {
+  const raw = String(status || '').trim().toLowerCase()
+  const map = {
+    neu: 'neu',
+    new: 'neu',
+    pending: 'pending',
+    processing: 'processing',
+    completed: 'completed',
+    confirmed: 'confirmed',
+    cancelled: 'cancelled',
+    canceled: 'cancelled',
+    shipped: 'shipped',
+    delivered: 'delivered'
+  }
+  return map[raw] || null
+}
+
 const OrderDetail = () => {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
+  const localeTag = language === 'de' ? 'de-DE' : 'en-GB'
+
+  const formatOrderStatus = (status) => {
+    const k = orderStatusKey(status)
+    return k ? t(`order_detail_page.status_display.${k}`) : (status || t('order_detail_page.status_new'))
+  }
   const [order, setOrder] = useState(null)
   const [orders, setOrders] = useState([])
   const [company, setCompany] = useState(null)
@@ -104,12 +127,12 @@ const OrderDetail = () => {
       if (response.data.success) {
         setOrder(response.data.data)
       } else {
-        alert(response.data.error || 'Order not found')
+        alert(response.data.error || t('order_detail_page.not_found'))
         navigate('/app/admin/orders')
       }
     } catch (error) {
       console.error('Error fetching order:', error)
-      alert('Failed to fetch order details')
+      alert(t('order_detail_page.load_failed'))
       navigate('/app/admin/orders')
     } finally {
       setLoading(false)
@@ -175,7 +198,7 @@ const OrderDetail = () => {
 
   const fetchTasks = async () => {
     try {
-      const response = await tasksAPI.getAll(params)
+      const response = await tasksAPI.getAll({ company_id: companyId })
       if (response.data.success) {
         setTasks(response.data.data || [])
       }
@@ -209,16 +232,16 @@ const OrderDetail = () => {
         setIsAddItemModalOpen(false)
         await fetchOrder()
       } else {
-        alert(response.data.error || 'Failed to add item')
+        alert(response.data.error || t('order_detail_page.add_item_error'))
       }
     } catch (error) {
       console.error('Error adding item:', error)
-      alert(error.response?.data?.error || 'Failed to add item')
+      alert(error.response?.data?.error || t('order_detail_page.add_item_error'))
     }
   }
 
   const handleRemoveItem = async (itemIndex) => {
-    if (!window.confirm('Are you sure you want to remove this item?')) {
+    if (!window.confirm(t('order_detail_page.remove_item_confirm'))) {
       return
     }
     
@@ -235,11 +258,11 @@ const OrderDetail = () => {
       if (response.data.success) {
         await fetchOrder()
       } else {
-        alert(response.data.error || 'Failed to remove item')
+        alert(response.data.error || t('order_detail_page.remove_item_error'))
       }
     } catch (error) {
       console.error('Error removing item:', error)
-      alert(error.response?.data?.error || 'Failed to remove item')
+      alert(error.response?.data?.error || t('order_detail_page.remove_item_error'))
     }
   }
 
@@ -271,15 +294,15 @@ const OrderDetail = () => {
           invoice_id: response.data.data.id
         }, { company_id: companyId })
         
-        alert('Invoice created successfully!')
+        alert(t('order_detail_page.invoice_created'))
         setIsCreateInvoiceModalOpen(false)
         await fetchOrder()
       } else {
-        alert(response.data.error || 'Failed to create invoice')
+        alert(response.data.error || t('order_detail_page.invoice_create_error'))
       }
     } catch (error) {
       console.error('Error creating invoice:', error)
-      alert(error.response?.data?.error || 'Failed to create invoice')
+      alert(error.response?.data?.error || t('order_detail_page.invoice_create_error'))
     }
   }
 
@@ -314,11 +337,26 @@ const OrderDetail = () => {
     const printWindow = window.open('', '_blank')
     if (!order) return
 
+    const orderTitle = `${t('order_detail_page.print_order_title')} #${order.id}`
+    const lblDate = t('order_detail_page.print_date')
+    const lblStatus = t('order_detail_page.print_status')
+    const lblPhone = t('order_detail_page.print_phone')
+    const lblEmail = t('order_detail_page.print_email')
+    const lblItem = t('order_detail_page.col_item')
+    const lblQty = t('order_detail_page.col_qty')
+    const lblRate = t('order_detail_page.col_rate')
+    const lblAmount = t('order_detail_page.col_amount')
+    const lblSub = t('order_detail_page.print_subtotal')
+    const lblDisc = t('order_detail_page.print_discount')
+    const lblTot = t('order_detail_page.print_total')
+    const orderDetailsHeading = t('order_detail_page.order_info')
+    const statusText = formatOrderStatus(order.status)
+
     const printContent = `
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Order #${order.id}</title>
+        <title>${orderTitle}</title>
         <style>
           body { font-family: Arial, sans-serif; padding: 20px; }
           .header { text-align: center; margin-bottom: 30px; }
@@ -337,35 +375,35 @@ const OrderDetail = () => {
       </head>
       <body>
         <div class="header">
-          <h1>ORDER #${order.id}</h1>
-          <p>Date: ${formatDate(order.order_date)}</p>
-          <p>Status: ${order.status}</p>
+          <h1>${orderTitle}</h1>
+          <p>${lblDate}: ${formatDate(order.order_date)}</p>
+          <p>${lblStatus}: ${statusText}</p>
         </div>
         <div class="order-info">
           <div class="company-info">
-            <h3>${company?.name || 'Company Name'}</h3>
+            <h3>${company?.name || ''}</h3>
             ${company?.address ? `<p>${company.address}</p>` : ''}
-            ${company?.phone ? `<p>Phone: ${company.phone}</p>` : ''}
-            ${company?.email ? `<p>Email: ${company.email}</p>` : ''}
+            ${company?.phone ? `<p>${lblPhone}: ${company.phone}</p>` : ''}
+            ${company?.email ? `<p>${lblEmail}: ${company.email}</p>` : ''}
           </div>
           <div class="client-info">
-            <h3>{t('auto.auto_c5c8ac6b') || 'Order Details'}</h3>
-            <p>Order ID: #${order.id}</p>
+            <h3>${orderDetailsHeading}</h3>
+            <p>#${order.id}</p>
           </div>
         </div>
         <table>
           <thead>
             <tr>
-              <th>{t('auto.auto_7d74f3b9') || 'Item'}</th>
-              <th>{t('auto.auto_694e8d1f') || 'Quantity'}</th>
-              <th>{t('auto.auto_dcb66ff6') || 'Rate'}</th>
-              <th>{t('auto.auto_96b01412') || 'Total'}</th>
+              <th>${lblItem}</th>
+              <th>${lblQty}</th>
+              <th>${lblRate}</th>
+              <th>${lblAmount}</th>
             </tr>
           </thead>
           <tbody>
             ${order.items && order.items.length > 0 ? order.items.map(item => `
               <tr>
-                <td>${item.item_name || 'Item'}</td>
+                <td>${item.item_name || lblItem}</td>
                 <td>${item.quantity} ${item.unit || 'PC'}</td>
                 <td>${formatCurrency(item.unit_price || 0)}</td>
                 <td>${formatCurrency(item.amount || 0)}</td>
@@ -374,9 +412,9 @@ const OrderDetail = () => {
           </tbody>
         </table>
         <div class="totals">
-          <p>Sub Total: ${formatCurrency(subTotal)}</p>
-          <p>Discount: ${formatCurrency(0)}</p>
-          <p><strong>Total: ${formatCurrency(total)}</strong></p>
+          <p>${lblSub}: ${formatCurrency(subTotal)}</p>
+          <p>${lblDisc}: ${formatCurrency(0)}</p>
+          <p><strong>${lblTot}: ${formatCurrency(total)}</strong></p>
         </div>
         ${order.description ? `<div class="footer"><p>${order.description}</p></div>` : ''}
       </body>
@@ -392,18 +430,16 @@ const OrderDetail = () => {
 
   const handleViewPdf = async () => {
     try {
-      // Use relative URL to leverage Vite proxy
       const pdfUrl = `/api/v1/orders/${id}/pdf?company_id=${companyId}`
       window.open(pdfUrl, '_blank')
     } catch (error) {
       console.error('Error viewing PDF:', error)
-      alert('Failed to view PDF')
+      alert(t('order_detail_page.pdf_view_failed'))
     }
   }
 
   const handleDownloadPdf = async () => {
     try {
-      // Use relative URL to leverage Vite proxy
       const pdfUrl = `/api/v1/orders/${id}/pdf?company_id=${companyId}&download=1`
       const response = await fetch(pdfUrl)
       const data = await response.json()
@@ -418,7 +454,7 @@ const OrderDetail = () => {
       window.URL.revokeObjectURL(url)
     } catch (error) {
       console.error('Error downloading PDF:', error)
-      alert('Failed to download PDF')
+      alert(t('order_detail_page.pdf_download_failed'))
     }
   }
 
@@ -433,13 +469,14 @@ const OrderDetail = () => {
       'Shipped': 'info',
       'Delivered': 'success'
     }
-    return <Badge variant={variants[status] || 'default'}>{status || 'Neu'}</Badge>
+    const label = formatOrderStatus(status)
+    return <Badge variant={variants[status] || 'default'}>{label}</Badge>
   }
 
   const formatDate = (dateString) => {
     if (!dateString) return '-'
     const date = new Date(dateString)
-    return date.toLocaleDateString('en-GB', {
+    return date.toLocaleDateString(localeTag, {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric'
@@ -447,7 +484,7 @@ const OrderDetail = () => {
   }
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat(localeTag, {
       style: 'currency',
       currency: 'USD'
     }).format(amount || 0)
@@ -472,7 +509,7 @@ const OrderDetail = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <p className="text-secondary-text">{t('auto.auto_ded71747') || 'Loading order details...'}</p>
+        <p className="text-secondary-text">{t('order_detail_page.loading')}</p>
       </div>
     )
   }
@@ -480,7 +517,7 @@ const OrderDetail = () => {
   if (!order) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <p className="text-secondary-text">{t('') || ''}</p>
+        <p className="text-secondary-text">{t('order_detail_page.not_found')}</p>
       </div>
     )
   }
@@ -496,7 +533,7 @@ const OrderDetail = () => {
               className="flex items-center gap-2 text-primary-text hover:text-primary-accent"
             >
               <IoArrowBack size={20} />
-              <span className="font-semibold">{t('auto.auto_7442e29d') || 'Orders'}</span>
+              <span className="font-semibold">{t('order_detail_page.orders_nav')}</span>
             </button>
             <button onClick={() => setIsSidebarOpen(false)}>
               <IoEllipsisVertical size={20} />
@@ -509,10 +546,10 @@ const OrderDetail = () => {
               onChange={(e) => setStatusFilter(e.target.value)}
               className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
             >
-              <option value="All">{t('') || ''}</option>
-              <option value="Neu">{t('') || ''}</option>
-              <option value="Processing">{t('') || ''}</option>
-              <option value="Completed">{t('') || ''}</option>
+              <option value="All">{t('order_detail_page.filter_all')}</option>
+              <option value="Neu">{t('order_detail_page.status_new')}</option>
+              <option value="Processing">{t('order_detail_page.status_processing')}</option>
+              <option value="Completed">{t('order_detail_page.status_completed')}</option>
             </select>
             <Button size="sm" onClick={() => navigate('/app/admin/orders')}>
               <IoAdd size={18} />
@@ -523,7 +560,7 @@ const OrderDetail = () => {
             <IoSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
             <Input
               type="text"
-              placeholder={t('auto.auto_b98920c3') || "Search orders..."}
+              placeholder={t('order_detail_page.search_placeholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
@@ -541,10 +578,10 @@ const OrderDetail = () => {
               }`}
             >
               <div className="flex items-center justify-between mb-1">
-                <span className="font-semibold text-primary-text">ORDER #{o.id}</span>
+                <span className="font-semibold text-primary-text">{t('order_detail_page.order_label')} #{o.id}</span>
                 {getStatusBadge(o.status)}
               </div>
-              <p className="text-sm text-secondary-text">Order #${o.id}</p>
+              <p className="text-sm text-secondary-text">{t('order_detail_page.order_label')} #{o.id}</p>
               <p className="text-sm font-medium text-primary-text">{formatCurrency(o.amount)}</p>
               <p className="text-xs text-secondary-text">{formatDate(o.order_date)}</p>
             </div>
@@ -574,7 +611,7 @@ const OrderDetail = () => {
                 </button>
               )}
               <div>
-                <h1 className="text-2xl font-bold text-primary-text">ORDER #{order.id}</h1>
+                <h1 className="text-2xl font-bold text-primary-text">{t('order_detail_page.order_label')} #{order.id}</h1>
                 <div className="flex items-center gap-2 mt-1">
                   {getStatusBadge(order.status)}
                   <span className="text-sm text-secondary-text">{formatDate(order.order_date)}</span>
@@ -584,7 +621,7 @@ const OrderDetail = () => {
             <div className="flex items-center gap-2">
               <Button variant="outline" onClick={handlePrint}>
                 <IoPrint size={18} />
-                Print
+                {t('order_detail_page.print')}
               </Button>
             </div>
           </div>
@@ -631,28 +668,28 @@ const OrderDetail = () => {
               </div>
 
               <div>
-                <h3 className="font-semibold text-primary-text mb-2">{t('auto.auto_4a998251') || 'Order Info'}</h3>
-                <p className="text-secondary-text">Order #${order.id}</p>
+                <h3 className="font-semibold text-primary-text mb-2">{t('order_detail_page.order_info')}</h3>
+                <p className="text-secondary-text">{t('order_detail_page.order_label')} #{order.id}</p>
               </div>
             </div>
 
             {/* Items Table */}
             <div className="mt-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-primary-text">{t('') || ''}</h3>
+                <h3 className="font-semibold text-primary-text">{t('order_detail_page.line_items')}</h3>
                 <Button size="sm" onClick={() => setIsAddItemModalOpen(true)}>
                   <IoAdd size={16} />
-                  Add item
+                  {t('order_detail_page.add_item')}
                 </Button>
               </div>
               <table className="w-full">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-sm font-medium text-secondary-text">{t('') || ''}</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium text-secondary-text">{t('') || ''}</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium text-secondary-text">{t('') || ''}</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium text-secondary-text">{t('') || ''}</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium text-secondary-text">{t('') || ''}</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-secondary-text">{t('order_detail_page.col_item')}</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-secondary-text">{t('order_detail_page.col_qty')}</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-secondary-text">{t('order_detail_page.col_rate')}</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-secondary-text">{t('order_detail_page.col_amount')}</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-secondary-text">{t('order_detail_page.col_actions')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -661,7 +698,7 @@ const OrderDetail = () => {
                       <tr key={index}>
                         <td className="px-4 py-3">
                           <div>
-                            <p className="font-medium text-primary-text">{item.item_name || 'Item'}</p>
+                            <p className="font-medium text-primary-text">{item.item_name || t('order_detail_page.col_item')}</p>
                             {item.description && (
                               <p className="text-sm text-secondary-text">{item.description}</p>
                             )}
@@ -683,7 +720,7 @@ const OrderDetail = () => {
                   ) : (
                     <tr>
                       <td colSpan="5" className="px-4 py-8 text-center text-secondary-text">
-                        No items added
+                        {t('order_detail_page.no_items')}
                       </td>
                     </tr>
                   )}
@@ -695,15 +732,15 @@ const OrderDetail = () => {
             <div className="mt-6 flex justify-end">
               <div className="w-64 space-y-2">
                 <div className="flex justify-between">
-                  <span className="text-secondary-text">{t('') || ''}</span>
+                  <span className="text-secondary-text">{t('order_detail_page.subtotal')}</span>
                   <span className="text-primary-text font-medium">{formatCurrency(subTotal)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-secondary-text">{t('') || ''}</span>
+                  <span className="text-secondary-text">{t('order_detail_page.discount')}</span>
                   <span className="text-primary-text font-medium">{formatCurrency(discount)}</span>
                 </div>
                 <div className="flex justify-between pt-2 border-t border-gray-200">
-                  <span className="text-primary-text font-semibold">{t('') || ''}</span>
+                  <span className="text-primary-text font-semibold">{t('order_detail_page.grand_total')}</span>
                   <span className="text-primary-text font-bold text-lg">{formatCurrency(total)}</span>
                 </div>
               </div>
@@ -716,7 +753,7 @@ const OrderDetail = () => {
       <div className={`${isRightSidebarOpen ? 'w-80' : 'w-0'} transition-all duration-300 bg-white border-l border-gray-200 overflow-hidden flex flex-col`}>
         <div className="p-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-primary-text">{t('projects.activity.actions') || 'Actions'}</h3>
+            <h3 className="font-semibold text-primary-text">{t('order_detail_page.actions')}</h3>
             <button onClick={() => setIsRightSidebarOpen(false)}>
               <IoClose size={20} />
             </button>
@@ -726,32 +763,32 @@ const OrderDetail = () => {
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           <Button className="w-full" onClick={() => setIsCreateInvoiceModalOpen(true)}>
             <IoReceipt size={18} />
-            Create Invoice
+            {t('order_detail_page.create_invoice')}
           </Button>
 
           <div>
             <h4 className="font-medium text-primary-text mb-2 flex items-center gap-2">
               <IoCart size={18} />
-              Order info
+              {t('order_detail_page.order_info_side')}
             </h4>
             <div className="space-y-2 text-sm">
               <div className="flex items-center gap-2 text-secondary-text">
                 <IoBriefcase size={16} />
-                <span>Order #${order.id}</span>
+                <span>{t('order_detail_page.order_label')} #{order.id}</span>
               </div>
             </div>
           </div>
 
           <div>
-            <h4 className="font-medium text-primary-text mb-2">{t('') || ''}</h4>
+            <h4 className="font-medium text-primary-text mb-2">{t('order_detail_page.documents')}</h4>
             <div className="space-y-2">
               <Button variant="outline" size="sm" className="w-full" onClick={handleViewPdf}>
                 <IoEye size={16} />
-                View PDF
+                {t('order_detail_page.view_pdf')}
               </Button>
               <Button variant="outline" size="sm" className="w-full" onClick={handleDownloadPdf}>
                 <IoDownload size={16} />
-                Download PDF
+                {t('order_detail_page.download_pdf')}
               </Button>
             </div>
           </div>
@@ -759,7 +796,7 @@ const OrderDetail = () => {
           <div>
             <h4 className="font-medium text-primary-text mb-2 flex items-center gap-2">
               <IoReceipt size={18} />
-              Invoices
+              {t('order_detail_page.invoices')}
             </h4>
             {order.invoice_id || order.invoice_number ? (
               <button
@@ -769,7 +806,7 @@ const OrderDetail = () => {
                 Invoice #{order.invoice_number || order.invoice_id}
               </button>
             ) : (
-              <p className="text-sm text-secondary-text">{t('') || ''}</p>
+              <p className="text-sm text-secondary-text">{t('order_detail_page.no_invoice')}</p>
             )}
           </div>
 

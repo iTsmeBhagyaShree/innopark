@@ -46,16 +46,19 @@ const AdminDashboard = () => {
         dashboardAPI.getAll(),
       ])
 
-      if (adminRes.data?.success && adminRes.data?.data) {
-        setAdminData(adminRes.data.data)
-        setEventsToday(adminRes.data.data.events_today ?? 0)
+      // Use the returned data directly since the API wrapper already calls .data
+      if (adminRes && adminRes.success && adminRes.data) {
+        setAdminData(adminRes.data)
+        setEventsToday(adminRes.data.events_today ?? 0)
       }
 
-      if (completeRes.data?.success && completeRes.data?.data?.timeline) {
-        setTimeline(Array.isArray(completeRes.data.data.timeline) ? completeRes.data.data.timeline : [])
-      }
-      if (completeRes.data?.success && completeRes.data?.data?.summary?.eventsToday != null) {
-        setEventsToday(completeRes.data.data.summary.eventsToday)
+      if (completeRes && completeRes.success && completeRes.data) {
+        if (completeRes.data.timeline) {
+          setTimeline(Array.isArray(completeRes.data.timeline) ? completeRes.data.timeline : [])
+        }
+        if (completeRes.data.summary?.eventsToday != null) {
+          setEventsToday(completeRes.data.summary.eventsToday)
+        }
       }
     } catch (err) {
       console.error('Admin dashboard fetch error:', err)

@@ -6,8 +6,10 @@ import Button from '../../../components/ui/Button'
 import RightSideModal from '../../../components/ui/RightSideModal'
 import { employeesAPI, documentsAPI } from '../../../api'
 import { IoCreate, IoDocumentText, IoDownload, IoTrash } from 'react-icons/io5'
+import { useLanguage } from '../../../context/LanguageContext.jsx'
 
 const MyProfile = () => {
+  const { t } = useLanguage()
   const { user } = useAuth()
   const userId = user?.id || localStorage.getItem('userId')
   const companyId = user?.company_id || localStorage.getItem('companyId')
@@ -72,7 +74,7 @@ const MyProfile = () => {
       }
     } catch (error) {
       console.error('Error fetching profile:', error)
-      alert(t('profile.fallback_error') || 'Error loading profile. Please try again.')
+      alert(t('profile.fallback_error'))
     } finally {
       setLoading(false)
     }

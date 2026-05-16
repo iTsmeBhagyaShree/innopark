@@ -16,15 +16,21 @@ try {
 }
 
 const i18nMiddleware = (req, res, next) => {
-  // Determine language from header or query or default to 'de' (as requested)
-  let lang = 'de'; 
-  const langHeader = req.headers['accept-language'] || req.headers['x-language'] || req.headers['language'];
-  if (langHeader && langHeader.startsWith('en')) {
+  // Default: German. Frontend sends X-Language from localStorage so API strings track UI language.
+  let lang = 'de';
+  const explicit = String(req.headers['x-language'] || req.headers['language'] || '').trim().toLowerCase();
+  if (explicit === 'en' || explicit.startsWith('en')) {
+    lang = 'en';
+  } else if (explicit === 'de' || explicit.startsWith('de')) {
+    lang = 'de';
+  } else {
+    const langHeader = req.headers['accept-language'] || '';
+    if (langHeader.toLowerCase().includes('en')) {
       lang = 'en';
-  } else if (langHeader && langHeader.startsWith('de')) {
+    } else if (langHeader.toLowerCase().includes('de')) {
       lang = 'de';
+    }
   }
-  // The default language MUST be German (de)
 
   req.language = lang;
 

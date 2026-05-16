@@ -8,6 +8,7 @@ import Input from '../../../components/ui/Input'
 import Button from '../../../components/ui/Button'
 import Card from '../../../components/ui/Card'
 import { ordersAPI, invoicesAPI, itemsAPI } from '../../../api'
+import { useSettings } from '../../../context/SettingsContext.jsx'
 import Modal from '../../../components/ui/Modal'
 import { 
   IoAdd,
@@ -36,6 +37,7 @@ import {
 
 const Orders = () => {
   const navigate = useNavigate()
+  const { formatCurrency } = useSettings()
   const companyId = parseInt(localStorage.getItem('companyId') || 1, 10)
   
   const [viewMode, setViewMode] = useState('list')
@@ -386,13 +388,6 @@ const Orders = () => {
       month: '2-digit',
       year: 'numeric'
     }).replace(/\//g, '-')
-  }
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount || 0)
   }
 
   const handleSort = (column) => {

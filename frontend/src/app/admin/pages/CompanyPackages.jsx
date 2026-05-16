@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import AddButton from '../../../components/ui/AddButton'
 import DataTable from '../../../components/ui/DataTable'
 import RightSideModal from '../../../components/ui/RightSideModal'
@@ -8,8 +8,10 @@ import Button from '../../../components/ui/Button'
 import Card from '../../../components/ui/Card'
 import { IoCreate, IoTrash, IoEye, IoCheckmarkCircle, IoPeople } from 'react-icons/io5'
 import { companyPackagesAPI, companiesAPI } from '../../../api'
+import { useLanguage } from '../../../context/LanguageContext'
 
 const CompanyPackages = () => {
+  const { t } = useLanguage()
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isViewModalOpen, setIsViewModalOpen] = useState(false)
@@ -32,6 +34,20 @@ const CompanyPackages = () => {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
 
+  const priceShort = useCallback((cycle) => {
+    const c = String(cycle || '').toLowerCase()
+    if (c === 'monthly' || c === 'month') return t('company_packages.per_mo')
+    if (c === 'quarterly' || c === 'quarter') return t('company_packages.per_q')
+    return t('company_packages.per_yr')
+  }, [t])
+
+  const periodLabel = useCallback((cycle) => {
+    const c = String(cycle || '').toLowerCase()
+    if (c === 'monthly' || c === 'month') return t('company_packages.period_month')
+    if (c === 'quarterly' || c === 'quarter') return t('company_packages.period_quarter')
+    return t('company_packages.period_year')
+  }, [t])
+
   useEffect(() => {
     fetchPackages()
     fetchCompanies()
@@ -53,8 +69,7 @@ const CompanyPackages = () => {
       setLoading(true)
       const response = await companyPackagesAPI.getAll()
       if (response.data.success) {
-        // Map API response to frontend format
-        const mappedPackages = response.data.data.map(pkg => ({
+        const mappedPackages = response.data.data.map((pkg) => ({
           id: pkg.id,
           name: pkg.package_name,
           price: parseFloat(pkg.price),
@@ -66,81 +81,88 @@ const CompanyPackages = () => {
         }))
         setPackages(mappedPackages)
       } else {
-        throw new Error(response.data.error || 'Failed to fetch packages')
+        throw new Error(response.data.error || t('company_packages.fetch_failed'))
       }
     } catch (error) {
       console.error('Failed to fetch packages:', error)
-      const errorMessage = error.response?.data?.error || 
-                          error.response?.data?.message || 
-                          error.message || 
-                          'Failed to fetch company packages'
-      
-      alert(`Error: ${errorMessage}\n\nPlease check:\n1. You are logged in\n2. You have ADMIN role\n3. Your account has a company_id set\n4. Backend server is running`)
+      const errorMessage =
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        error.message ||
+        t('company_packages.fetch_failed')
+
+      alert(t('company_packages.fetch_error_body').replace('{{msg}}', errorMessage))
     } finally {
       setLoading(false)
     }
   }
 
-  const columns = [
-    { key: 'name', label: 'Package Name' },
-    {
-      key: 'price',
-      label: 'Price',
-      render: (value, row) => (
-        <div>
-          <span className="font-semibold text-primary-text">
-            ${value}/{row.billingCycle === 'monthly' || row.billingCycle === 'Monthly' ? 'mo' : 'yr'}
-          </span>
-        </div>
-      ),
-    },
-    {
-      key: 'features',
-      label: 'Features',
-      render: (value) => (
-        <div className="flex flex-wrap gap-1">
-          {value.slice(0, 2).map((feature, idx) => (
-            <Badge key={idx} variant="default" className="text-xs">
-              {feature}
-            </Badge>
-          ))}
-          {value.length > 2 && (
-            <Badge variant="default" className="text-xs">
-              +{value.length - 2} more
-            </Badge>
-          )}
-        </div>
-      ),
-    },
-    {
-      key: 'companiesCount',
-      label: 'Companies',
-      render: (value, row) => (
-        <div className="flex flex-col">
-          <span className="text-primary-text font-medium">{value || 0} assigned</span>
-          {row.assignedCompanies && row.assignedCompanies.length > 0 && (
-            <span className="text-xs text-secondary-text mt-1">
-              {row.assignedCompanies.slice(0, 2).join(', ')}
-              {row.assignedCompanies.length > 2 && ` +${row.assignedCompanies.length - 2} more`}
+  const columns = useMemo(
+    () => [
+      { key: 'name', label: t('company_packages.col_name') },
+      {
+        key: 'price',
+        label: t('company_packages.col_price'),
+        render: (value, row) => (
+          <div>
+            <span className="font-semibold text-primary-text">
+              ${value}/{priceShort(row.billingCycle)}
             </span>
-          )}
-        </div>
-      ),
-    },
-    {
-      key: 'isActive',
-      label: 'Status',
-      render: (value, row) => (
-        <Badge variant={value ? 'success' : 'default'}>
-          {value ? 'Active' : 'Inactive'}
-        </Badge>
-      ),
-    },
-  ]
+          </div>
+        ),
+      },
+      {
+        key: 'features',
+        label: t('company_packages.col_features'),
+        render: (value) => (
+          <div className="flex flex-wrap gap-1">
+            {value.slice(0, 2).map((feature, idx) => (
+              <Badge key={idx} variant="default" className="text-xs">
+                {feature}
+              </Badge>
+            ))}
+            {value.length > 2 && (
+              <Badge variant="default" className="text-xs">
+                {t('company_packages.more').replace('{{n}}', String(value.length - 2))}
+              </Badge>
+            )}
+          </div>
+        ),
+      },
+      {
+        key: 'companiesCount',
+        label: t('company_packages.col_companies'),
+        render: (value, row) => (
+          <div className="flex flex-col">
+            <span className="text-primary-text font-medium">
+              {t('company_packages.assigned_count').replace('{{n}}', String(value || 0))}
+            </span>
+            {row.assignedCompanies && row.assignedCompanies.length > 0 && (
+              <span className="text-xs text-secondary-text mt-1">
+                {row.assignedCompanies.slice(0, 2).join(', ')}
+                {row.assignedCompanies.length > 2 &&
+                  ` ${t('company_packages.more').replace('{{n}}', String(row.assignedCompanies.length - 2))}`}
+              </span>
+            )}
+          </div>
+        ),
+      },
+      {
+        key: 'isActive',
+        label: t('company_packages.col_status'),
+        render: (value) => (
+          <Badge variant={value ? 'success' : 'default'}>
+            {value ? t('company_packages.active') : t('company_packages.inactive')}
+          </Badge>
+        ),
+      },
+    ],
+    [t, priceShort]
+  )
 
   const handleAdd = () => {
     setSelectedPackage(null)
-    setIsEditModalOpen(false) // Ensure edit modal is closed
+    setIsEditModalOpen(false)
     setFormData({
       name: '',
       price: '',
@@ -157,14 +179,14 @@ const CompanyPackages = () => {
 
   const handleEdit = (pkg) => {
     setSelectedPackage(pkg)
-    setIsAddModalOpen(false) // Ensure add modal is closed
+    setIsAddModalOpen(false)
     setFormData({
       name: pkg.name || '',
       price: pkg.price ? pkg.price.toString() : '',
       billingCycle: pkg.billingCycle || 'monthly',
       features: Array.isArray(pkg.features) ? pkg.features : [],
-      maxCompanies: pkg.maxCompanies === -1 ? 'unlimited' : (pkg.maxCompanies ? pkg.maxCompanies.toString() : ''),
-      maxUsers: pkg.maxUsers === -1 ? 'unlimited' : (pkg.maxUsers ? pkg.maxUsers.toString() : ''),
+      maxCompanies: pkg.maxCompanies === -1 ? 'unlimited' : pkg.maxCompanies ? pkg.maxCompanies.toString() : '',
+      maxUsers: pkg.maxUsers === -1 ? 'unlimited' : pkg.maxUsers ? pkg.maxUsers.toString() : '',
       maxStorage: pkg.maxStorage || '',
       isActive: pkg.isActive !== undefined ? pkg.isActive : true,
     })
@@ -185,25 +207,24 @@ const CompanyPackages = () => {
 
   const handleSaveAssignment = async () => {
     if (!selectedCompanyId) {
-      alert('Please select a company')
+      alert(t('company_packages.alert_select_company'))
       return
     }
 
     try {
       setSaving(true)
-      // Update company's package_id
       const response = await companiesAPI.update(selectedCompanyId, {
-        package_id: selectedPackage.id
+        package_id: selectedPackage.id,
       })
-      
+
       if (response.data.success) {
-        alert('Company assigned to package successfully!')
+        alert(t('company_packages.alert_assign_success'))
         setIsAssignCompanyModalOpen(false)
         await fetchPackages()
       }
     } catch (error) {
       console.error('Failed to assign company:', error)
-      alert(error.response?.data?.error || 'Failed to assign company to package')
+      alert(error.response?.data?.error || t('company_packages.alert_assign_failed'))
     } finally {
       setSaving(false)
     }
@@ -212,10 +233,8 @@ const CompanyPackages = () => {
   const handleAddFeature = () => {
     const trimmedFeature = featureInput.trim()
     if (trimmedFeature) {
-      setFormData(prevData => {
+      setFormData((prevData) => {
         const newFeatures = [...(prevData.features || []), trimmedFeature]
-        console.log('Adding feature:', trimmedFeature)
-        console.log('Updated features array:', newFeatures)
         return {
           ...prevData,
           features: newFeatures,
@@ -234,53 +253,42 @@ const CompanyPackages = () => {
 
   const handleSave = async () => {
     if (!formData.name || !formData.price) {
-      alert('Package name and price are required')
+      alert(t('company_packages.alert_name_price_required'))
       return
     }
 
     try {
       setSaving(true)
-      // Ensure features is always an array - use current formData state
-      const currentFeatures = Array.isArray(formData.features) ? formData.features : [];
-      
-      console.log('Current formData:', formData)
-      console.log('Current features from formData:', formData.features)
-      console.log('Features array to send:', currentFeatures)
-      
+      const currentFeatures = Array.isArray(formData.features) ? formData.features : []
+
       const apiData = {
         package_name: formData.name,
         price: parseFloat(formData.price),
         billing_cycle: formData.billingCycle.charAt(0).toUpperCase() + formData.billingCycle.slice(1),
-        features: currentFeatures, // Always send as array
+        features: currentFeatures,
         status: formData.isActive ? 'Active' : 'Inactive',
       }
-      
-      console.log('Final API Data being sent:', JSON.stringify(apiData, null, 2));
-      console.log('Features in API Data:', apiData.features);
 
       if (isEditModalOpen && selectedPackage) {
         const response = await companyPackagesAPI.update(selectedPackage.id, apiData)
         if (response.data.success) {
-          alert('Package updated successfully!')
+          alert(t('company_packages.alert_updated'))
           setIsEditModalOpen(false)
           await fetchPackages()
         }
       } else {
-        console.log('Creating new package...')
-        console.log('Request payload:', JSON.stringify(apiData, null, 2))
         const response = await companyPackagesAPI.create(apiData)
-        console.log('Create response:', response.data)
         if (response.data.success) {
-          alert('Package created successfully!')
+          alert(t('company_packages.alert_created'))
           setIsAddModalOpen(false)
           await fetchPackages()
         } else {
-          alert(response.data.error || 'Failed to create package')
+          alert(response.data.error || t('company_packages.alert_create_failed'))
         }
       }
     } catch (error) {
       console.error('Failed to save package:', error)
-      alert(error.response?.data?.error || 'Failed to save package')
+      alert(error.response?.data?.error || t('company_packages.alert_save_failed'))
     } finally {
       setSaving(false)
     }
@@ -289,56 +297,58 @@ const CompanyPackages = () => {
   const actions = (row) => (
     <div className="flex items-center justify-end gap-2">
       <button
+        type="button"
         onClick={(e) => {
           e.stopPropagation()
           handleView(row)
         }}
         className="p-2 text-primary-accent hover:bg-primary-accent hover:bg-opacity-10 rounded transition-colors"
-        title="View Details"
+        title={t('company_packages.title_view_details')}
       >
         <IoEye size={18} />
       </button>
       <button
+        type="button"
         onClick={(e) => {
           e.stopPropagation()
           handleAssignCompany(row)
         }}
         className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-        title="Assign Company"
+        title={t('company_packages.title_assign_company')}
       >
         <IoPeople size={18} />
       </button>
       <button
+        type="button"
         onClick={(e) => {
           e.preventDefault()
           e.stopPropagation()
-          console.log('Edit button clicked for package:', row)
           handleEdit(row)
         }}
         className="p-2 text-warning hover:bg-warning hover:bg-opacity-10 rounded transition-colors"
-        title="Edit"
-        type="button"
+        title={t('company_packages.title_edit')}
       >
         <IoCreate size={18} />
       </button>
       <button
+        type="button"
         onClick={async (e) => {
           e.stopPropagation()
-          if (window.confirm(`Delete ${row.name} package?`)) {
+          if (window.confirm(t('company_packages.confirm_delete').replace('{{name}}', row.name))) {
             try {
               const response = await companyPackagesAPI.delete(row.id)
               if (response.data.success) {
-                alert('Package deleted successfully!')
+                alert(t('company_packages.alert_deleted'))
                 await fetchPackages()
               }
             } catch (error) {
               console.error('Failed to delete package:', error)
-              alert(error.response?.data?.error || 'Failed to delete package')
+              alert(error.response?.data?.error || t('company_packages.alert_delete_failed'))
             }
           }
         }}
         className="p-2 text-danger hover:bg-danger hover:bg-opacity-10 rounded transition-colors"
-        title="Delete"
+        title={t('company_packages.title_delete')}
       >
         <IoTrash size={18} />
       </button>
@@ -349,12 +359,12 @@ const CompanyPackages = () => {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold text-primary-text">Company Packages</h1>
-          <p className="text-secondary-text mt-1">Define subscription plans and assign packages to companies</p>
+          <h1 className="text-3xl font-bold text-primary-text">{t('company_packages.title')}</h1>
+          <p className="text-secondary-text mt-1">{t('company_packages.subtitle')}</p>
         </div>
         <Card>
           <div className="text-center py-8">
-            <p className="text-secondary-text">Loading packages...</p>
+            <p className="text-secondary-text">{t('company_packages.loading')}</p>
           </div>
         </Card>
       </div>
@@ -365,13 +375,12 @@ const CompanyPackages = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-primary-text">Company Packages</h1>
-          <p className="text-secondary-text mt-1">Define subscription plans and assign packages to companies</p>
+          <h1 className="text-3xl font-bold text-primary-text">{t('company_packages.title')}</h1>
+          <p className="text-secondary-text mt-1">{t('company_packages.subtitle')}</p>
         </div>
-        <AddButton onClick={handleAdd} label="Add Package" />
+        <AddButton onClick={handleAdd} label={t('company_packages.add_package')} />
       </div>
 
-      {/* Package Cards Overview */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {packages.map((pkg) => (
           <Card key={pkg.id} className="p-6 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow">
@@ -380,11 +389,11 @@ const CompanyPackages = () => {
                 <h3 className="text-xl font-bold text-primary-text">{pkg.name}</h3>
                 <p className="text-2xl font-semibold text-primary-accent mt-1">
                   ${pkg.price}
-                  <span className="text-sm text-secondary-text font-normal">/{pkg.billingCycle === 'monthly' ? 'mo' : 'yr'}</span>
+                  <span className="text-sm text-secondary-text font-normal">/{priceShort(pkg.billingCycle)}</span>
                 </p>
               </div>
               <Badge variant={pkg.isActive ? 'success' : 'default'}>
-                {pkg.isActive ? 'Active' : 'Inactive'}
+                {pkg.isActive ? t('company_packages.active') : t('company_packages.inactive')}
               </Badge>
             </div>
             <div className="space-y-2 mb-4">
@@ -395,12 +404,14 @@ const CompanyPackages = () => {
                 </div>
               ))}
               {pkg.features.length > 3 && (
-                <p className="text-xs text-secondary-text">+{pkg.features.length - 3} more features</p>
+                <p className="text-xs text-secondary-text">
+                  {t('company_packages.more_features').replace('{{n}}', String(pkg.features.length - 3))}
+                </p>
               )}
             </div>
             <div className="pt-4 border-t border-gray-200">
               <p className="text-sm text-secondary-text">
-                <span className="font-medium text-primary-text">{pkg.companiesCount}</span> companies assigned
+                {t('company_packages.companies_assigned_line').replace('{{n}}', String(pkg.companiesCount || 0))}
               </p>
             </div>
           </Card>
@@ -410,7 +421,7 @@ const CompanyPackages = () => {
       <DataTable
         columns={columns}
         data={packages}
-        searchPlaceholder="Search packages..."
+        searchPlaceholder={t('company_packages.search_placeholder')}
         filters={true}
         actions={actions}
       />
@@ -421,7 +432,6 @@ const CompanyPackages = () => {
           setIsAddModalOpen(false)
           setIsEditModalOpen(false)
           setSelectedPackage(null)
-          // Reset form data when closing
           setFormData({
             name: '',
             price: '',
@@ -434,18 +444,18 @@ const CompanyPackages = () => {
           })
           setFeatureInput('')
         }}
-        title={isAddModalOpen ? 'Add New Package' : 'Edit Package'}
+        title={isAddModalOpen ? t('company_packages.modal_add') : t('company_packages.modal_edit')}
       >
         <div className="space-y-4">
           <Input
-            label="Package Name"
+            label={t('company_packages.label_name')}
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            placeholder="e.g., Pro, Basic, Free"
+            placeholder={t('company_packages.placeholder_name')}
           />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
-              label="Price"
+              label={t('company_packages.label_price')}
               type="number"
               step="0.01"
               value={formData.price}
@@ -454,25 +464,24 @@ const CompanyPackages = () => {
               required
             />
             <div>
-              <label className="block text-sm font-medium text-primary-text mb-2">
-                Billing Cycle
-              </label>
+              <label className="block text-sm font-medium text-primary-text mb-2">{t('company_packages.label_billing_cycle')}</label>
               <select
                 value={formData.billingCycle}
                 onChange={(e) => setFormData({ ...formData, billingCycle: e.target.value })}
                 className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
               >
-                <option value="monthly">Monthly</option>
-                <option value="yearly">Yearly</option>
-                <option value="quarterly">Quarterly</option>
+                <option value="monthly">{t('company_packages.billing_monthly')}</option>
+                <option value="yearly">{t('company_packages.billing_yearly')}</option>
+                <option value="quarterly">{t('company_packages.billing_quarterly')}</option>
               </select>
             </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-primary-text mb-2">
-              Features {formData.features && formData.features.length > 0 && (
+              {t('company_packages.features_heading')}{' '}
+              {formData.features && formData.features.length > 0 && (
                 <span className="text-xs text-secondary-text font-normal">
-                  ({formData.features.length} added)
+                  {t('company_packages.features_count').replace('{{n}}', String(formData.features.length))}
                 </span>
               )}
             </label>
@@ -486,29 +495,21 @@ const CompanyPackages = () => {
                     handleAddFeature()
                   }
                 }}
-                placeholder="Add a feature and press Enter"
+                placeholder={t('company_packages.feature_input_placeholder')}
               />
             </div>
             <div className="flex flex-wrap gap-2 mt-2">
               {formData.features && formData.features.length > 0 ? (
                 formData.features.map((feature, index) => (
-                  <Badge
-                    key={index}
-                    variant="default"
-                    className="flex items-center gap-1"
-                  >
+                  <Badge key={index} variant="default" className="flex items-center gap-1">
                     {feature}
-                    <button
-                      onClick={() => handleRemoveFeature(index)}
-                      className="ml-1 hover:text-danger"
-                      type="button"
-                    >
+                    <button onClick={() => handleRemoveFeature(index)} className="ml-1 hover:text-danger" type="button">
                       ×
                     </button>
                   </Badge>
                 ))
               ) : (
-                <p className="text-sm text-secondary-text">No features added yet. Type a feature and press Enter.</p>
+                <p className="text-sm text-secondary-text">{t('company_packages.features_empty')}</p>
               )}
             </div>
           </div>
@@ -521,7 +522,7 @@ const CompanyPackages = () => {
               className="w-4 h-4 text-primary-accent rounded focus:ring-primary-accent"
             />
             <label htmlFor="isActive" className="text-sm font-medium text-primary-text">
-              Active (Package available for assignment)
+              {t('company_packages.active_checkbox')}
             </label>
           </div>
           <div className="flex gap-2 pt-4 justify-end">
@@ -533,36 +534,32 @@ const CompanyPackages = () => {
               }}
               className="px-4"
             >
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button variant="primary" onClick={handleSave} className="px-4" disabled={saving}>
-              {saving ? 'Saving...' : (isAddModalOpen ? 'Create Package' : 'Update Package')}
+              {saving ? t('company_packages.saving') : isAddModalOpen ? t('company_packages.create_package') : t('company_packages.update_package')}
             </Button>
           </div>
         </div>
       </RightSideModal>
 
-      <RightSideModal
-        isOpen={isViewModalOpen}
-        onClose={() => setIsViewModalOpen(false)}
-        title="Package Details"
-      >
+      <RightSideModal isOpen={isViewModalOpen} onClose={() => setIsViewModalOpen(false)} title={t('company_packages.view_modal_title')}>
         {selectedPackage && (
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium text-secondary-text">Package Name</label>
+              <label className="text-sm font-medium text-secondary-text">{t('company_packages.detail_name')}</label>
               <p className="text-primary-text mt-1 font-semibold">{selectedPackage.name}</p>
             </div>
             <div>
-              <label className="text-sm font-medium text-secondary-text">Price</label>
+              <label className="text-sm font-medium text-secondary-text">{t('company_packages.detail_price')}</label>
               <p className="text-primary-text mt-1">
-                ${selectedPackage.price}/{selectedPackage.billingCycle === 'monthly' || selectedPackage.billingCycle === 'Monthly' ? 'month' : selectedPackage.billingCycle === 'quarterly' || selectedPackage.billingCycle === 'Quarterly' ? 'quarter' : 'year'}
+                ${selectedPackage.price}/{periodLabel(selectedPackage.billingCycle)}
               </p>
             </div>
             <div>
-              <label className="text-sm font-medium text-secondary-text">Companies Assigned</label>
+              <label className="text-sm font-medium text-secondary-text">{t('company_packages.detail_companies')}</label>
               <p className="text-primary-text mt-1 font-semibold">
-                {selectedPackage.companiesCount || 0} companies
+                {t('company_packages.companies_count').replace('{{n}}', String(selectedPackage.companiesCount || 0))}
               </p>
               {selectedPackage.assignedCompanies && selectedPackage.assignedCompanies.length > 0 && (
                 <div className="mt-2 space-y-1">
@@ -576,7 +573,7 @@ const CompanyPackages = () => {
               )}
             </div>
             <div>
-              <label className="text-sm font-medium text-secondary-text">Features</label>
+              <label className="text-sm font-medium text-secondary-text">{t('company_packages.detail_features')}</label>
               <ul className="mt-2 space-y-2">
                 {selectedPackage.features.map((feature, idx) => (
                   <li key={idx} className="flex items-center gap-2 text-primary-text">
@@ -587,10 +584,10 @@ const CompanyPackages = () => {
               </ul>
             </div>
             <div>
-              <label className="text-sm font-medium text-secondary-text">Status</label>
+              <label className="text-sm font-medium text-secondary-text">{t('company_packages.detail_status')}</label>
               <p className="mt-1">
                 <Badge variant={selectedPackage.isActive ? 'success' : 'default'}>
-                  {selectedPackage.isActive ? 'Active' : 'Inactive'}
+                  {selectedPackage.isActive ? t('company_packages.active') : t('company_packages.inactive')}
                 </Badge>
               </p>
             </div>
@@ -598,24 +595,23 @@ const CompanyPackages = () => {
         )}
       </RightSideModal>
 
-      {/* Assign Company Modal */}
       <RightSideModal
         isOpen={isAssignCompanyModalOpen}
         onClose={() => setIsAssignCompanyModalOpen(false)}
-        title={`Assign Company to ${selectedPackage?.name || 'Package'}`}
+        title={t('company_packages.assign_title').replace('{{name}}', selectedPackage?.name || t('company_packages.package_fallback'))}
       >
         {selectedPackage && (
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-primary-text mb-2">
-                Select Company <span className="text-danger">*</span>
+                {t('company_packages.assign_select_label')} <span className="text-danger">*</span>
               </label>
               <select
                 value={selectedCompanyId}
                 onChange={(e) => setSelectedCompanyId(e.target.value)}
                 className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
               >
-                <option value="">-- Select Company --</option>
+                <option value="">{t('company_packages.assign_placeholder')}</option>
                 {companies.map((company) => (
                   <option key={company.id} value={company.id}>
                     {company.name}
@@ -624,27 +620,18 @@ const CompanyPackages = () => {
               </select>
             </div>
             <div className="bg-gray-50 p-3 rounded-lg">
-              <p className="text-xs text-secondary-text mb-1">Package Details:</p>
+              <p className="text-xs text-secondary-text mb-1">{t('company_packages.assign_summary')}</p>
               <p className="text-sm font-semibold text-primary-text">{selectedPackage.name}</p>
               <p className="text-xs text-secondary-text">
-                ${selectedPackage.price}/{selectedPackage.billingCycle === 'monthly' || selectedPackage.billingCycle === 'Monthly' ? 'month' : 'year'}
+                ${selectedPackage.price}/{periodLabel(selectedPackage.billingCycle)}
               </p>
             </div>
             <div className="flex gap-2 pt-4 justify-end">
-              <Button
-                variant="outline"
-                onClick={() => setIsAssignCompanyModalOpen(false)}
-                className="px-4"
-              >
-                Cancel
+              <Button variant="outline" onClick={() => setIsAssignCompanyModalOpen(false)} className="px-4">
+                {t('common.cancel')}
               </Button>
-              <Button 
-                variant="primary" 
-                onClick={handleSaveAssignment} 
-                className="px-4" 
-                disabled={saving || !selectedCompanyId}
-              >
-                {saving ? 'Assigning...' : 'Assign Company'}
+              <Button variant="primary" onClick={handleSaveAssignment} className="px-4" disabled={saving || !selectedCompanyId}>
+                {saving ? t('company_packages.assigning') : t('company_packages.assign_btn')}
               </Button>
             </div>
           </div>
@@ -655,4 +642,3 @@ const CompanyPackages = () => {
 }
 
 export default CompanyPackages
-

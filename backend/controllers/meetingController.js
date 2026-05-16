@@ -62,6 +62,21 @@ const create = async (req, res) => {
             return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_377516fa') : "Title, Date, Start Time, End Time, and Assigned User are required" });
         }
 
+        // Handle assigned_to if it comes as an array [7] or "[7]"
+        let finalAssignedTo = assigned_to;
+        if (Array.isArray(assigned_to)) {
+            finalAssignedTo = assigned_to[0];
+        } else if (typeof assigned_to === 'string' && assigned_to.startsWith('[') && assigned_to.endsWith(']')) {
+            try {
+                const parsed = JSON.parse(assigned_to);
+                if (Array.isArray(parsed)) finalAssignedTo = parsed[0];
+            } catch (e) {
+                finalAssignedTo = parseInt(assigned_to.replace(/[\[\]]/g, ''), 10);
+            }
+        }
+        finalAssignedTo = (finalAssignedTo !== undefined && finalAssignedTo !== null && finalAssignedTo !== '') ? finalAssignedTo : null;
+
+
         // Validate time
         if (start_time >= end_time) {
             return res.status(400).json({ success: false, error: req.t ? req.t('api_msg_815d372c') : "End time must be after start time" });
@@ -70,7 +85,20 @@ const create = async (req, res) => {
         const [result] = await pool.execute(
             `INSERT INTO meetings (company_id, title, description, meeting_date, start_time, end_time, location, assigned_to, reminder_datetime, related_to_type, related_to_id, created_by)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [companyId, title, description, meeting_date, start_time, end_time, location, assigned_to, reminder_datetime, related_to_type, related_to_id, createdBy]
+            [
+                companyId,
+                title,
+                description || null,
+                meeting_date,
+                start_time,
+                end_time,
+                location || null,
+                finalAssignedTo,
+                reminder_datetime || null,
+                related_to_type || null,
+                related_to_id || null,
+                createdBy
+            ]
         );
 
         const newMeetingId = result.insertId;
@@ -101,8 +129,25 @@ const update = async (req, res) => {
 
         for (const key of Object.keys(updates)) {
             if (allowed.includes(key) && updates[key] !== undefined) {
+                let value = updates[key];
+                
+                // Handle assigned_to array if updating
+                if (key === 'assigned_to') {
+                    if (Array.isArray(value)) {
+                        value = value[0];
+                    } else if (typeof value === 'string' && value.startsWith('[') && value.endsWith(']')) {
+                        try {
+                            const parsed = JSON.parse(value);
+                            if (Array.isArray(parsed)) value = parsed[0];
+                        } catch (e) {
+                            value = parseInt(value.replace(/[\[\]]/g, ''), 10);
+                        }
+                    }
+                    value = (value !== '' && value !== null) ? value : null;
+                }
+
                 fields.push(`${key} = ?`);
-                values.push(updates[key]);
+                values.push(value);
             }
         }
 

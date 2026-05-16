@@ -17,6 +17,7 @@ const DataTable = ({
   selectedRows: externalSelectedRows,
   onSelectAll: externalOnSelectAll,
   loading = false,
+  hideSearch = false,
 }) => {
   const [searchTerm, setSearchTerm] = useState('')
   const [internalSelectedRows, setInternalSelectedRows] = useState([])
@@ -218,17 +219,19 @@ const DataTable = ({
       <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 relative z-[50]">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           {/* Search Input */}
-          <div className="flex-1 relative order-2 sm:order-1">
-            <IoSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-            <input
-              type="text"
-              placeholder={searchPlaceholder === 'Search...' ? t('common.search_placeholder') : searchPlaceholder}
-              value={searchTerm}
-              onChange={handleSearch}
-              className="w-full pr-4 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white placeholder-gray-400"
-              style={{ paddingLeft: '2.5rem' }}
-            />
-          </div>
+          {!hideSearch && (
+            <div className="flex-1 relative order-2 sm:order-1">
+              <IoSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+              <input
+                type="text"
+                placeholder={searchPlaceholder === 'Search...' ? t('common.search_placeholder') : searchPlaceholder}
+                value={searchTerm}
+                onChange={handleSearch}
+                className="w-full pr-4 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white placeholder-gray-400"
+                style={{ paddingLeft: '2.5rem' }}
+              />
+            </div>
+          )}
 
           {/* Button Group */}
           <div className="flex items-center gap-2 order-1 sm:order-2 flex-shrink-0">

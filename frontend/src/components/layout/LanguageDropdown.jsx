@@ -4,7 +4,7 @@ import { useLanguage } from '../../context/LanguageContext'
 
 const LanguageDropdown = ({ isOpen, onClose, className = "" }) => {
   const dropdownRef = useRef(null)
-  const { language: currentLang, changeLanguage, languages } = useLanguage()
+  const { language: currentLang, changeLanguage, languages, t } = useLanguage()
 
   // Find the flag for each language
   const getFlag = (code) => {
@@ -47,7 +47,7 @@ const LanguageDropdown = ({ isOpen, onClose, className = "" }) => {
     >
       <div className="p-2 space-y-1">
         <div className="px-3 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-          Select Language
+          {t('common.select_language')}
         </div>
         {languages.map((langItem) => (
           <button

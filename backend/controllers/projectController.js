@@ -219,6 +219,18 @@ const getAll = async (req, res) => {
       params.push(searchPattern, searchPattern, searchPattern, searchPattern);
     }
 
+    const userRoleAll = String(req.user?.role || 'ADMIN').toUpperCase();
+    const userIdAll = req.user?.id;
+    const isPrivilegedAll = userRoleAll === 'ADMIN' || userRoleAll === 'SUPERADMIN';
+    if (!isPrivilegedAll && userIdAll) {
+      whereClause += ` AND (
+        p.project_manager_id = ? OR EXISTS (
+          SELECT 1 FROM project_members pm WHERE pm.project_id = p.id AND pm.user_id = ?
+        )
+      )`;
+      params.push(userIdAll, userIdAll);
+    }
+
     // Validate and set sort column
     const allowedSortColumns = {
       'id': 'p.id',
@@ -337,6 +349,26 @@ const getById = async (req, res) => {
     }
 
     const project = projects[0];
+
+    const userRoleDetail = String(req.user?.role || 'ADMIN').toUpperCase();
+    const userIdDetail = req.user?.id;
+    const isPrivilegedDetail = userRoleDetail === 'ADMIN' || userRoleDetail === 'SUPERADMIN';
+    if (!isPrivilegedDetail && userIdDetail) {
+      const [access] = await pool.execute(
+        `SELECT 1 FROM projects p WHERE p.id = ? AND p.company_id = ? AND (
+          p.project_manager_id = ? OR EXISTS (
+            SELECT 1 FROM project_members pm WHERE pm.project_id = p.id AND pm.user_id = ?
+          )
+        )`,
+        [id, companyId, userIdDetail, userIdDetail]
+      );
+      if (access.length === 0) {
+        return res.status(403).json({
+          success: false,
+          error: 'Access denied'
+        });
+      }
+    }
 
     // Get members
     const [members] = await pool.execute(
@@ -838,7 +870,10 @@ const uploadFile = async (req, res) => {
 const getMembers = async (req, res) => {
   try {
     const { id } = req.params;
-    const companyId = req.query.company_id || req.companyId;
+    const companyId = req.companyId || req.query.company_id;
+    const userRole = String(req.user?.role || 'ADMIN').toUpperCase();
+    const userId = req.user?.id;
+    const isPrivileged = userRole === 'ADMIN' || userRole === 'SUPERADMIN';
 
     if (!companyId) {
       return res.status(400).json({
@@ -858,6 +893,23 @@ const getMembers = async (req, res) => {
         success: false,
         error: req.t ? req.t('api_msg_1badba1e') : "Project not found"
       });
+    }
+
+    if (!isPrivileged && userId) {
+      const [access] = await pool.execute(
+        `SELECT 1 FROM projects p WHERE p.id = ? AND p.company_id = ? AND (
+          p.project_manager_id = ? OR EXISTS (
+            SELECT 1 FROM project_members pm WHERE pm.project_id = p.id AND pm.user_id = ?
+          )
+        )`,
+        [id, companyId, userId, userId]
+      );
+      if (access.length === 0) {
+        return res.status(403).json({
+          success: false,
+          error: 'Access denied'
+        });
+      }
     }
 
     // Get members
@@ -890,8 +942,11 @@ const getMembers = async (req, res) => {
 const getTasks = async (req, res) => {
   try {
     const { id } = req.params;
-    const companyId = req.query.company_id || req.companyId;
+    const companyId = req.companyId || req.query.company_id;
     const { status, assigned_to, priority } = req.query;
+    const userRole = String(req.user?.role || 'ADMIN').toUpperCase();
+    const userId = req.user?.id || null;
+    const isPrivileged = userRole === 'ADMIN' || userRole === 'SUPERADMIN';
 
     if (!companyId) {
       return res.status(400).json({
@@ -913,6 +968,23 @@ const getTasks = async (req, res) => {
       });
     }
 
+    if (!isPrivileged && userId) {
+      const [access] = await pool.execute(
+        `SELECT 1 FROM projects p WHERE p.id = ? AND p.company_id = ? AND (
+          p.project_manager_id = ? OR EXISTS (
+            SELECT 1 FROM project_members pm WHERE pm.project_id = p.id AND pm.user_id = ?
+          )
+        )`,
+        [id, companyId, userId, userId]
+      );
+      if (access.length === 0) {
+        return res.status(403).json({
+          success: false,
+          error: 'Access denied'
+        });
+      }
+    }
+
     let whereClause = 'WHERE t.project_id = ? AND t.company_id = ? AND t.is_deleted = 0';
     const params = [id, companyId];
 
@@ -927,6 +999,18 @@ const getTasks = async (req, res) => {
     if (assigned_to) {
       whereClause += ` AND t.id IN (SELECT task_id FROM task_assignees WHERE user_id = ?)`;
       params.push(assigned_to);
+    }
+
+    if (!isPrivileged && userId) {
+      whereClause += ` AND (
+        t.assigned_to = ?
+        OR EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = t.id AND ta.user_id = ?)
+        OR EXISTS (
+          SELECT 1 FROM employees e
+          WHERE e.company_id = t.company_id AND e.user_id = ? AND e.id = t.assigned_to AND t.assigned_to IS NOT NULL
+        )
+      )`;
+      params.push(userId, userId, userId);
     }
 
     // Get tasks

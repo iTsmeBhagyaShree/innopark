@@ -94,7 +94,6 @@ import PipelineSettings from '../app/admin/pages/PipelineSettings'
 
 // Employee Pages
 import EmployeeDashboard from '../app/employee/pages/EmployeeDashboard'
-import MyTasks from '../app/employee/pages/MyTasks'
 import MyProjects from '../app/employee/pages/MyProjects'
 import MyProfile from '../app/employee/pages/MyProfile'
 import MyDocuments from '../app/employee/pages/MyDocuments'
@@ -268,6 +267,7 @@ function AppRoutes() {
           <Route path="admin/contacts/:id" element={<ContactDetail />} />
           <Route path="admin/deals" element={<Deals />} />
           <Route path="admin/deals/:id" element={<DealDetail />} />
+          <Route path="admin/tasks" element={<Tasks />} />
           <Route path="admin/companies" element={<Companies />} />
           <Route path="admin/companies/:id" element={<CompanyDetail />} />
           <Route path="admin/revenue" element={<Invoices />} />
@@ -287,7 +287,6 @@ function AppRoutes() {
         <Route path="admin/project-templates/add" element={<RoleGuard allowedRoles={['SUPERADMIN', 'ADMIN']}><ProjectTemplateForm /></RoleGuard>} />
         <Route path="admin/project-templates/:id" element={<RoleGuard allowedRoles={['SUPERADMIN', 'ADMIN']}><ProjectTemplateForm /></RoleGuard>} />
         <Route path="admin/project-templates/:id/edit" element={<RoleGuard allowedRoles={['SUPERADMIN', 'ADMIN']}><ProjectTemplateForm /></RoleGuard>} />
-        <Route path="admin/tasks" element={<RoleGuard allowedRoles={['SUPERADMIN', 'ADMIN']}><Tasks /></RoleGuard>} />
         <Route path="admin/calendar" element={<RoleGuard allowedRoles={['SUPERADMIN', 'ADMIN']}><AdminCalendar /></RoleGuard>} />
         <Route path="admin/messages" element={<RoleGuard allowedRoles={['SUPERADMIN', 'ADMIN']}><Messages /></RoleGuard>} />
 
@@ -342,7 +341,7 @@ function AppRoutes() {
 
         {/* Employee Routes – EMPLOYEE only */}
         <Route path="employee/dashboard" element={<RoleGuard allowedRoles={['SUPERADMIN', 'ADMIN', 'EMPLOYEE']}><EmployeeDashboard /></RoleGuard>} />
-        <Route path="employee/my-tasks" element={<RoleGuard allowedRoles={['SUPERADMIN', 'ADMIN', 'EMPLOYEE']}><MyTasks /></RoleGuard>} />
+        <Route path="employee/my-tasks" element={<Navigate to="/app/employee/tasks" replace />} />
         <Route path="employee/my-projects" element={<RoleGuard allowedRoles={['SUPERADMIN', 'ADMIN', 'EMPLOYEE']}><MyProjects /></RoleGuard>} />
         <Route path="employee/my-projects/:id" element={<RoleGuard allowedRoles={['SUPERADMIN', 'ADMIN', 'EMPLOYEE']}><ProjectDetail /></RoleGuard>} />
         <Route path="employee/my-profile" element={<RoleGuard allowedRoles={['SUPERADMIN', 'ADMIN', 'EMPLOYEE']}><MyProfile /></RoleGuard>} />
@@ -364,6 +363,7 @@ function AppRoutes() {
           <Route path="employee/companies/:id" element={<CompanyDetail />} />
           <Route path="employee/deals" element={<Deals />} />
           <Route path="employee/deals/:id" element={<DealDetail />} />
+          <Route path="employee/tasks" element={<Tasks />} />
           <Route path="employee/offers" element={<Offers />} />
           <Route path="employee/offers/:id" element={<OfferDetail />} />
           <Route path="employee/offers/:id/edit" element={<OfferDetail />} />

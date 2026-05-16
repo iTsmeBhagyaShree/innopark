@@ -4,6 +4,79 @@
 
 const pool = require('../config/db');
 
+/** Same rules as getAvailableUsers — caller must still enforce company match */
+function rolesMayMessage(senderRole, recipientRole) {
+  const s = String(senderRole || '').toUpperCase();
+  const r = String(recipientRole || '').toUpperCase();
+  if (s === 'SUPERADMIN' || r === 'SUPERADMIN') return false;
+  if (s === 'ADMIN') return ['CLIENT', 'EMPLOYEE', 'ADMIN'].includes(r);
+  if (s === 'CLIENT') return r === 'ADMIN';
+  if (s === 'EMPLOYEE') return ['ADMIN', 'EMPLOYEE'].includes(r);
+  return false;
+}
+
+/** Prefer users.id when it exists; otherwise map employees.id → users.id (UI sometimes sends HR row id). */
+async function resolveToUserId(pool, rawNumericId) {
+  const [u] = await pool.execute(
+    `SELECT id FROM users WHERE id = ? AND is_deleted = 0 LIMIT 1`,
+    [rawNumericId]
+  );
+  if (u.length) return rawNumericId;
+  const [emp] = await pool.execute(
+    `SELECT user_id FROM employees WHERE id = ? LIMIT 1`,
+    [rawNumericId]
+  );
+  if (emp.length) return Number(emp[0].user_id);
+  return rawNumericId;
+}
+
+/**
+ * Same organisation even when users.company_id is wrong (common with imports / legacy data).
+ */
+async function messagingSameOrganisation(pool, senderRow, recipientRow, tenantCompanyId) {
+  const rCid = Number(recipientRow.company_id);
+  const tCid = Number(tenantCompanyId);
+  if (Number.isFinite(rCid) && Number.isFinite(tCid) && rCid === tCid) return true;
+
+  const recipientUserId = recipientRow.id;
+
+  const [dept] = await pool.execute(
+    `SELECT 1 FROM employees e
+     INNER JOIN departments d ON d.id = e.department_id AND d.is_deleted = 0
+     WHERE e.user_id = ? AND d.company_id = ? LIMIT 1`,
+    [recipientUserId, tCid]
+  );
+  if (dept.length) return true;
+
+  const rRole = String(recipientRow.role || '').toUpperCase();
+  if (rRole === 'CLIENT' && recipientRow.email) {
+    const [cc] = await pool.execute(
+      `SELECT 1 FROM client_contacts cc
+       INNER JOIN clients c ON c.id = cc.client_id AND c.is_deleted = 0
+       WHERE c.company_id = ? AND cc.is_deleted = 0
+       AND LOWER(TRIM(cc.email)) = LOWER(TRIM(?)) LIMIT 1`,
+      [tCid, recipientRow.email]
+    );
+    if (cc.length) return true;
+  }
+
+  const sRole = String(senderRow.role || '').toUpperCase();
+  if (
+    (sRole === 'EMPLOYEE' || sRole === 'CLIENT') &&
+    rRole === 'ADMIN' &&
+    recipientUserId
+  ) {
+    const [own] = await pool.execute(
+      `SELECT 1 FROM clients c
+       WHERE c.company_id = ? AND c.owner_id = ? AND c.is_deleted = 0 LIMIT 1`,
+      [tCid, recipientUserId]
+    );
+    if (own.length) return true;
+  }
+
+  return false;
+}
+
 /**
  * Get all messages/conversations
  * GET /api/v1/messages
@@ -22,6 +95,22 @@ const getAll = async (req, res) => {
     }
 
     if (conversationWith) {
+      let insertCompanyId = companyId;
+      const uidNum = parseInt(userId, 10);
+      const otherNum = parseInt(conversationWith, 10);
+      if (Number.isFinite(uidNum) && Number.isFinite(otherNum)) {
+        const [pairRows] = await pool.execute(
+          `SELECT u1.company_id AS ca, u2.company_id AS cb
+           FROM users u1
+           INNER JOIN users u2 ON u2.id = ? AND u2.is_deleted = 0
+           WHERE u1.id = ? AND u1.is_deleted = 0`,
+          [otherNum, uidNum]
+        );
+        if (pairRows.length && pairRows[0].ca === pairRows[0].cb) {
+          insertCompanyId = pairRows[0].ca;
+        }
+      }
+
       // 1. Mark as read (Nuclear: Handles both private and group contexts for this user pairing)
       await pool.execute(
         "UPDATE messages SET is_read = 1, read_at = NOW() WHERE to_user_id = ? AND from_user_id = ? AND is_read = 0",
@@ -42,8 +131,9 @@ const getAll = async (req, res) => {
       );
       if (hii.length === 0) {
         await pool.execute(
-          "INSERT INTO messages (from_user_id, to_user_id, company_id, message, is_read) VALUES (?, ?, ?, 'hii', 0)",
-          [conversationWith, userId, companyId]
+          `INSERT INTO messages (from_user_id, to_user_id, company_id, subject, message, is_read)
+           VALUES (?, ?, ?, ?, 'hii', 0)`,
+          [conversationWith, userId, insertCompanyId, 'Chat']
         );
       }
 
@@ -155,18 +245,88 @@ const getById = async (req, res) => {
  */
 const create = async (req, res) => {
   try {
-    const { to_user_id, group_id, subject, message, file_path, user_id, company_id } = req.body;
-    const userId = user_id || req.userId || req.query.user_id;
-    const companyId = company_id || req.companyId || req.query.company_id;
+    const {
+      to_user_id,
+      toUserId,
+      recipient_id,
+      group_id,
+      subject,
+      message,
+      file_path,
+      user_id,
+      company_id
+    } = req.body;
+    // Prefer JWT identity so stale/wrong body.user_id cannot break tenant checks
+    const userIdRaw =
+      req.userId != null && req.userId !== ''
+        ? req.userId
+        : user_id ?? req.query.user_id;
 
-    console.log('Create message - userId:', userId, 'companyId:', companyId, 'to_user_id:', to_user_id, 'group_id:', group_id);
+    const rawRecipientId = to_user_id ?? toUserId ?? recipient_id;
 
-    if (!userId || !companyId) {
+    console.log(
+      'Create message - sender:',
+      userIdRaw,
+      '(jwt:',
+      req.userId,
+      ') company_id (body):',
+      company_id,
+      'to:',
+      rawRecipientId,
+      'group_id:',
+      group_id
+    );
+
+    if (!userIdRaw) {
       return res.status(400).json({
         success: false,
-        error: req.t ? req.t('api_msg_a2192a92') : "user_id and company_id are required"
+        error: req.t ? req.t('api_msg_a2192a92') : "user_id is required"
       });
     }
+
+    const senderId = parseInt(userIdRaw, 10);
+    if (!Number.isFinite(senderId)) {
+      return res.status(400).json({ success: false, error: "Invalid user_id" });
+    }
+
+    const [senders] = await pool.execute(
+      `SELECT id, company_id, role FROM users WHERE id = ? AND is_deleted = 0`,
+      [senderId]
+    );
+    if (senders.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: "Sender not found or inactive"
+      });
+    }
+
+    const sessionCompanyId = Number(company_id ?? req.companyId);
+    const jwtMatchesSender =
+      req.userId != null &&
+      req.userId !== '' &&
+      Number(req.userId) === senderId;
+
+    // UI / login use company_id=2 but DB row still has old tenant (e.g. 1) → messaging always failed
+    if (
+      jwtMatchesSender &&
+      Number.isFinite(sessionCompanyId) &&
+      sessionCompanyId > 0
+    ) {
+      const dbSenderCid = Number(senders[0].company_id);
+      if (!Number.isFinite(dbSenderCid) || dbSenderCid !== sessionCompanyId) {
+        try {
+          await pool.execute(
+            `UPDATE users SET company_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND is_deleted = 0`,
+            [sessionCompanyId, senderId]
+          );
+          senders[0].company_id = sessionCompanyId;
+        } catch (syncErr) {
+          console.warn('[messages/create] sender session company sync failed:', syncErr.message);
+        }
+      }
+    }
+
+    const senderCompanyId = senders[0].company_id;
 
     if (!message || !message.trim()) {
       return res.status(400).json({
@@ -181,7 +341,7 @@ const create = async (req, res) => {
       const [memberships] = await pool.execute(
         `SELECT * FROM group_members 
          WHERE group_id = ? AND user_id = ? AND is_deleted = 0`,
-        [group_id, userId]
+        [group_id, senderId]
       );
 
       if (memberships.length === 0) {
@@ -195,7 +355,7 @@ const create = async (req, res) => {
       const [groups] = await pool.execute(
         `SELECT * FROM \`groups\` 
          WHERE id = ? AND company_id = ? AND is_deleted = 0`,
-        [group_id, companyId]
+        [group_id, senderCompanyId]
       );
 
       if (groups.length === 0) {
@@ -209,14 +369,14 @@ const create = async (req, res) => {
       const [result] = await pool.execute(
         `INSERT INTO messages (company_id, from_user_id, group_id, subject, message, file_path, created_at)
          VALUES (?, ?, ?, ?, ?, ?, NOW())`,
-        [companyId, userId, group_id, subject || 'Group Message', message.trim(), file_path || null]
+        [senderCompanyId, senderId, group_id, subject || 'Group Message', message.trim(), file_path || null]
       );
 
       // Get all group members except sender
       const [members] = await pool.execute(
         `SELECT user_id FROM group_members 
          WHERE group_id = ? AND user_id != ? AND is_deleted = 0`,
-        [group_id, userId]
+        [group_id, senderId]
       );
 
       // Create message recipients for unread tracking
@@ -245,30 +405,123 @@ const create = async (req, res) => {
     }
 
     // Private message
-    if (!to_user_id) {
+    if (rawRecipientId === undefined || rawRecipientId === null || rawRecipientId === '') {
       return res.status(400).json({
         success: false,
         error: req.t ? req.t('api_msg_ee13f802') : "to_user_id or group_id is required"
       });
     }
 
-    // Verify recipient exists and belongs to same company
+    const parsedRecipient = parseInt(rawRecipientId, 10);
+    if (!Number.isFinite(parsedRecipient)) {
+      return res.status(400).json({ success: false, error: "Invalid to_user_id" });
+    }
+
+    const recipientUserId = await resolveToUserId(pool, parsedRecipient);
+
+    if (recipientUserId === senderId) {
+      return res.status(400).json({
+        success: false,
+        error: req.t ? req.t('api_msg_ee13f802') : "Cannot send a message to yourself"
+      });
+    }
+
     const [recipients] = await pool.execute(
-      `SELECT id, role FROM users WHERE id = ? AND company_id = ? AND is_deleted = 0`,
-      [to_user_id, companyId]
+      `SELECT id, role, company_id, email FROM users WHERE id = ? AND is_deleted = 0`,
+      [recipientUserId]
     );
 
     if (recipients.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: req.t ? req.t('api_msg_0a697366') : "Recipient not found"
+      });
+    }
+
+    if (
+      jwtMatchesSender &&
+      Number.isFinite(sessionCompanyId) &&
+      sessionCompanyId > 0 &&
+      rolesMayMessage(senders[0].role, recipients[0].role)
+    ) {
+      const rCid = Number(recipients[0].company_id);
+      if (Number.isFinite(rCid) && rCid !== sessionCompanyId) {
+        try {
+          await pool.execute(
+            `UPDATE users SET company_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND is_deleted = 0`,
+            [sessionCompanyId, recipientUserId]
+          );
+          recipients[0].company_id = sessionCompanyId;
+        } catch (syncErr) {
+          console.warn('[messages/create] recipient session company sync failed:', syncErr.message);
+        }
+      }
+    }
+
+    let tenantCid = Number(senders[0].company_id);
+    if (!Number.isFinite(tenantCid)) {
+      const fb = Number(company_id || req.companyId);
+      if (Number.isFinite(fb)) tenantCid = fb;
+    }
+    if (!Number.isFinite(tenantCid)) {
+      return res.status(400).json({
+        success: false,
+        error: "Your account has no company assigned; cannot send messages."
+      });
+    }
+
+    const recipientCid = Number(recipients[0].company_id);
+    const sameCompany =
+      Number.isFinite(recipientCid) && recipientCid === tenantCid;
+
+    let sameOrg =
+      sameCompany ||
+      (await messagingSameOrganisation(pool, senders[0], recipients[0], tenantCid));
+
+    if (!sameOrg) {
+      console.warn('[messages/create] organisation mismatch', {
+        senderId,
+        recipientUserId,
+        tenantCid,
+        recipientCid
+      });
       return res.status(404).json({
         success: false,
         error: req.t ? req.t('api_msg_0a697366') : "Recipient not found or does not belong to your company"
       });
     }
 
+    const senderRoleUpper = String(senders[0].role || '').toUpperCase();
+    const recipientRoleUpper = String(recipients[0].role || '').toUpperCase();
+    const needsCompanyRepair =
+      recipientRoleUpper !== 'SUPERADMIN' &&
+      Number.isFinite(recipientCid) &&
+      recipientCid !== tenantCid;
+    const mayRepairRecipient =
+      senderRoleUpper === 'ADMIN' ||
+      (['EMPLOYEE', 'CLIENT'].includes(senderRoleUpper) && recipientRoleUpper === 'ADMIN');
+    if (needsCompanyRepair && mayRepairRecipient) {
+      try {
+        await pool.execute(
+          `UPDATE users SET company_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND is_deleted = 0`,
+          [tenantCid, recipientUserId]
+        );
+      } catch (repairErr) {
+        console.warn('[messages/create] company_id repair skipped:', repairErr.message);
+      }
+    }
+
+    if (!rolesMayMessage(senders[0].role, recipients[0].role)) {
+      return res.status(403).json({
+        success: false,
+        error: req.t ? req.t('api_msg_0a697366') : "You are not allowed to message this user"
+      });
+    }
+
     const [result] = await pool.execute(
       `INSERT INTO messages (company_id, from_user_id, to_user_id, subject, message, file_path, created_at)
        VALUES (?, ?, ?, ?, ?, ?, NOW())`,
-      [companyId, userId, to_user_id, subject || 'Chat Message', message.trim(), file_path || null]
+      [tenantCid, senderId, recipientUserId, subject || 'Chat Message', message.trim(), file_path || null]
     );
 
     console.log('Message created with ID:', result.insertId);
@@ -391,21 +644,42 @@ const deleteMessage = async (req, res) => {
  */
 const getAvailableUsers = async (req, res) => {
   try {
-    const userId = req.query.user_id || req.body.user_id;
-    const companyId = req.query.company_id || req.body.company_id || req.companyId;
-    const userRole = req.query.user_role || req.body.user_role;
-    
-    if (!userId || !companyId || !userRole) {
+    const userIdRaw = req.query.user_id || req.body.user_id;
+    const userRole = (req.query.user_role || req.body.user_role || '').toUpperCase();
+
+    if (!userIdRaw || !userRole) {
       return res.status(400).json({
         success: false,
-        error: req.t ? req.t('api_msg_c5b31152') : "user_id, company_id, and user_role are required"
+        error: req.t ? req.t('api_msg_c5b31152') : "user_id and user_role are required"
       });
+    }
+
+    const uid = parseInt(userIdRaw, 10);
+    if (!Number.isFinite(uid)) {
+      return res.status(400).json({ success: false, error: "Invalid user_id" });
+    }
+
+    const [senderRows] = await pool.execute(
+      `SELECT company_id, role FROM users WHERE id = ? AND is_deleted = 0`,
+      [uid]
+    );
+    if (senderRows.length === 0) {
+      return res.status(404).json({ success: false, error: "User not found" });
+    }
+
+    // Always use DB tenant for listings so it matches POST /messages (client company_id can be stale)
+    const companyId = senderRows[0].company_id;
+    const dbRole = String(senderRows[0].role || '').toUpperCase();
+    if (dbRole !== userRole) {
+      console.warn(
+        `[messages/available-users] user_role mismatch for user ${uid}: query=${userRole} db=${dbRole}, using DB role`
+      );
     }
 
     let availableUsers = [];
 
     // ROLE-BASED LOGIC
-    if (userRole === 'SUPERADMIN') {
+    if (dbRole === 'SUPERADMIN') {
       // SuperAdmin has NO messaging
       return res.json({
         success: true,
@@ -414,7 +688,7 @@ const getAvailableUsers = async (req, res) => {
       });
     }
     
-    else if (userRole === 'ADMIN') {
+    else if (dbRole === 'ADMIN') {
       // Admin can message their own Clients and Employees
       const [users] = await pool.execute(
         `SELECT u.id, 
@@ -433,12 +707,12 @@ const getAvailableUsers = async (req, res) => {
            AND u.role IN ('CLIENT', 'EMPLOYEE', 'ADMIN')
            AND u.is_deleted = 0
          ORDER BY u.role, u.name`,
-        [companyId, userId]
+        [companyId, uid]
       );
       availableUsers = users;
     }
     
-    else if (userRole === 'CLIENT') {
+    else if (dbRole === 'CLIENT') {
       // Client can ONLY message Admin users of their company
       const [users] = await pool.execute(
         `SELECT u.id, u.name, u.email, u.role
@@ -452,7 +726,7 @@ const getAvailableUsers = async (req, res) => {
       availableUsers = users;
     }
     
-    else if (userRole === 'EMPLOYEE') {
+    else if (dbRole === 'EMPLOYEE') {
       // Employee can message Admin and OTHER Employees of their company
       const [users] = await pool.execute(
         `SELECT u.id, u.name, u.email, u.role, u.name as display_name,
@@ -467,7 +741,7 @@ const getAvailableUsers = async (req, res) => {
            AND u.role IN ('ADMIN', 'EMPLOYEE')
            AND u.is_deleted = 0
          ORDER BY u.role, u.name`,
-        [companyId, userId]
+        [companyId, uid]
       );
       availableUsers = users;
     }

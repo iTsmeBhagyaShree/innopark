@@ -87,6 +87,58 @@ const defaultLabels = [
   { name: 'Feedback', color: '#f97316' },
 ]
 
+/** tasks.assigned_to must be users.id; legacy rows may store employees.id — map to user_id for the form */
+function resolveAssignToUserId(task, employeeRows) {
+  if (!task) return ''
+  const raw = task.assign_to ?? task.assigned_to
+  let candidate = ''
+  if (Array.isArray(raw) && raw.length > 0) {
+    const a = raw[0]
+    candidate = a?.user_id ?? a?.id ?? ''
+  } else if (raw != null && typeof raw === 'object') {
+    candidate = raw?.user_id ?? raw?.id ?? ''
+  } else if (typeof raw === 'string') {
+    const trimmed = raw.trim()
+    // Handles legacy payloads like "[12]" or '[{"id":12}]'
+    if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(trimmed)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const first = parsed[0]
+          candidate = (typeof first === 'object' && first != null)
+            ? (first.user_id ?? first.id ?? '')
+            : first
+        } else if (parsed && typeof parsed === 'object') {
+          candidate = parsed.user_id ?? parsed.id ?? ''
+        }
+      } catch (_) {
+        // Fallback for loosely formatted bracket strings
+        candidate = trimmed.replace(/[\[\]\{\}"']/g, '').split(',')[0]
+      }
+    } else {
+      candidate = trimmed
+    }
+  } else if (raw != null && raw !== '') {
+    candidate = raw
+  }
+  const n = parseInt(String(candidate), 10)
+  if (!Number.isFinite(n)) return ''
+  if (!employeeRows?.length) return String(n)
+  const byUser = employeeRows.find((e) => parseInt(String(e.user_id), 10) === n)
+  if (byUser?.user_id != null) return String(byUser.user_id)
+  const byEmp = employeeRows.find((e) => parseInt(String(e.id), 10) === n)
+  if (byEmp?.user_id != null) return String(byEmp.user_id)
+  return String(n)
+}
+
+/** Pick stable option id for assignee/collaborator selects (prefer users.id, fallback employees.id). */
+function getEmployeeOptionId(employee) {
+  if (!employee) return ''
+  if (employee.user_id != null && String(employee.user_id).trim() !== '') return String(employee.user_id)
+  if (employee.id != null && String(employee.id).trim() !== '') return String(employee.id)
+  return ''
+}
+
 /**
  * Unified Task Form Modal Component
  * 
@@ -216,57 +268,88 @@ const TaskFormModal = ({
     }
   }, [companyId])
 
-  // Load data when modal opens
+  // Load data when modal opens (employees first so assign_to maps employee.id → user_id)
   useEffect(() => {
-    if (isOpen) {
+    if (!isOpen) return
+
+    let cancelled = false
+
+    const load = async () => {
       setLoading(true)
-      Promise.all([
-        fetchProjects(),
-        fetchLeads(),
-        fetchEmployees(),
-        fetchDeals(),
-        fetchContacts(),
-        fetchCompanies(),
-      ]).finally(() => setLoading(false))
+      try {
+        let empData = []
+        try {
+          const empRes = await employeesAPI.getAll({ company_id: companyId })
+          empData = empRes.data?.data || empRes.data || []
+        } catch (e) {
+          console.error('Error fetching employees:', e)
+        }
+        if (!cancelled) setEmployees(empData)
 
-      // Initialize form data
-      if (task) {
-        // Editing existing task
-        setFormData({
-          title: task.title || '',
-          description: task.description || '',
-          related_to: task.project_id || task.lead_id || task.deal_id || task.contact_id || task.related_company_id || task.related_to || '',
-          related_to_type: task.project_id ? 'project' : (task.lead_id ? 'lead' : (task.deal_id ? 'deal' : (task.contact_id ? 'contact' : (task.related_company_id ? 'company' : 'project')))),
-          points: task.points?.toString() || '1',
-          assign_to: task.assign_to || (task.assigned_to && task.assigned_to.length > 0 ? task.assigned_to[0].id : '') || '',
-          collaborators: task.collaborators ? task.collaborators.map(c => c.id || c.user_id || c) : [],
-          status: task.status || 'Incomplete',
-          priority: task.priority || 'Medium',
-          labels: normalizeLabels(task.labels || task.tags || []),
-          start_date: parseDateFromInput(task.start_date) || '',
-          deadline: parseDateFromInput(task.deadline || task.due_date) || '',
-          is_recurring: task.is_recurring || false,
-          repeat_every: task.repeat_every?.toString() || '1',
-          repeat_unit: task.repeat_unit || 'Month(s)',
-          cycles: task.cycles?.toString() || '',
-          uploaded_file: null,
-        })
-      } else {
-        // New task
-        const newFormData = getDefaultFormData()
+        await Promise.all([
+          fetchProjects(),
+          fetchLeads(),
+          fetchDeals(),
+          fetchContacts(),
+          fetchCompanies(),
+        ])
 
-        // Pre-set related_to if provided
-        if (relatedToType && relatedToId) {
-          newFormData.related_to_type = relatedToType
-          newFormData.related_to = relatedToId.toString()
+        if (cancelled) return
+
+        if (task) {
+          const resolvedRelatedType =
+            task.related_to_type ||
+            (task.project_id ? 'project' : (task.lead_id ? 'lead' : (task.deal_id ? 'deal' : (task.contact_id ? 'contact' : (task.related_company_id ? 'company' : 'project')))))
+
+          const resolvedRelatedId =
+            task.related_to_id ||
+            task.project_id ||
+            task.lead_id ||
+            task.deal_id ||
+            task.contact_id ||
+            task.related_company_id ||
+            task.related_to ||
+            ''
+
+          setFormData({
+            title: task.title || '',
+            description: task.description || '',
+            related_to: resolvedRelatedId ? String(resolvedRelatedId) : '',
+            related_to_type: resolvedRelatedType,
+            points: task.points?.toString() || '1',
+            assign_to: resolveAssignToUserId(task, empData),
+            collaborators: task.collaborators ? task.collaborators.map(c => c.user_id || c.id || c) : [],
+            status: task.status || 'Incomplete',
+            priority: task.priority || 'Medium',
+            labels: normalizeLabels(task.labels || task.tags || []),
+            start_date: parseDateFromInput(task.start_date) || '',
+            deadline: parseDateFromInput(task.deadline || task.due_date) || '',
+            is_recurring: task.is_recurring || false,
+            repeat_every: task.repeat_every?.toString() || '1',
+            repeat_unit: task.repeat_unit || 'Month(s)',
+            cycles: task.cycles?.toString() || '',
+            uploaded_file: null,
+          })
+        } else {
+          const newFormData = getDefaultFormData()
+          if (relatedToType && relatedToId) {
+            newFormData.related_to_type = relatedToType
+            newFormData.related_to = relatedToId.toString()
+          }
+          setFormData(newFormData)
         }
 
-        setFormData(newFormData)
+        setFileInputKey(Date.now())
+      } finally {
+        if (!cancelled) setLoading(false)
       }
-
-      setFileInputKey(Date.now())
     }
-  }, [isOpen, task, relatedToType, relatedToId, fetchProjects, fetchLeads, fetchEmployees])
+
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [isOpen, task, relatedToType, relatedToId, companyId, fetchProjects, fetchLeads, fetchDeals, fetchContacts, fetchCompanies])
 
   // Normalize labels to array of strings
   const normalizeLabels = (labelsData) => {
@@ -281,7 +364,7 @@ const TaskFormModal = ({
   const getRelatedToOptions = () => {
     switch (formData.related_to_type) {
       case 'project':
-        return projects.filter(p => parseInt(p.company_id) === parseInt(companyId)).map(p => ({
+        return projects.map(p => ({
           value: p.id,
           label: p.project_name || p.name || p.title || `Project #${p.id}`
         }))
@@ -289,12 +372,12 @@ const TaskFormModal = ({
       case 'lead':
         return leads.map(l => ({
           value: l.id,
-          label: l.name || l.company_name || `Lead #${l.id}`
+          label: l.person_name || l.name || l.company_name || `Lead #${l.id}`
         }))
       case 'deal':
         return deals.map(d => ({
           value: d.id,
-          label: d.deal_name || d.pipeline || `Deal #${d.id}`
+          label: d.title || d.deal_name || d.name || d.deal_number || `Deal #${d.id}`
         }))
       case 'contact':
         return contacts.map(c => ({
@@ -463,11 +546,16 @@ const TaskFormModal = ({
     onClose()
   }
 
-  // Get employee name by ID
+  // Resolve label by users.id or legacy employees.id
   const getEmployeeName = (empId) => {
-    const emp = employees.find(e => parseInt(e.user_id || e.id) === parseInt(empId))
-    return emp ? (emp.name || emp.email) : `Employee #${empId}`
+    const n = parseInt(String(empId), 10)
+    const emp = employees.find(
+      (e) => parseInt(String(e.user_id), 10) === n || parseInt(String(e.id), 10) === n
+    )
+    return emp ? (emp.name || emp.email) : `#${empId}`
   }
+
+  const assignableEmployees = employees.filter((e) => getEmployeeOptionId(e) !== '')
 
   return (
     <Modal
@@ -550,8 +638,8 @@ const TaskFormModal = ({
                 onChange={(e) => setFormData({ ...formData, assign_to: e.target.value })}
               >
                 <option value="">-</option>
-                {employees.map(emp => (
-                  <option key={emp.user_id || emp.id} value={emp.user_id || emp.id}>
+                {assignableEmployees.map((emp) => (
+                  <option key={getEmployeeOptionId(emp)} value={getEmployeeOptionId(emp)}>
                     {emp.name || emp.email}
                   </option>
                 ))}
@@ -586,13 +674,16 @@ const TaskFormModal = ({
                   }}
                 >
                   <option value="">{t('tasks.add_collaborator')}</option>
-                  {employees
-                    .filter(emp => {
-                      const empId = parseInt(emp.user_id || emp.id)
-                      return empId !== parseInt(formData.assign_to) && !formData.collaborators.map(c => parseInt(c)).includes(empId)
+                  {assignableEmployees
+                    .filter((emp) => {
+                      const uid = parseInt(getEmployeeOptionId(emp), 10)
+                      return (
+                        uid !== parseInt(String(formData.assign_to), 10) &&
+                        !formData.collaborators.map((c) => parseInt(String(c), 10)).includes(uid)
+                      )
                     })
-                    .map(emp => (
-                      <option key={emp.user_id || emp.id} value={emp.user_id || emp.id}>
+                    .map((emp) => (
+                      <option key={getEmployeeOptionId(emp)} value={getEmployeeOptionId(emp)}>
                         {emp.name || emp.email}
                       </option>
                     ))}
@@ -747,7 +838,7 @@ const TaskFormModal = ({
         <div className="flex items-center gap-2">
           <label className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors">
             <IoAttach size={18} className="text-gray-500" />
-            <span>{t('auto.auto_fbb7d719') || 'Upload File'}</span>
+            <span>{t('common.add_file')}</span>
             <input
               key={fileInputKey}
               type="file"

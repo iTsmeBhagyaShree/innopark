@@ -29,6 +29,14 @@ const adminSidebarData = [
   },
 
   {
+    label: 'sidebar.tasks',
+    icon: IoCheckboxOutline,
+    path: '/app/admin/tasks',
+    section: 'sidebar.teamOperations',
+    moduleKey: 'tasks',
+  },
+
+  {
     label: 'sidebar.crm',
     icon: IoBriefcase,
     path: '/app/admin/crm',
@@ -52,14 +60,6 @@ const adminSidebarData = [
   },
 
   {
-    label: 'sidebar.tasks',
-    icon: IoCheckboxOutline,
-    path: '/app/admin/tasks',
-    section: 'sidebar.teamOperations',
-    moduleKey: 'tasks',
-  },
-
-  {
     label: 'sidebar.reports',
     icon: IoBarChart,
     path: '/app/admin/reports',
@@ -72,6 +72,10 @@ const adminSidebarData = [
     path: '/app/admin/employees',
     section: 'sidebar.teamOperations',
     moduleKey: 'employees',
+    children: [
+      { label: 'sidebar.employees', icon: IoPeople, path: '/app/admin/employees' },
+      { label: 'settings.roles_permissions', icon: IoShieldCheckmark, path: '/app/admin/roles-permissions' },
+    ]
   },
 
   {

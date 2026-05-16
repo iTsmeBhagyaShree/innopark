@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { estimatesAPI, projectsAPI, companiesAPI, itemsAPI, emailTemplatesAPI, customFieldsAPI } from '../../../api'
 import baseUrl from '../../../api/baseUrl'
 import { useSettings } from '../../../context/SettingsContext'
+import { useLanguage } from '../../../context/LanguageContext.jsx'
 import Card from '../../../components/ui/Card'
 import Button from '../../../components/ui/Button'
 import Badge from '../../../components/ui/Badge'
@@ -51,6 +52,7 @@ const EstimateDetail = () => {
   const { id } = useParams()
   const navigate = useNavigate()
   const { formatDate: settingsFormatDate, formatCurrency: settingsFormatCurrency, getCompanyInfo } = useSettings()
+  const { t } = useLanguage()
 
   const [estimate, setEstimate] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -254,20 +256,10 @@ const EstimateDetail = () => {
     }
   }
 
-  const formatCurrency = (amount) => {
-    let currencyCode = estimate?.currency || 'USD'
-    if (currencyCode.includes(' ')) {
-      currencyCode = currencyCode.split(' ')[0]
-    }
-    if (currencyCode.length !== 3) {
-      currencyCode = 'USD'
-    }
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currencyCode,
-      minimumFractionDigits: 2,
-    }).format(amount || 0)
-  }
+  const formatCurrency = useCallback(
+    (amount) => settingsFormatCurrency(amount, estimate?.currency),
+    [settingsFormatCurrency, estimate?.currency]
+  )
 
   const parseTemplateVariables = (content) => {
     if (!content) return ''
@@ -474,7 +466,7 @@ const EstimateDetail = () => {
   const handleSendEmail = async () => {
     try {
       if (!emailForm.to) {
-        alert('To email is required')
+        alert(t('estimate_detail_page.email_required'))
         return
       }
       setSendingEmail(true)
@@ -486,14 +478,14 @@ const EstimateDetail = () => {
         message: emailForm.message
       })
       if (response.data.success) {
-        alert('Email sent successfully!')
+        alert(t('estimate_detail_page.email_sent'))
         setIsSendEmailModalOpen(false)
       } else {
-        alert('Failed to send email')
+        alert(t('estimate_detail_page.email_failed'))
       }
     } catch (error) {
       console.error('Error sending email:', error)
-      alert(error.response?.data?.error || 'Failed to send email')
+      alert(error.response?.data?.error || t('estimate_detail_page.email_failed'))
     } finally {
       setSendingEmail(false)
     }
@@ -515,7 +507,7 @@ const EstimateDetail = () => {
       }
     } catch (error) {
       console.error('Error adding item:', error)
-      alert('Failed to add item')
+      alert(t('estimate_detail_page.add_item_failed'))
     }
   }
 
@@ -539,7 +531,7 @@ const EstimateDetail = () => {
       }
     } catch (error) {
       console.error('Error adding stored item:', error)
-      alert('Failed to add item')
+      alert(t('estimate_detail_page.add_item_failed'))
     }
   }
 
@@ -556,12 +548,12 @@ const EstimateDetail = () => {
       }
     } catch (error) {
       console.error('Error editing item:', error)
-      alert('Failed to update item')
+      alert(t('estimate_detail_page.update_item_failed'))
     }
   }
 
   const handleDeleteItem = async (index) => {
-    if (!window.confirm('Are you sure you want to delete this item?')) return
+    if (!window.confirm(t('estimate_detail_page.delete_item_confirm'))) return
     try {
       const updatedItems = (estimate.items || []).filter((_, idx) => idx !== index)
       const response = await estimatesAPI.update(id, { items: updatedItems })
@@ -570,7 +562,7 @@ const EstimateDetail = () => {
       }
     } catch (error) {
       console.error('Error deleting item:', error)
-      alert('Failed to delete item')
+      alert(t('estimate_detail_page.delete_item_failed'))
     }
   }
 
@@ -583,7 +575,7 @@ const EstimateDetail = () => {
       }
     } catch (error) {
       console.error('Error updating discount:', error)
-      alert('Failed to update discount')
+      alert(t('estimate_detail_page.discount_failed'))
     }
   }
 
@@ -628,7 +620,7 @@ const EstimateDetail = () => {
       <div className="flex items-center justify-center h-screen bg-gray-100">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading estimate details...</p>
+          <p className="text-gray-600">{t('estimate_detail_page.loading')}</p>
         </div>
       </div>
     )
@@ -690,18 +682,18 @@ const EstimateDetail = () => {
               onClick={() => {
                 const url = `${window.location.origin}/estimate/${id}`
                 navigator.clipboard.writeText(url)
-                alert('Estimate URL copied!')
+                alert(t('estimate_detail_page.url_copied'))
               }}
               className="flex items-center gap-2 rounded-2xl font-bold border-gray-200 hover:bg-gray-50 bg-white"
             >
-              <IoLink size={18} /> Public URL
+              <IoLink size={18} /> {t('estimate_detail_page.public_url')}
             </Button>
             <Button
               onClick={() => setIsSendEmailModalOpen(true)}
               size="md"
               className="flex items-center gap-2 rounded-2xl font-bold bg-primary-accent hover:bg-primary-accent/90"
             >
-              <IoMail size={22} className="mr-1" /> Send Email
+              <IoMail size={22} className="mr-1" /> {t('estimate_detail_page.send_email_button')}
             </Button>
           </div>
         </div>
@@ -1010,7 +1002,7 @@ const EstimateDetail = () => {
               <button
                 onClick={() => {
                   navigator.clipboard.writeText(`${window.location.origin}/estimate/${id}`)
-                  alert('URL copied!')
+                  alert(t('estimate_detail_page.url_copied'))
                 }}
                 className="p-2 text-primary-accent hover:bg-main-bg rounded-lg"
                 title="Copy URL"

@@ -24,7 +24,7 @@ const MOCK_ADMIN_STATS = {
   success: true,
   data: {
     leads: 45, employees: 12, projects: 8,
-    invoices: { total: 15, amount: 12500 },
+    invoices: { total: 15, paid_amount: 12500, total_amount: 48000 },
     leadsBySource: [ { source: "Google", count: 25 }, { source: "Direct", count: 20 } ],
     pipelineStages: [ { stage: "New", value: 5000 }, { stage: "Won", value: 8500 } ],
     events_today: 3
@@ -32,7 +32,9 @@ const MOCK_ADMIN_STATS = {
 };
 
 export const dashboardAPI = {
-  getSuperAdminStats: () => axiosInstance.get('/dashboard/superadmin').catch(() => ({ data: MOCK_DASHBOARD })),
+  getSuperAdminStats: () => axiosInstance.get('/dashboard/superadmin')
+    .then(res => res.data)
+    .catch(() => MOCK_DASHBOARD),
   
   getAdminStats: (params) => axiosInstance.get('/dashboard/admin', { params })
     .then(res => res.data)

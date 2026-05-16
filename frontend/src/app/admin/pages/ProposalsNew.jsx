@@ -13,6 +13,7 @@ import {
 } from 'react-icons/io5'
 import { proposalsAPI, companiesAPI } from '../../../api'
 import { useAuth } from '../../../context/AuthContext'
+import { useSettings } from '../../../context/SettingsContext.jsx'
 import Card from '../../../components/ui/Card'
 import Button from '../../../components/ui/Button'
 import Badge from '../../../components/ui/Badge'
@@ -22,6 +23,7 @@ import RichTextEditor from '../../../components/ui/RichTextEditor'
 
 const ProposalsNew = () => {
     const { user } = useAuth()
+    const { formatCurrency } = useSettings()
     const navigate = useNavigate()
     const companyId = useMemo(() => {
         const id = user?.company_id || localStorage.getItem('companyId') || '1'
@@ -126,13 +128,6 @@ const ProposalsNew = () => {
         const matchesStatus = filterStatus === 'All' || proposal.status?.toLowerCase() === filterStatus.toLowerCase()
         return matchesSearch && matchesStatus
     })
-
-    const formatCurrency = (amount, currency = 'USD') => {
-        return new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency: currency
-        }).format(amount || 0)
-    }
 
     const formatDate = (dateString) => {
         if (!dateString) return 'N/A'
@@ -244,7 +239,7 @@ const ProposalsNew = () => {
                                                 {proposal.company_name || '-'}
                                             </td>
                                             <td className="px-6 py-4 font-medium text-gray-900">
-                                                {formatCurrency(proposal.total, proposal.currency)}
+                                                {formatCurrency(proposal.total)}
                                             </td>
                                             <td className="px-6 py-4 text-sm text-gray-600">
                                                 {formatDate(proposal.valid_till)}

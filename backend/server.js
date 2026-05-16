@@ -69,31 +69,38 @@ const API_VERSION = process.env.API_VERSION || 'v1';
 // Middleware
 // =====================================================
 
-// Security
-app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" }
-}));
+// CORS first — must run before helmet/routes so preflight always gets headers.
+// origin: true echoes the request Origin (works for localhost, Railway, Vercel, etc.).
+const corsAllowedHeaders = [
+  'Content-Type',
+  'Authorization',
+  'X-Requested-With',
+  'Accept',
+  'Accept-Language',
+  'Origin',
+  'Cache-Control',
+  'Pragma',
+  'X-Language',
+  'language',
+];
 
-// CORS: reflect request Origin (works with browser + proxies; '*' can fail in some edge cases)
-app.use(cors({
+const corsOptions = {
   origin: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: [
-    'Content-Type',
-    'Authorization',
-    'X-Requested-With',
-    'Accept',
-    'Origin',
-    'Cache-Control',
-    'Pragma',
-  ],
+  allowedHeaders: corsAllowedHeaders,
   exposedHeaders: ['Content-Range', 'X-Content-Range', 'Cache-Control'],
+  // Frontend uses Bearer token, not cookies — false avoids strict credential + Origin pairing issues on some hosts
+  credentials: false,
+  optionsSuccessStatus: 204,
   maxAge: 86400,
+};
+
+app.use(cors(corsOptions));
+
+// Security (after CORS so browser cross-origin requests stay predictable)
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
-
-// Handle preflight requests
-app.options('*', cors());
-
 // Body parser
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));

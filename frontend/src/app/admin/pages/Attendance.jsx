@@ -7,7 +7,7 @@ import Button from '../../../components/ui/Button'
 import { IoAdd, IoDownloadOutline, IoCloudUploadOutline, IoListOutline, IoPersonOutline, IoTimeOutline } from 'react-icons/io5'
 
 const Attendance = () => {
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   const { user } = useAuth()
   const companyId = user?.company_id || localStorage.getItem('companyId') || 1
 
@@ -137,7 +137,15 @@ const Attendance = () => {
   // Get day name
   const getDayName = (day) => {
     const date = new Date(year, month - 1, day)
-    return date.toLocaleDateString('de', { weekday: 'short' })
+    const loc =
+      String(language || '').toLowerCase().startsWith('de')
+        ? 'de-DE'
+        : String(language || '').toLowerCase().startsWith('fr')
+          ? 'fr-FR'
+          : String(language || '').toLowerCase().startsWith('ar')
+            ? 'ar-SA'
+            : 'en-US'
+    return date.toLocaleDateString(loc, { weekday: 'short' })
   }
 
   // Check if weekend

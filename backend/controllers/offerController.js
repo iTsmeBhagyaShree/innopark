@@ -7,6 +7,18 @@ const pool = require('../config/db');
 /**
  * Normalize unit value to valid ENUM values
  */
+const parseMoney = (v, def = 0) => {
+    if (v === undefined || v === null || v === '') return def;
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : def;
+};
+
+const normalizeOfferCurrency = (c) => {
+    if (c == null || String(c).trim() === '') return 'USD';
+    const t = String(c).trim().split(/\s+/)[0].replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase();
+    return /^[A-Z]{3}$/.test(t) ? t : 'USD';
+};
+
 const normalizeUnit = (unit) => {
     const validUnits = ['Pcs', 'Kg', 'Hours', 'Days'];
     if (!unit) return 'Pcs';
@@ -157,8 +169,10 @@ const create = async (req, res) => {
         const {
             offer_date, valid_till, currency, client_id, project_id, lead_id,
             calculate_tax, description, note, terms, tax, second_tax,
-            discount, discount_type, items = [], status
+            discount, discount_type, status
         } = req.body;
+
+        const items = Array.isArray(req.body.items) ? req.body.items : [];
 
         const companyId = req.body.company_id || req.query.company_id || 1;
         const offer_number = await generateOfferNumber(companyId);
@@ -169,6 +183,28 @@ const create = async (req, res) => {
         let totals = { sub_total: 0, discount_amount: 0, tax_amount: 0, total: 0 };
         if (items.length > 0) {
             totals = calculateTotals(items, discount, discount_type);
+        } else {
+            const has = (k) => req.body[k] !== undefined && req.body[k] !== null && req.body[k] !== '';
+            const providedTotal = has('total') ? parseMoney(req.body.total) : null;
+            const providedSub = has('sub_total') ? parseMoney(req.body.sub_total) : null;
+            const taxAmount = has('tax_amount') ? parseMoney(req.body.tax_amount) : 0;
+
+            let discountAmount;
+            if (has('discount_amount')) {
+                discountAmount = parseMoney(req.body.discount_amount);
+            } else if ((discount_type || '%') === '%') {
+                const base = providedSub ?? providedTotal ?? parseMoney(req.body.amount);
+                discountAmount = (base * parseMoney(discount)) / 100;
+            } else {
+                discountAmount = parseMoney(discount);
+            }
+
+            const subTotal = providedSub ?? parseMoney(req.body.amount) ?? (providedTotal !== null ? providedTotal : 0);
+            const total = providedTotal !== null
+                ? providedTotal
+                : (subTotal - discountAmount + taxAmount);
+
+            totals = { sub_total: subTotal, discount_amount: discountAmount, tax_amount: taxAmount, total };
         }
 
         const [result] = await pool.execute(
@@ -178,7 +214,7 @@ const create = async (req, res) => {
         sub_total, discount_amount, tax_amount, total, created_by, status
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
-                companyId, offer_number, offer_date ?? null, valid_till ?? defaultValidTill, currency || 'USD',
+                companyId, offer_number, offer_date ?? null, valid_till ?? defaultValidTill, normalizeOfferCurrency(currency),
                 client_id ?? null, project_id ?? null, lead_id ?? null,
                 calculate_tax || 'After Discount', description ?? null, note ?? null, terms || 'Thank you for your business.',
                 tax ?? null, second_tax ?? null, discount ?? 0, discount_type || '%',
@@ -235,7 +271,7 @@ const update = async (req, res) => {
             for (const [key, val] of Object.entries(fields)) {
                 if (val !== undefined && key !== 'items' && key !== 'id') {
                     updates.push(`${key} = ?`);
-                    values.push(val);
+                    values.push(key === 'currency' ? normalizeOfferCurrency(val) : val);
                 }
             }
             if (updates.length > 0) {

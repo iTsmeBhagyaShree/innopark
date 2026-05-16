@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useSettings } from '../../../context/SettingsContext.jsx'
 
 /** Stable tenant id for admin pages — never guess company `1` (wrong org / empty lists). */
 const resolveCompanyId = (u) => {
@@ -71,6 +72,21 @@ import {
 } from '../../../components/ui/FormRow'
 import RichTextEditor from '../../../components/ui/RichTextEditor'
 
+/** Maps stored/API category strings (e.g. "Development") to `project_templates_ui.categories.*` keys for display. */
+const PROJECT_TEMPLATE_CATEGORY_KEYS = [
+  'development', 'design', 'marketing', 'sales', 'support', 'hr', 'finance', 'other'
+]
+
+/** Escape text inserted into print preview HTML (project names, codes, etc.). */
+const escapeHtml = (v) => {
+  if (v == null) return ''
+  return String(v)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
 /** Shown in the create/edit form when the API has not returned any project labels yet (same names as list badges). */
 const DEFAULT_PROJECT_PRIORITY_LABELS = [
   { id: 'fb-urgent', name: 'Urgent' },
@@ -90,8 +106,19 @@ const toDateInput = (v) => {
 const Projects = () => {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
+  const { formatCurrency, settings } = useSettings()
   const companyId = useMemo(() => resolveCompanyId(user), [user])
+  const printLocale = language === 'de' ? 'de-DE' : 'en-GB'
+
+  const displayTemplateCategory = (cat) => {
+    if (cat == null || cat === '') return ''
+    const slug = String(cat).trim().toLowerCase().replace(/\s+/g, '_')
+    if (PROJECT_TEMPLATE_CATEGORY_KEYS.includes(slug)) {
+      return t(`project_templates_ui.categories.${slug}`)
+    }
+    return String(cat)
+  }
 
   // Keep localStorage in sync so axios + list calls always send the same company as the session
   useEffect(() => {
@@ -156,6 +183,7 @@ const Projects = () => {
     deadline: '',
     noDeadline: false,
     budget: '', // Budget field
+    currency: settings?.default_currency || 'EUR', // Currency field
     projectCategory: '',
     projectSubCategory: '',
     projectSummary: '',
@@ -416,6 +444,7 @@ const Projects = () => {
           progress: project.progress || 0,
           label: project.label || '',
           price: project.budget || project.price || null,
+          currency: project.currency || settings?.default_currency || 'EUR',
           company_id: project.company_id,
           department_id: project.department_id,
           project_manager_id: project.project_manager_id,
@@ -562,6 +591,24 @@ const Projects = () => {
     return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-')
   }
 
+  const localizeProjectType = (projectType) => {
+    const raw = String(projectType || '').trim().toLowerCase()
+    if (!raw) return ''
+    if (raw === 'internal project') return language === 'de' ? 'Internes Projekt' : 'Internal Project'
+    if (raw === 'client project') return language === 'de' ? 'Kundenprojekt' : 'Client Project'
+    return projectType
+  }
+
+  const localizeProjectName = (projectName) => {
+    const name = String(projectName || '').trim()
+    if (!name) return ''
+    const match = name.match(/^Imported Project\s+(\d+)$/i)
+    if (match && language === 'de') {
+      return `Importiertes Projekt ${match[1]}`
+    }
+    return name
+  }
+
   const isDeadlineOverdue = (deadline) => {
     if (!deadline) return false
     const d = new Date(deadline)
@@ -622,6 +669,7 @@ const Projects = () => {
       deadline: '',
       noDeadline: false,
       budget: '',
+      currency: settings?.default_currency || 'EUR',
       projectCategory: '',
       projectSubCategory: '',
       projectSummary: '',
@@ -737,6 +785,7 @@ const Projects = () => {
         project_members: projectMembers, // Array of user IDs (includes selected employee)
         status: formData.status || 'In Bearbeitung',
         progress: 0,
+        currency: formData.currency || settings?.default_currency || 'EUR',
         custom_fields: formData.custom_fields || {}
       }
 
@@ -816,7 +865,7 @@ const Projects = () => {
         const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''))
         const projectData = {
           company_id: companyId,
-          project_name: values[nameIndex] || `Imported Project ${i}`,
+          project_name: values[nameIndex] || (language === 'de' ? `Importiertes Projekt ${i}` : `Imported Project ${i}`),
           status: 'In Bearbeitung',
           start_date: new Date().toISOString().slice(0, 10),
           deadline: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
@@ -970,15 +1019,79 @@ const Projects = () => {
     setIsExcelModalOpen(false)
   }
 
+  const formatStatusForPrint = (status) => {
+    if (status == null || status === '') return '-'
+    const raw = String(status)
+    const s = raw.toLowerCase().trim()
+    if (s === 'in bearbeitung' || s === 'in progress' || s === 'open') {
+      return t('projects.form.status_in_bearbeitung')
+    }
+    if (s === 'on hold' || s === 'on_hold' || s === 'common.status.on_hold') {
+      return t('projects.form.status_on_hold')
+    }
+    if (s === 'cancelled' || s === 'canceled') {
+      return t('projects.form.status_cancelled')
+    }
+    if (s === 'completed' || s === 'finished') {
+      return t('projects.form.status_completed')
+    }
+    return raw
+  }
+
   // Handle Print
   const handlePrint = () => {
-    // Create a print-friendly table
     const printWindow = window.open('', '_blank')
-    const tableHTML = `
-      <!DOCTYPE html>
+    if (!printWindow) return
+
+    const title = escapeHtml(t('projects.print.report_title'))
+    const generatedLabel = escapeHtml(t('projects.print.generated_on'))
+    const generatedAt = escapeHtml(
+      new Date().toLocaleString(printLocale, { dateStyle: 'medium', timeStyle: 'short' })
+    )
+    const hId = escapeHtml(t('projects.columns.id'))
+    const hName = escapeHtml(t('projects.columns.name'))
+    const hCode = escapeHtml(t('projects.columns.code'))
+    const hClient = escapeHtml(t('projects.columns.client'))
+    const hStatus = escapeHtml(t('projects.columns.status'))
+    const hProgress = escapeHtml(t('projects.columns.progress'))
+    const hStart = escapeHtml(t('projects.columns.start_date'))
+    const hDeadline = escapeHtml(t('projects.columns.deadline'))
+    const hLabel = escapeHtml(t('projects.columns.label'))
+
+    const rowsHtml = filteredProjects
+      .map((project) => {
+        const id = escapeHtml(project.id ?? '')
+        const name = escapeHtml(project.name || project.project_name || '-')
+        const code = escapeHtml(project.code || project.short_code || '-')
+        const client = escapeHtml(project.client?.name || project.client_name || '-')
+        const status = escapeHtml(formatStatusForPrint(project.status))
+        const progress = escapeHtml(project.progress != null ? `${project.progress}%` : '0%')
+        const start = project.startDate
+          ? escapeHtml(new Date(project.startDate).toLocaleDateString(printLocale))
+          : '-'
+        const deadline = project.deadline
+          ? escapeHtml(new Date(project.deadline).toLocaleDateString(printLocale))
+          : '-'
+        const label = escapeHtml(project.label || '-')
+        return `<tr>
+                  <td>${id}</td>
+                  <td>${name}</td>
+                  <td>${code}</td>
+                  <td>${client}</td>
+                  <td>${status}</td>
+                  <td>${progress}</td>
+                  <td>${start}</td>
+                  <td>${deadline}</td>
+                  <td>${label}</td>
+                </tr>`
+      })
+      .join('')
+
+    const tableHTML = `<!DOCTYPE html>
       <html>
         <head>
-          <title>{t('auto.auto_be25f2c6') || 'Projects Report'}</title>
+          <meta charset="utf-8" />
+          <title>${title}</title>
           <style>
             body { font-family: Arial, sans-serif; margin: 20px; }
             h1 { color: #333; }
@@ -990,40 +1103,28 @@ const Projects = () => {
           </style>
         </head>
         <body>
-          <h1>{t('auto.auto_be25f2c6') || 'Projects Report'}</h1>
-          <p>Generated on: ${new Date().toLocaleString()}</p>
+          <h1>${title}</h1>
+          <p>${generatedLabel} ${generatedAt}</p>
           <table>
             <thead>
               <tr>
-                <th>{t('') || ''}</th>
-                <th>{t('auto.auto_8e3a4215') || 'Project Name'}</th>
-                <th>{t('') || ''}</th>
-                <th>{t('auto.auto_ec53a8c4') || 'Status'}</th>
-                <th>{t('') || ''}</th>
-                <th>{t('auto.auto_db3794c7') || 'Start Date'}</th>
-                <th>{t('') || ''}</th>
-                <th>{t('auto.auto_b021df6a') || 'Label'}</th>
+                <th>${hId}</th>
+                <th>${hName}</th>
+                <th>${hCode}</th>
+                <th>${hClient}</th>
+                <th>${hStatus}</th>
+                <th>${hProgress}</th>
+                <th>${hStart}</th>
+                <th>${hDeadline}</th>
+                <th>${hLabel}</th>
               </tr>
             </thead>
             <tbody>
-              ${filteredProjects.map(project => `
-                <tr>
-                  <td>${project.id}</td>
-                  <td>${project.name || project.project_name || '-'}</td>
-                  <td>${project.code || project.short_code || '-'}</td>
-                  <td>${project.client?.name || project.client_name || '-'}</td>
-                  <td>${project.status || '-'}</td>
-                  <td>${project.progress || 0}%</td>
-                  <td>${project.startDate ? new Date(project.startDate).toLocaleDateString() : '-'}</td>
-                  <td>${project.deadline ? new Date(project.deadline).toLocaleDateString() : '-'}</td>
-                  <td>${project.label || '-'}</td>
-                </tr>
-              `).join('')}
+              ${rowsHtml}
             </tbody>
           </table>
         </body>
-      </html>
-    `
+      </html>`
     printWindow.document.write(tableHTML)
     printWindow.document.close()
     printWindow.focus()
@@ -1034,13 +1135,6 @@ const Projects = () => {
   }
 
   const columns = [
-    {
-      key: 'checkbox',
-      label: '',
-      render: (value, row) => (
-        <input type="checkbox" className="w-4 h-4 text-primary-accent rounded focus:ring-primary-accent" />
-      ),
-    },
     {
       key: 'id',
       label: t('projects.columns.id'),
@@ -1060,11 +1154,11 @@ const Projects = () => {
               handleView(row)
             }}
           >
-            {value || row.project_name || '-'}
+            {localizeProjectName(value || row.project_name || '-')}
           </a>
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-gray-500">
             {row.code && <span className="font-mono">{row.code}</span>}
-            {row.projectType && <span className="text-gray-400 capitalize">{row.projectType}</span>}
+            {row.projectType && <span className="text-gray-400 capitalize">{localizeProjectType(row.projectType)}</span>}
           </div>
           {row.label && (
             <span
@@ -1194,129 +1288,132 @@ const Projects = () => {
         </div>
       )}
       {/* Header Section */}
-      <div className="bg-white rounded-lg shadow-sm p-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-          <h1 className="text-xl font-semibold text-gray-900">{t('sidebar.projects')}</h1>
-          <div className="flex items-center gap-2 flex-wrap print:hidden">
-            <button
-              onClick={handleManageLabels}
-              className="inline-flex items-center gap-2 px-2.5 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors shadow-sm"
-            >
-              <IoPricetag size={14} />
-              <span className="hidden sm:inline">{t('projects.actions.manage_labels')}</span>
-            </button>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="inline-flex items-center gap-2 px-2.5 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors shadow-sm"
-            >
-              <IoDownload size={14} />
-              <span className="hidden sm:inline">{t('projects.actions.import_projects')}</span>
-            </button>
-            {/* Hidden Input for Import */}
-            <input
-              type="file"
-              ref={fileInputRef}
-              style={{ display: 'none' }}
-              accept=".csv,.xlsx,.xls"
-              onChange={handleFileImport}
-            />
-            <button
-              onClick={handleOpenTemplateModal}
-              className="inline-flex items-center gap-2 px-2.5 py-1.5 text-xs font-medium text-white rounded-md hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-1 transition-colors shadow-sm"
-              style={{ backgroundColor: '#0891b2' }}
-            >
-              <IoFolder size={14} />
-              <span className="hidden sm:inline">{t('projects.actions.use_template')}</span>
-            </button>
-            <AddButton onClick={handleAdd} label={t('projects.actions.add_project')} />
-          </div>
-        </div>
+      {/* ── Ultra-Compact Header ── */}
+      <div className="bg-white border-b border-gray-200 px-4 py-2 z-20 shadow-sm sticky top-0">
+        <div className="max-w-full mx-auto flex flex-col gap-2">
+          {/* Row 1: Brand, Search, Primary Actions */}
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-primary-accent/10 flex items-center justify-center text-primary-accent shrink-0">
+                <IoFolder size={18} />
+              </div>
+              <h1 className="text-xl font-black text-gray-900 tracking-tight shrink-0">{t('sidebar.projects')}</h1>
 
-        {/* View Mode and Filters */}
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-4 print:hidden">
-          <div className="flex items-center gap-2">
-            <div className="inline-flex rounded-md border border-gray-300 bg-white p-0.5">
-              <button
-                className={`px-2.5 py-1.5 text-xs font-medium rounded transition-colors ${viewMode === 'list' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
-                onClick={() => setViewMode('list')}
-              >
-                <IoList size={14} />
-              </button>
-              <button
-                className={`px-2.5 py-1.5 text-xs font-medium rounded transition-colors ${viewMode === 'card' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
-                onClick={() => setViewMode('card')}
-              >
-                <IoGrid size={14} />
-              </button>
+              <div className="hidden md:flex items-center gap-1 p-1 bg-gray-100 rounded-lg shadow-inner ml-2">
+                {[
+                  { id: 'list', icon: IoList, label: t('common.list') || 'Liste' },
+                  { id: 'card', icon: IoGrid, label: t('common.grid') || 'Raster' }
+                ].map(v => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => setViewMode(v.id)}
+                    className={`flex items-center gap-1.5 px-2 py-1 text-[10px] font-black rounded-md transition-all ${viewMode === v.id ? 'bg-white text-primary-accent shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                  >
+                    <v.icon size={12} /> {v.label}
+                  </button>
+                ))}
+              </div>
             </div>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-2.5 py-1.5 text-xs border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none h-[32px]"
-            >
-              <option value="all">- {t('common.filter')} -</option>
-              <option value="all">{t('projects.filters.all')}</option>
-              <option value="completed">{t('projects.filters.completed')}</option>
-              <option value="high_priority">{t('projects.filters.high_priority')}</option>
-              <option value="open">{t('projects.filters.open')}</option>
-              <option value="upcoming">{t('projects.filters.upcoming')}</option>
-            </select>
-            <button
-              onClick={() => setIsFilterModalOpen(true)}
-              className="p-1.5 text-gray-600 bg-white border border-gray-300 hover:bg-gray-50 rounded-md transition-colors shadow-sm"
-              title={t('projects.actions.advanced_filters')}
-            >
-              <IoFilter size={14} />
-            </button>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleExportExcel}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors shadow-sm"
-            >
-              <IoDownload size={14} />
-              <span className="hidden sm:inline">{t('common.export')}</span>
-            </button>
-            <button
-              onClick={handlePrint}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors shadow-sm"
-            >
-              <IoPrint size={14} />
-              <span className="hidden sm:inline">{t('common.print')}</span>
-            </button>
-            <div className="relative">
+
+            {/* Search - Flexible */}
+            <div className="flex-1 max-w-md relative group">
               <input
                 type="text"
+                placeholder={t('projects.search_placeholder') || 'Search...'}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t('projects.search_placeholder')}
-                className="pl-8 pr-3 py-1.5 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-xs w-40"
+                className="w-full pl-9 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent text-sm transition-all"
               />
-              <IoSearch className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
+              <IoSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleManageLabels}
+                className="p-1.5 text-gray-500 hover:text-primary-accent hover:bg-gray-100 rounded-lg transition-all"
+                title={t('projects.actions.manage_labels')}
+              >
+                <IoPricetag size={16} />
+              </button>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="p-1.5 text-gray-500 hover:text-primary-accent hover:bg-gray-100 rounded-lg transition-all"
+                title={t('projects.actions.import_projects')}
+              >
+                <IoDownload size={16} />
+              </button>
+              <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept=".csv,.xlsx,.xls" onChange={handleFileImport} />
+              
+              <button
+                onClick={handleOpenTemplateModal}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-600 text-white rounded-lg text-xs font-black shadow-md shadow-cyan-600/20 hover:bg-cyan-700 transition-all whitespace-nowrap"
+              >
+                <IoFolder size={14} /> {t('projects.actions.use_template')}
+              </button>
+              
+              <button
+                onClick={handleAdd}
+                className="flex items-center gap-1.5 px-4 py-1.5 bg-primary-accent text-white rounded-lg text-xs font-black shadow-md shadow-primary-accent/20 hover:bg-primary-accent-hover transition-all whitespace-nowrap"
+              >
+                <IoAdd size={16} /> {t('projects.actions.add_project')}
+              </button>
             </div>
           </div>
-        </div>
 
-        {/* Status Quick Tabs */}
-        <div className="flex flex-wrap items-center gap-2 mb-4">
-          {[
-            { id: 'all', label: t('projects.filters.all') },
-            { id: 'completed', label: t('projects.filters.completed') },
-            { id: 'high_priority', label: t('projects.filters.high_priority') },
-            { id: 'open', label: t('projects.filters.open') },
-            { id: 'upcoming', label: t('projects.filters.upcoming') },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setStatusFilter(tab.id)}
-              className={`px-3 py-1 text-xs font-medium rounded-full transition-all ${statusFilter === tab.id
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'bg-white text-gray-600 border border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+          {/* Row 2: Quick Filters and Stats */}
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-2">
+              {[
+                { id: 'all', label: t('projects.filters.all') },
+                { id: 'completed', label: t('projects.filters.completed') },
+                { id: 'high_priority', label: t('projects.filters.high_priority') },
+                { id: 'open', label: t('projects.filters.open') },
+                { id: 'upcoming', label: t('projects.filters.upcoming') },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setStatusFilter(tab.id)}
+                  className={`px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${statusFilter === tab.id
+                    ? 'bg-primary-accent/10 text-primary-accent ring-1 ring-primary-accent/20'
+                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+
+              <div className="h-4 w-px bg-gray-200 mx-1"></div>
+
+              <button
+                onClick={() => setIsFilterModalOpen(true)}
+                className="flex items-center gap-1 px-2 py-1 text-[10px] font-black text-gray-600 uppercase bg-white border border-gray-200 rounded-lg hover:border-primary-accent transition-all"
+              >
+                <IoFilter size={12} /> {t('projects.actions.advanced_filters')}
+              </button>
+
+              <button
+                onClick={handleExportExcel}
+                className="flex items-center gap-1 px-2 py-1 text-[10px] font-black text-gray-600 uppercase bg-white border border-gray-200 rounded-lg hover:border-primary-accent transition-all"
+              >
+                <IoDownload size={12} /> {t('common.export')}
+              </button>
+
+              <button
+                onClick={handlePrint}
+                className="flex items-center gap-1 px-2 py-1 text-[10px] font-black text-gray-600 uppercase bg-white border border-gray-200 rounded-lg hover:border-primary-accent transition-all"
+              >
+                <IoPrint size={12} /> {t('common.print')}
+              </button>
+            </div>
+
+            <div className="flex items-center gap-3 text-[10px] font-bold text-gray-500">
+              <div className="flex items-center gap-1">
+                <span className="opacity-70">{t('projects.total') || 'Total'}:</span>
+                <span className="text-gray-900 font-black">{filteredProjects.length}</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1330,6 +1427,7 @@ const Projects = () => {
             columns={columns}
             data={filteredProjects}
             searchPlaceholder={t('projects.search_placeholder')}
+            hideSearch={true}
             filterConfig={[
               { key: 'status', label: t('common.status'), type: 'select', options: ['In Bearbeitung', 'completed', 'on hold', 'cancelled'] },
               { key: 'company_name', label: t('common.company'), type: 'text' },
@@ -1392,7 +1490,7 @@ const Projects = () => {
                   <div className="flex items-center justify-between text-xs sm:text-sm">
                     <span className="text-secondary-text">{t('projects.form.budget')} :</span>
                     <span className="text-primary-text font-medium">
-                      {project.budget || project.price ? `$${parseFloat(project.budget || project.price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}
+                      {project.budget || project.price ? formatCurrency(project.budget || project.price, project.currency) : '-'}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-xs sm:text-sm">
@@ -1495,6 +1593,7 @@ const Projects = () => {
             projectMembers: [],
             createPublicProject: false,
             status: 'In Bearbeitung',
+            currency: 'EUR',
           })
           setFilteredEmployees([])
           setFilteredDepartments([])
@@ -1556,6 +1655,16 @@ const Projects = () => {
                 onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
                 placeholder="0.00"
               />
+              <div className="hidden">
+                <label className="block text-sm font-medium text-gray-700 mb-2">{t('common.currency') || 'Währung'}</label>
+                <select
+                  value={formData.currency}
+                  onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent outline-none transition-all"
+                >
+                  <option value="EUR">EUR (€)</option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -2441,21 +2550,21 @@ const Projects = () => {
       <Modal
         isOpen={isTemplateModalOpen}
         onClose={() => setIsTemplateModalOpen(false)}
-        title="Select Project Template"
+        title={t('project_templates_ui.select_modal_title')}
         size="lg"
       >
         <div className="space-y-4">
-          <p className="text-sm text-gray-600">{t('') || ''}</p>
+          <p className="text-sm text-gray-600">{t('project_templates_ui.select_modal_description')}</p>
 
           {loadingTemplates ? (
             <div className="text-center py-8">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-primary-accent border-t-transparent"></div>
-              <p className="text-gray-500 mt-2">{t('') || ''}</p>
+              <p className="text-gray-500 mt-2">{t('project_templates_ui.loading')}</p>
             </div>
           ) : projectTemplates.length === 0 ? (
             <div className="text-center py-8 bg-gray-50 rounded-lg">
               <IoFolder size={48} className="mx-auto mb-3 text-gray-300" />
-              <p className="text-gray-500">{t('') || ''}</p>
+              <p className="text-gray-500">{t('project_templates_ui.empty_all')}</p>
               <button
                 onClick={() => {
                   setIsTemplateModalOpen(false)
@@ -2463,7 +2572,7 @@ const Projects = () => {
                 }}
                 className="mt-3 text-sm text-primary-accent hover:underline"
               >
-                Create a template
+                {t('project_templates_ui.select_modal_create_cta')}
               </button>
             </div>
           ) : (
@@ -2481,7 +2590,7 @@ const Projects = () => {
                     <div>
                       <h4 className="font-semibold text-gray-900">{template.name}</h4>
                       {template.category && (
-                        <span className="text-xs text-gray-500">{template.category}</span>
+                        <span className="text-xs text-gray-500">{displayTemplateCategory(template.category)}</span>
                       )}
                     </div>
                   </div>
@@ -2501,10 +2610,10 @@ const Projects = () => {
               }}
               className="text-sm text-primary-accent hover:underline"
             >
-              Skip, create without template
+              {t('project_templates_ui.select_modal_skip')}
             </button>
             <Button variant="outline" onClick={() => setIsTemplateModalOpen(false)}>
-              Cancel
+              {t('project_templates_ui.cancel')}
             </Button>
           </div>
         </div>

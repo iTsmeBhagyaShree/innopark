@@ -5,9 +5,11 @@ import Badge from '../../../components/ui/Badge'
 import Input from '../../../components/ui/Input'
 import Card from '../../../components/ui/Card'
 import { notificationsAPI } from '../../../api'
-import { IoSearch, IoNotifications } from 'react-icons/io5'
+import { IoSearch } from 'react-icons/io5'
+import { useLanguage } from '../../../context/LanguageContext.jsx'
 
 const Notifications = () => {
+  const { t } = useLanguage()
   const { user } = useAuth()
   const userId = user?.id || localStorage.getItem('userId')
   const companyId = user?.company_id || localStorage.getItem('companyId')
@@ -181,7 +183,7 @@ const Notifications = () => {
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search notifications..."
+            placeholder={t('employee_notifications.search_placeholder')}
             className="pl-10"
           />
         </div>

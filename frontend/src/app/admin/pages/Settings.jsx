@@ -91,6 +91,8 @@ const Settings = () => {
       navigate('/app/admin/settings/email-templates')
     } else if (activeSubMenu === 'notifications') {
       navigate('/app/admin/settings/notifications')
+    } else if (activeSubMenu === 'access-permission') {
+      navigate('/app/admin/roles-permissions')
     }
   }, [activeSubMenu, navigate])
 
@@ -223,10 +225,12 @@ const Settings = () => {
       const companyId = localStorage.getItem('companyId') || 1
 
       // Fetch company info
+      let companyCurrency = null
       try {
         const companyResponse = await companiesAPI.getById(companyId)
         if (companyResponse.data.success && companyResponse.data.data) {
           const company = companyResponse.data.data
+          companyCurrency = company.currency || null
           setCompanyInfo({
             id: company.id,
             name: company.name || '',
@@ -273,10 +277,11 @@ const Settings = () => {
           }))
         }
 
-        // Merge with defaults
+        // Merge with defaults (fallback: companies.currency if system_settings has no default_currency)
         setSettings(prev => ({
           ...prev,
           ...settingsObj,
+          default_currency: settingsObj.default_currency || companyCurrency || prev.default_currency || 'EUR',
           // Ensure boolean values
           email_notifications: settingsObj.email_notifications === 'true' || settingsObj.email_notifications === true,
           sms_notifications: settingsObj.sms_notifications === 'true' || settingsObj.sms_notifications === true,
@@ -1913,6 +1918,7 @@ const UpdatesSettings = ({ settings, handleChange }) => {
 // Access Permission Settings Component
 const AccessPermissionSettings = ({ settings, handleChange }) => {
   const { t } = useLanguage()
+  const navigate = useNavigate()
   return (
     <div className="space-y-6">
       <div>
@@ -1920,35 +1926,19 @@ const AccessPermissionSettings = ({ settings, handleChange }) => {
         <p className="text-secondary-text text-sm sm:text-base">{t('settings.access.description')}</p>
       </div>
       <div className="space-y-4">
-        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-3">
           <p className="text-sm text-blue-800">
             {t('settings.access.info')}
           </p>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-primary-text mb-2">{t('settings.access.default_role')}</label>
-          <select
-            value={settings.default_role || 'employee'}
-            onChange={(e) => handleChange('default_role', e.target.value)}
-            className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-accent focus:border-primary-accent outline-none"
+          <Button
+            variant="primary"
+            onClick={() => navigate('/app/admin/roles-permissions')}
           >
-            <option value="admin">{t('settings.access.admin')}</option>
-            <option value="employee">{t('settings.access.employee')}</option>
-          </select>
-        </div>
-        <div>
-          <label className="flex items-center gap-3 p-4 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
-            <input
-              type="checkbox"
-              checked={settings.enable_two_factor === true}
-              onChange={(e) => handleChange('enable_two_factor', e.target.checked)}
-              className="w-5 h-5 text-primary-accent rounded focus:ring-primary-accent"
-            />
-            <div className="flex-1">
-              <span className="text-sm font-medium text-primary-text block">{t('settings.access.enable_2fa')}</span>
-              <span className="text-xs text-secondary-text">{t('settings.access.enable_2fa_desc')}</span>
-            </div>
-          </label>
+            {t('settings.roles_permissions')}
+          </Button>
+          <p className="text-xs text-blue-700">
+            Employee sidebar visibility and per-module CRUD are managed in Roles & Permissions.
+          </p>
         </div>
       </div>
     </div>

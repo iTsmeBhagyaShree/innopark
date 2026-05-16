@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { IoCheckmarkCircle, IoSettings, IoChevronForward } from 'react-icons/io5'
-import { useLanguage } from '../../context/LanguageContext.jsx'
+import { useLanguage } from '../../context/LanguageContext'
 
 const NotificationDropdown = ({ isOpen, onClose, notifications = [] }) => {
   const { t } = useLanguage()

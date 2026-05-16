@@ -62,6 +62,12 @@ const formatDateForMySQL = (dateValue) => {
   return null;
 };
 
+const parseMoney = (v, def = 0) => {
+  if (v === undefined || v === null || v === '') return def;
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : def;
+};
+
 const generateProposalNumber = async (companyId) => {
   try {
     // Find the highest existing proposal number for this company
@@ -426,10 +432,33 @@ const create = async (req, res) => {
       mappedDiscountType = '%';
     }
 
-    // Calculate totals if items exist
+    // Calculate totals from line items, or from body when there are no items
     let totals = { sub_total: 0, discount_amount: 0, tax_amount: 0, total: 0 };
-    if (items && Array.isArray(items) && items.length > 0) {
-      totals = calculateTotals(items, discount, mappedDiscountType);
+    const itemRows = items && Array.isArray(items) ? items : [];
+    if (itemRows.length > 0) {
+      totals = calculateTotals(itemRows, discount, mappedDiscountType);
+    } else {
+      const has = (k) => req.body[k] !== undefined && req.body[k] !== null && req.body[k] !== '';
+      const providedTotal = has('total') ? parseMoney(req.body.total) : null;
+      const providedSub = has('sub_total') ? parseMoney(req.body.sub_total) : null;
+      const taxAmount = has('tax_amount') ? parseMoney(req.body.tax_amount) : 0;
+
+      let discountAmount;
+      if (has('discount_amount')) {
+        discountAmount = parseMoney(req.body.discount_amount);
+      } else if (mappedDiscountType === '%') {
+        const base = providedSub ?? providedTotal ?? parseMoney(req.body.amount);
+        discountAmount = (base * parseMoney(discount)) / 100;
+      } else {
+        discountAmount = parseMoney(discount);
+      }
+
+      const subTotal = providedSub ?? parseMoney(req.body.amount) ?? (providedTotal !== null ? providedTotal : 0);
+      const total = providedTotal !== null
+        ? providedTotal
+        : (subTotal - discountAmount + taxAmount);
+
+      totals = { sub_total: subTotal, discount_amount: discountAmount, tax_amount: taxAmount, total };
     }
 
     // Use title in description if no description provided

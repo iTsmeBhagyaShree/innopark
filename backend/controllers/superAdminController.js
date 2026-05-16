@@ -1902,20 +1902,22 @@ const ensureAuditLogsTable = async () => {
   try {
     await pool.execute(`
       CREATE TABLE IF NOT EXISTS audit_logs (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        admin_id INT,
-        admin_name VARCHAR(255),
-        action VARCHAR(255) NOT NULL,
-        module VARCHAR(100),
-        old_value TEXT,
-        new_value TEXT,
-        ip_address VARCHAR(45),
-        user_agent TEXT,
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        company_id INT UNSIGNED NOT NULL,
+        user_id INT UNSIGNED NOT NULL,
+        action VARCHAR(100) NOT NULL,
+        module VARCHAR(50) NOT NULL,
+        record_id INT UNSIGNED NULL,
+        old_values JSON NULL,
+        new_values JSON NULL,
+        ip_address VARCHAR(45) NULL,
+        user_agent VARCHAR(500) NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_admin_id (admin_id),
-        INDEX idx_action (action),
-        INDEX idx_module (module),
-        INDEX idx_created_at (created_at)
+        INDEX idx_audit_user (user_id),
+        INDEX idx_audit_module (module),
+        INDEX idx_audit_action (action),
+        INDEX idx_audit_date (created_at),
+        INDEX idx_audit_company (company_id)
       )
     `);
     return true;
@@ -1931,12 +1933,13 @@ const ensureAuditLogsTable = async () => {
 const logAudit = async (adminId, adminName, action, module, oldValue, newValue, ipAddress, userAgent) => {
   try {
     await ensureAuditLogsTable();
+    // Super Admin logs are generally for system-wide changes, use company_id = 1 as default
     await pool.execute(
-      `INSERT INTO audit_logs (admin_id, admin_name, action, module, old_value, new_value, ip_address, user_agent)
+      `INSERT INTO audit_logs (company_id, user_id, action, module, old_values, new_values, ip_address, user_agent)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        1, // Default company_id for super admin actions
         adminId,
-        adminName,
         action,
         module,
         typeof oldValue === 'object' ? JSON.stringify(oldValue) : oldValue,
@@ -2289,37 +2292,42 @@ const getAuditLogs = async (req, res) => {
     const params = [];
 
     if (module) {
-      whereClause += ' AND module = ?';
+      whereClause += ' AND al.module = ?';
       params.push(module);
     }
     if (action) {
-      whereClause += ' AND action LIKE ?';
+      whereClause += ' AND al.action LIKE ?';
       params.push(`%${action}%`);
     }
     if (admin_id) {
-      whereClause += ' AND admin_id = ?';
+      whereClause += ' AND al.user_id = ?';
       params.push(admin_id);
     }
     if (start_date) {
-      whereClause += ' AND created_at >= ?';
+      whereClause += ' AND al.created_at >= ?';
       params.push(start_date);
     }
     if (end_date) {
-      whereClause += ' AND created_at <= ?';
+      whereClause += ' AND al.created_at <= ?';
       params.push(end_date + ' 23:59:59');
     }
 
     // Get total count
     const [countResult] = await pool.execute(
-      `SELECT COUNT(*) as total FROM audit_logs WHERE ${whereClause}`,
+      `SELECT COUNT(*) as total FROM audit_logs al WHERE ${whereClause}`,
       params
     );
     const total = countResult[0].total;
 
-    // Get logs
+    // Get logs - Injecting limit and offset directly to avoid placeholder issues in pool.execute
     const [logs] = await pool.execute(
-      `SELECT * FROM audit_logs WHERE ${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-      [...params, parseInt(limit), offset]
+      `SELECT al.*, u.name as admin_name 
+       FROM audit_logs al 
+       LEFT JOIN users u ON al.user_id = u.id 
+       WHERE ${whereClause} 
+       ORDER BY al.created_at DESC 
+       LIMIT ${parseInt(limit)} OFFSET ${offset}`,
+      params
     );
 
     res.json({

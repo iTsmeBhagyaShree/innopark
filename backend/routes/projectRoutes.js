@@ -6,8 +6,10 @@ const express = require('express');
 const router = express.Router();
 const projectController = require('../controllers/projectController');
 const { uploadSingle, handleUploadError } = require('../middleware/upload');
+const { verifyToken } = require('../middleware/auth');
 
-// No authentication required - all routes are public
+router.use(verifyToken);
+
 // Labels
 router.get('/labels', projectController.getAllLabels);
 router.post('/labels', projectController.createLabel);

@@ -10,7 +10,7 @@ import adminSidebarData from '../../config/adminSidebarData'
 import employeeSidebarData from '../../config/employeeSidebarData'
 import superAdminSidebarData from '../../config/superAdminSidebarData'
 
-import { useLanguage } from '../../context/LanguageContext.jsx'
+import { useLanguage } from '../../context/LanguageContext'
 
 const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
   const { user, logout } = useAuth()

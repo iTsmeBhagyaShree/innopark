@@ -1,5 +1,19 @@
 const pool = require('../config/db');
 const bcrypt = require('bcryptjs');
+const ensureUserRbacRoleColumn = require('../utils/ensureUserRbacRoleColumn');
+
+/** Validate roles.id for company; undefined = caller skips update */
+async function normalizeRbacRoleId(exec, raw, companyId) {
+  if (raw === undefined) return undefined;
+  if (raw === null || raw === '') return null;
+  const rid = parseInt(String(raw), 10);
+  if (!Number.isFinite(rid) || rid <= 0) return null;
+  const [vr] = await exec(
+    'SELECT id FROM roles WHERE id = ? AND company_id = ? AND is_deleted = 0',
+    [rid, companyId]
+  );
+  return vr.length ? rid : null;
+}
 
 const getAll = async (req, res) => {
   try {
@@ -42,9 +56,11 @@ const getAll = async (req, res) => {
               e.skills, e.probation_end_date, e.notice_period_start_date,
               e.notice_period_end_date, e.employment_type, e.marital_status,
               e.business_address, e.created_at, e.updated_at,
-              u.id as uid, u.name, u.email, u.phone, u.address, u.country,
+              u.id as uid,
+              COALESCE(e.user_id, u.id) AS assignable_user_id,
+              u.name, u.email, u.phone, u.address, u.country,
               u.email_notifications, u.role as user_role, u.status,
-              u.company_id,
+              u.company_id, u.rbac_role_id,
               c.name as company_name,
               d.name as department_name, 
               p.name as position_name
@@ -88,6 +104,7 @@ const getAll = async (req, res) => {
  */
 const create = async (req, res) => {
   try {
+    await ensureUserRbacRoleColumn(pool);
     const {
       name, email, phone, password, role,
       company_id, department_id, position_id,
@@ -157,6 +174,15 @@ const create = async (req, res) => {
 
       const userId = userResult.insertId;
 
+      if (req.body.rbac_role_id !== undefined) {
+        const rbacResolved = await normalizeRbacRoleId(
+          connection.execute.bind(connection),
+          req.body.rbac_role_id,
+          finalCompanyId
+        );
+        await connection.execute('UPDATE users SET rbac_role_id = ? WHERE id = ?', [rbacResolved, userId]);
+      }
+
       // Generate employee number if not provided
       let empNumber = employee_number;
       if (!empNumber) {
@@ -210,7 +236,7 @@ const create = async (req, res) => {
       const [employees] = await pool.execute(
         `SELECT e.*, 
                 u.name, u.email, u.phone, u.address, u.role as user_role, u.status,
-                u.company_id,
+                u.company_id, u.rbac_role_id,
                 c.name as company_name,
                 d.name as department_name, 
                 p.name as position_name
@@ -259,7 +285,7 @@ const getById = async (req, res) => {
     // If we're looking up by user_id directly because it's a fallback admin record without an employees row
     let query = `SELECT e.*,
               u.name, u.email, u.phone, u.address, u.country, u.email_notifications, u.role as user_role, u.status, u.avatar,
-              u.company_id,
+              u.company_id, u.rbac_role_id,
               c.name as company_name,
               d.name as department_name,
               p.name as position_name,
@@ -304,6 +330,7 @@ const getById = async (req, res) => {
  */
 const update = async (req, res) => {
   try {
+    await ensureUserRbacRoleColumn(pool);
     const { id } = req.params;
     const {
       name, email, phone, address,
@@ -409,6 +436,15 @@ const update = async (req, res) => {
         );
       }
 
+      if (req.body.rbac_role_id !== undefined) {
+        const rbacResolved = await normalizeRbacRoleId(
+          connection.execute.bind(connection),
+          req.body.rbac_role_id,
+          currentCompanyId
+        );
+        await connection.execute('UPDATE users SET rbac_role_id = ? WHERE id = ?', [rbacResolved, userId]);
+      }
+
       // Update employee fields
       const empUpdateFields = [];
       const empUpdateValues = [];
@@ -478,7 +514,7 @@ const update = async (req, res) => {
       // Get updated employee
       let fetchQuery = `SELECT e.*, 
                 u.name, u.email, u.phone, u.address, u.role as user_role, u.status,
-                u.company_id,
+                u.company_id, u.rbac_role_id,
                 c.name as company_name,
                 d.name as department_name, 
                 p.name as position_name

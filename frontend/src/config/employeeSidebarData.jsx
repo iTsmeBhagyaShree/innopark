@@ -20,11 +20,17 @@ const employeeSidebarData = [
     moduleKey: 'dashboard',
   },
   {
+    label: 'sidebar.tasks',
+    icon: IoCheckboxOutline,
+    path: '/app/employee/tasks',
+    section: 'sidebar.crmSales',
+    moduleKey: 'tasks',
+  },
+  {
     label: 'sidebar.crm',
     icon: IoBriefcase,
     path: '/app/employee/crm',
     section: 'sidebar.crmSales',
-    moduleKey: 'leads',
     children: [
       { label: 'sidebar.leads', icon: IoPeople, path: '/app/employee/leads', moduleKey: 'leads' },
       { label: 'sidebar.deals', icon: IoTrendingUp, path: '/app/employee/deals', moduleKey: 'deals' },
@@ -40,13 +46,6 @@ const employeeSidebarData = [
     path: '/app/employee/my-projects',
     section: 'sidebar.teamOperations',
     moduleKey: 'projects',
-  },
-  {
-    label: 'sidebar.tasks',
-    icon: IoCheckboxOutline,
-    path: '/app/employee/my-tasks',
-    section: 'sidebar.teamOperations',
-    moduleKey: 'tasks',
   },
   {
     label: 'sidebar.messages',

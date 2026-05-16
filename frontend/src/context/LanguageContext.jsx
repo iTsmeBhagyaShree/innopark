@@ -1,9 +1,14 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { translations, languages } from '../locales'
 import { languageConfig } from '../config/languageConfig'
-import { useSettings } from './SettingsContext'
+import SettingsContext from './SettingsContext'
 
 const LanguageContext = createContext()
+
+/** Matches SettingsProvider initial default_language when SettingsProvider is not an ancestor */
+const settingsFallback = {
+  default_language: languageConfig.DEFAULT_LANGUAGE || 'de',
+}
 
 /**
  * Custom hook to use the language context
@@ -17,13 +22,17 @@ export const useLanguage = () => {
 }
 
 export const LanguageProvider = ({ children }) => {
-    const { settings } = useSettings()
+    const settingsCtx = useContext(SettingsContext)
+    const settings = settingsCtx?.settings ?? settingsFallback
 
-    // localStorage > company settings > languageConfig (default German for this product)
+    // Saved user choice (localStorage) wins. Otherwise DEFAULT_LANGUAGE, optionally company API — see languageConfig.SYNC_COMPANY_DEFAULT_LANGUAGE
     const [language, setLanguage] = useState(() => {
         const stored = localStorage.getItem('language')
         if (stored) return stored
-        return settings.default_language || languageConfig.DEFAULT_LANGUAGE || 'de'
+        if (languageConfig.SYNC_COMPANY_DEFAULT_LANGUAGE) {
+            return settings.default_language || languageConfig.DEFAULT_LANGUAGE || 'de'
+        }
+        return languageConfig.DEFAULT_LANGUAGE || 'de'
     })
 
     // Sync state when language changes
@@ -57,16 +66,16 @@ export const LanguageProvider = ({ children }) => {
         loadTranslations()
     }, [language])
 
-    // Sync with global settings if it changes
+    // Optional: follow company default_language from API when enabled and user has not chosen a language
     useEffect(() => {
+        if (!languageConfig.SYNC_COMPANY_DEFAULT_LANGUAGE) return
         if (settings.default_language && settings.default_language !== language) {
-            // Only sync if localStorage is empty or we haven't manually changed it in this session
             const stored = localStorage.getItem('language')
             if (!stored) {
                 setLanguage(settings.default_language)
             }
         }
-    }, [settings.default_language])
+    }, [settings.default_language, language])
 
     /**
      * Translate a key into the current language with Smart Fallbacks
@@ -110,9 +119,14 @@ export const LanguageProvider = ({ children }) => {
             result = findValue(currentTranslations, ['common', key.toLowerCase()]);
         }
 
-        // Attempt 3: English fallback (only if current locale has no string — keeps rare keys usable)
+        // Attempt 3: English fallback when UI is not English
         if (result === null && language !== 'en') {
             result = findValue(translations.en, keys) || findValue(translations.en, ['common', key.toLowerCase()]);
+        }
+
+        // Attempt 4: German fallback when UI is not German (mirrors Attempt 3 for incomplete catalogs)
+        if (result === null && language !== 'de') {
+            result = findValue(translations.de, keys) || findValue(translations.de, ['common', key.toLowerCase()]);
         }
 
         // Final Result Processing

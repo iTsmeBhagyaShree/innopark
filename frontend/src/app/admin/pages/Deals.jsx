@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { createPortal } from 'react-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useLanguage } from '../../../context/LanguageContext'
 import {
     IoSearch, IoFilter, IoAdd, IoBriefcase, IoBusiness, IoPricetag,
@@ -8,10 +9,11 @@ import {
     IoTrashOutline, IoPencil, IoEye, IoClose, IoCashOutline,
     IoCalendarOutline, IoDocumentTextOutline, IoLayers, IoFunnelOutline,
     IoRefreshOutline, IoColorPaletteOutline, IoPersonOutline, IoStatsChartOutline,
-    IoChevronDown
+    IoChevronDown, IoDownload, IoReceipt
 } from 'react-icons/io5'
 import { dealsAPI, companiesAPI, dealPipelinesAPI, employeesAPI, customFieldsAPI } from '../../../api'
 import { useAuth } from '../../../context/AuthContext'
+import { useSettings } from '../../../context/SettingsContext.jsx'
 import Card from '../../../components/ui/Card'
 import Button from '../../../components/ui/Button'
 import Badge from '../../../components/ui/Badge'
@@ -19,95 +21,124 @@ import Input from '../../../components/ui/Input'
 import Modal from '../../../components/ui/Modal'
 import CustomFieldsSection from '../../../components/ui/CustomFieldsSection'
 
-// ─── helpers ────────────────────────────────────────────────────────────────
-const fmt = (amount, currency = 'EUR') =>
-    new Intl.NumberFormat('de-DE', { style: 'currency', currency, maximumFractionDigits: 0 }).format(amount || 0)
-
-const fmtShort = (n) => {
-    return new Intl.NumberFormat('de-DE', {
-        style: 'currency',
-        currency: 'EUR',
-        notation: 'compact',
-        maximumFractionDigits: 1
-    }).format(n || 0)
-}
-
 const EMPTY_FORM = {
-    title: '', company_id: '', total: '', currency: 'EUR',
+    title: '', client_id: '', company_id: '', total: '', currency: 'EUR',
     valid_till: '', status: 'Draft', description: '', pipeline_id: '', stage_id: '',
     assigned_to: '', custom_fields: {}
 }
 
+/** Row from GET /employees — deals.assigned_to must be users.id */
+const employeeAssignableUserId = (row) => {
+    if (!row) return ''
+    const id = row.assignable_user_id ?? row.user_id ?? row.uid
+    if (id == null || id === '') return ''
+    return String(id)
+}
+
+/** Pipeline stage title in column headers — aligned with Leads Kanban i18n */
+const dealStageDisplayName = (stage, t) => {
+    const n = (stage.name || '').toLowerCase().trim()
+    if (['new lead', 'new', 'neu'].includes(n)) return t('deals.stages.new')
+    if (['contacted', 'kontaktiert'].includes(n)) return t('deals.stages.contacted')
+    if (['qualified', 'qualifiziert'].includes(n)) return t('deals.stages.qualified')
+    if (['converted', 'konvertiert'].includes(n)) return t('deals.stages.converted')
+    if (['proposal', 'angebot'].includes(n)) return t('deals.stages.proposal')
+    if (['negotiation', 'verhandlung'].includes(n)) return t('deals.stages.negotiation')
+    if (['in progress', 'in bearbeitung'].includes(n)) return t('deals.stages.in_progress')
+    if (['won', 'gewonnen'].includes(n)) return t('deals.stages.won')
+    if (['lost', 'verloren'].includes(n)) return t('deals.stages.lost')
+    return stage.name
+}
+
 // ─── DealFormFields (top-level to avoid remount bug) ─────────────────────────
-const DealFormFields = ({ data, setData, employees, pipelines, onPipelineChange }) => {
+const DealFormFields = ({ data, setData, employees, pipelines, companies, onPipelineChange }) => {
     const { t } = useLanguage()
     return (
-        <div className="space-y-5">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
-                    <label className="block text-xs font-black text-gray-600 uppercase tracking-widest mb-1.5">{t('deals.form.title')} *</label>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">{t('deals.form.title')} *</label>
                     <div className="relative">
                         <input required type="text" value={data.title}
                             onChange={e => setData(p => ({ ...p, title: e.target.value }))}
-                            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent text-sm transition-all"
+                            className="w-full pl-10 pr-4 py-3 bg-gray-50/50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-primary-accent/5 focus:border-primary-accent text-sm transition-all placeholder:text-gray-400 font-medium"
                             placeholder={t('deals.form.placeholder_title')} />
-                        <IoBriefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                        <IoBriefcase className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                     </div>
                 </div>
 
                 <div>
-                    <label className="block text-xs font-black text-gray-600 uppercase tracking-widest mb-1.5">{t('deals.form.assigned_to')}</label>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">{t('deals.form.assigned_to')}</label>
                     <div className="relative">
                         <select value={data.assigned_to} onChange={e => setData(p => ({ ...p, assigned_to: e.target.value }))}
-                            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent text-sm appearance-none transition-all">
+                            className="w-full pl-10 pr-10 py-3 bg-gray-50/50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-primary-accent/5 focus:border-primary-accent text-sm appearance-none transition-all font-medium cursor-pointer">
                             <option value="">{t('deals.form.unassigned')}</option>
-                            {(employees || []).map(e => <option key={e.id} value={e.user_id}>{e.name}</option>)}
+                            {(employees || []).map((e) => {
+                                const uid = employeeAssignableUserId(e)
+                                return <option key={uid || e.email || e.id} value={uid}>{e.name}</option>
+                            })}
                         </select>
-                        <IoPersonOutline className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                        <IoPersonOutline className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        <IoChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" size={16} />
                     </div>
                 </div>
             </div>
+
             <div>
-                <label className="block text-xs font-black text-gray-600 uppercase tracking-widest mb-1.5">{t('deals.form.pipeline')} *</label>
-                <p className="text-[11px] text-gray-500 mb-2 font-medium">{t('deals.form.stage_inherited_hint')}</p>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">{t('sidebar.companies') || 'Company'} *</label>
+                <div className="relative">
+                    <select required value={data.client_id} onChange={e => setData(p => ({ ...p, client_id: e.target.value }))}
+                        className="w-full pl-10 pr-10 py-3 bg-gray-50/50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-primary-accent/5 focus:border-primary-accent text-sm appearance-none transition-all font-medium cursor-pointer">
+                        <option value="">{t('common.select_company') || t('deals.form.select_client') || 'Select Company'}</option>
+                        {(companies || []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                    <IoBusiness className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <IoChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" size={16} />
+                </div>
+            </div>
+
+            <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1.5">{t('deals.form.pipeline')} *</label>
+                <p className="text-[11px] text-gray-400 mb-2.5 font-medium">{t('deals.form.stage_inherited_hint')}</p>
                 <div className="relative">
                     <select required value={data.pipeline_id}
                         onChange={e => { const pid = e.target.value; setData(p => ({ ...p, pipeline_id: pid })); onPipelineChange && onPipelineChange(pid) }}
-                        className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent text-sm appearance-none transition-all">
+                        className="w-full pl-10 pr-10 py-3 bg-gray-50/50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-primary-accent/5 focus:border-primary-accent text-sm appearance-none transition-all font-medium cursor-pointer">
                         <option value="">{t('deals.form.select_pipeline')}</option>
                         {(pipelines || []).map(p => <option key={p.id} value={p.id}>{['sales pipeline'].includes((p.name||'').toLowerCase()) ? t('deals.pipelines.sales') : p.name}</option>)}
                     </select>
-                    <IoLayers className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                    <IoLayers className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <IoChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" size={16} />
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
-                    <label className="block text-xs font-black text-gray-600 uppercase tracking-widest mb-1.5">{t('deals.form.amount')} *</label>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">{t('deals.form.amount')} *</label>
                     <div className="relative">
                         <input required type="number" value={data.total} onChange={e => setData(p => ({ ...p, total: e.target.value }))}
-                            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent text-sm transition-all"
+                            className="w-full pl-10 pr-4 py-3 bg-gray-50/50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-primary-accent/5 focus:border-primary-accent text-sm transition-all font-bold text-gray-800"
                             placeholder="0.00" min="0" step="0.01" />
-                        <IoCashOutline className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                        <IoCashOutline className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                     </div>
                 </div>
                 <div>
-                    <label className="block text-xs font-black text-gray-600 uppercase tracking-widest mb-1.5">{t('deals.form.valid_till')}</label>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">{t('deals.form.valid_till')}</label>
                     <div className="relative">
                         <input type="date" value={data.valid_till} onChange={e => setData(p => ({ ...p, valid_till: e.target.value }))}
-                            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent text-sm transition-all" />
-                        <IoCalendarOutline className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                            className="w-full pl-10 pr-4 py-3 bg-gray-50/50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-primary-accent/5 focus:border-primary-accent text-sm transition-all font-medium cursor-pointer" />
+                        <IoCalendarOutline className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                     </div>
                 </div>
             </div>
 
             <div>
-                <label className="block text-xs font-black text-gray-600 uppercase tracking-widest mb-1.5">{t('deals.form.description')}</label>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">{t('deals.form.description')}</label>
                 <div className="relative">
                     <textarea value={data.description} onChange={e => setData(p => ({ ...p, description: e.target.value }))}
-                        className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent text-sm transition-all min-h-[80px] resize-none"
+                        className="w-full pl-10 pr-4 py-3 bg-gray-50/50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-primary-accent/5 focus:border-primary-accent text-sm transition-all min-h-[100px] resize-none font-medium placeholder:text-gray-400"
                         placeholder={t('deals.form.placeholder_desc')} />
-                    <IoDocumentTextOutline className="absolute left-3 top-3 text-gray-400" size={16} />
+                    <IoDocumentTextOutline className="absolute left-3.5 top-4 text-gray-400" size={18} />
                 </div>
             </div>
         </div>
@@ -117,136 +148,197 @@ const DealFormFields = ({ data, setData, employees, pipelines, onPipelineChange 
 // ─── DealCard ────────────────────────────────────────────────────────────────
 const DealCard = ({ deal, onDragStart, onDragEnd, onEdit, onDelete, navigate, user, draggable = true }) => {
     const { t } = useLanguage()
+    const { formatCurrency } = useSettings()
     const [menuOpen, setMenuOpen] = useState(false)
-    const menuRef = useRef(null)
+    const [menuStyle, setMenuStyle] = useState({})
+    const btnWrapRef = useRef(null)
+    const menuPanelRef = useRef(null)
 
     useEffect(() => {
-        const handler = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false) }
+        if (!menuOpen) return
+        const handler = (e) => {
+            const el = e.target
+            if (btnWrapRef.current?.contains(el)) return
+            if (menuPanelRef.current?.contains(el)) return
+            setMenuOpen(false)
+        }
         document.addEventListener('mousedown', handler)
         return () => document.removeEventListener('mousedown', handler)
-    }, [])
+    }, [menuOpen])
+
+    const toggleMenu = (e) => {
+        e.stopPropagation()
+        e.preventDefault()
+        if (!menuOpen && btnWrapRef.current) {
+            const r = btnWrapRef.current.getBoundingClientRect()
+            const w = 144
+            setMenuStyle({
+                position: 'fixed',
+                top: Math.min(r.bottom + 4, window.innerHeight - 8),
+                left: Math.max(8, r.right - w),
+                width: w,
+                zIndex: 9999,
+            })
+        }
+        setMenuOpen((v) => !v)
+    }
 
     const daysLeft = deal.valid_till
         ? Math.ceil((new Date(deal.valid_till) - new Date()) / 86400000)
         : null
 
+    const dealDetailPath = user?.role === 'EMPLOYEE' ? `/app/employee/deals/${deal.id}` : `/app/admin/deals/${deal.id}`
+
     return (
-        <div
-            draggable={draggable}
-            onDragStart={draggable ? (e) => onDragStart(e, deal) : undefined}
-            onDragEnd={onDragEnd}
-            className={`bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md hover:border-primary-accent/40 transition-all group select-none ${
-                draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
-            }`}
-        >
-            {/* Color bar */}
-            <div className="h-1 rounded-t-xl" style={{ backgroundColor: deal.stage_color || '#6366f1' }} />
+        <>
+            <div
+                draggable={draggable}
+                onDragStart={draggable ? (e) => onDragStart(e, deal) : undefined}
+                onDragEnd={onDragEnd}
+                className={`bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md hover:border-primary-accent/40 transition-all group select-none ${
+                    draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
+                }`}
+            >
+                {/* Color bar */}
+                <div className="h-1 rounded-t-xl" style={{ backgroundColor: deal.stage_color || '#6366f1' }} />
 
-            <div className="p-4">
-                {/* Header row */}
-                <div className="flex items-start justify-between gap-2 mb-3">
-                    <h4
-                        className="font-bold text-gray-900 group-hover:text-primary-accent transition-colors leading-tight line-clamp-2 text-sm cursor-pointer flex-1"
-                        onClick={() => {
-                            const path = user?.role === 'EMPLOYEE' ? `/app/employee/deals/${deal.id}` : `/app/admin/deals/${deal.id}`;
-                            navigate(path);
-                        }}
-                    >
-                        {deal.title}
-                    </h4>
-                    <div className="relative flex-shrink-0" ref={menuRef}>
-                        <button
-                            onClick={(e) => { e.stopPropagation(); setMenuOpen(v => !v) }}
-                            className="p-1 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-all"
+                <div className="p-4">
+                    {/* Header row */}
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                        <h4
+                            className="font-bold text-gray-900 group-hover:text-primary-accent transition-colors leading-tight line-clamp-2 text-sm cursor-pointer flex-1"
+                            onClick={() => navigate(dealDetailPath)}
                         >
-                            <IoEllipsisHorizontal size={16} />
-                        </button>
-                        {menuOpen && (
-                            <div className="absolute right-0 top-7 z-50 bg-white border border-gray-200 rounded-xl shadow-xl w-36 py-1 animate-in fade-in zoom-in-95 duration-150">
-                                <button onClick={() => { 
-                                    const path = user?.role === 'EMPLOYEE' ? `/app/employee/deals/${deal.id}` : `/app/admin/deals/${deal.id}`;
-                                    navigate(path); 
-                                    setMenuOpen(false);
-                                }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                                    <IoEye size={14} /> {t('common.view')}
-                                </button>
-                                <button onClick={() => { onEdit(deal); setMenuOpen(false) }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                                    <IoPencil size={14} /> {t('common.edit')}
-                                </button>
-                                <button onClick={() => { onDelete(deal); setMenuOpen(false) }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50">
-                                    <IoTrashOutline size={14} /> {t('common.delete')}
-                                </button>
+                            {deal.title}
+                        </h4>
+                        <div className="relative flex-shrink-0" ref={btnWrapRef}>
+                            <button
+                                type="button"
+                                onClick={toggleMenu}
+                                className="p-1 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-all"
+                                aria-expanded={menuOpen}
+                                aria-haspopup="menu"
+                            >
+                                <IoEllipsisHorizontal size={16} />
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Company */}
+                    {(deal.company_name || deal.client_name) && (
+                        <div className="flex items-center gap-1.5 text-gray-500 mb-2">
+                            <IoBusiness size={12} className="flex-shrink-0" />
+                            <span className="text-[11px] font-semibold truncate">{deal.company_name || deal.client_name}</span>
+                        </div>
+                    )}
+
+                    {/* Assigned */}
+                    {deal.assigned_to_name && (
+                        <div className="flex items-center gap-1.5 text-gray-400 mb-2">
+                            <IoPersonOutline size={12} className="flex-shrink-0" />
+                            <span className="text-[11px] truncate">{deal.assigned_to_name}</span>
+                        </div>
+                    )}
+
+                    {/* Footer */}
+                    <div className="flex items-center justify-between pt-3 border-t border-gray-50 mt-2">
+                        <div className="text-sm font-black text-gray-900">{formatCurrency(deal.total, deal.currency)}</div>
+                        <div className="flex items-center gap-2">
+                            {daysLeft !== null && (
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${daysLeft < 0 ? 'bg-red-100 text-red-600' : daysLeft <= 7 ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
+                                    {daysLeft < 0 ? `${Math.abs(daysLeft)} ${t('deals.summary.days_ago')}` : `${daysLeft} ${t('deals.summary.days_left')}`}
+                                </span>
+                            )}
+                            <div
+                                className="w-6 h-6 rounded-full bg-primary-accent/10 border border-primary-accent/20 flex items-center justify-center text-[10px] font-bold text-primary-accent ring-2 ring-white uppercase"
+                                title={deal.assigned_to_name || deal.created_by_name || ''}
+                            >
+                                {(deal.assigned_to_name || deal.created_by_name || 'U').charAt(0)}
                             </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* Company */}
-                {(deal.company_name || deal.client_name) && (
-                    <div className="flex items-center gap-1.5 text-gray-500 mb-2">
-                        <IoBusiness size={12} className="flex-shrink-0" />
-                        <span className="text-[11px] font-semibold truncate">{deal.company_name || deal.client_name}</span>
-                    </div>
-                )}
-
-                {/* Assigned */}
-                {deal.assigned_to_name && (
-                    <div className="flex items-center gap-1.5 text-gray-400 mb-2">
-                        <IoPersonOutline size={12} className="flex-shrink-0" />
-                        <span className="text-[11px] truncate">{deal.assigned_to_name}</span>
-                    </div>
-                )}
-
-                {/* Footer */}
-                <div className="flex items-center justify-between pt-3 border-t border-gray-50 mt-2">
-                    <div className="text-sm font-black text-gray-900">{fmt(deal.total, deal.currency)}</div>
-                    <div className="flex items-center gap-2">
-                        {daysLeft !== null && (
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${daysLeft < 0 ? 'bg-red-100 text-red-600' : daysLeft <= 7 ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
-                                {daysLeft < 0 ? `${Math.abs(daysLeft)} ${t('deals.summary.days_ago')}` : `${daysLeft} ${t('deals.summary.days_left')}`}
-                            </span>
-                        )}
-                        <div className="w-6 h-6 rounded-full bg-primary-accent/10 flex items-center justify-center text-[10px] font-bold text-primary-accent uppercase" title={deal.created_by_name}>
-                            {deal.created_by_name?.charAt(0) || 'U'}
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
+            {menuOpen &&
+                createPortal(
+                    <div
+                        ref={menuPanelRef}
+                        style={menuStyle}
+                        className="bg-white border border-gray-200 rounded-xl shadow-xl py-1"
+                        role="menu"
+                    >
+                        <button
+                            type="button"
+                            role="menuitem"
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                            onClick={() => {
+                                navigate(dealDetailPath)
+                                setMenuOpen(false)
+                            }}
+                        >
+                            <IoEye size={14} /> {t('common.view')}
+                        </button>
+                        <button
+                            type="button"
+                            role="menuitem"
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                            onClick={() => {
+                                onEdit(deal)
+                                setMenuOpen(false)
+                            }}
+                        >
+                            <IoPencil size={14} /> {t('common.edit')}
+                        </button>
+                        <button
+                            type="button"
+                            role="menuitem"
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                            onClick={() => {
+                                onDelete(deal)
+                                setMenuOpen(false)
+                            }}
+                        >
+                            <IoTrashOutline size={14} /> {t('common.delete')}
+                        </button>
+                    </div>,
+                    document.body
+                )}
+        </>
     )
 }
 
 // ─── KanbanColumn ─────────────────────────────────────────────────────────────
-const KanbanColumn = ({ stage, deals, onDragStart, onDragEnd, onDragOver, onDrop, onEdit, onDelete, navigate, isDragOver, user, cardsDraggable = true }) => {
+const KanbanColumn = ({ stage, deals, onDragStart, onDragEnd, onDragOver, onDrop, onEdit, onDelete, navigate, isDragOver, user, cardsDraggable = true, fmtShort }) => {
     const { t } = useLanguage()
     const totalValue = deals.reduce((s, d) => s + parseFloat(d.total || 0), 0)
+    const color = stage.color || '#6366f1'
 
     return (
         <div
-            className={`flex-shrink-0 w-[300px] flex flex-col rounded-2xl border transition-all duration-200 ${isDragOver ? 'border-primary-accent/50 bg-primary-accent/5 shadow-lg shadow-primary-accent/10' : 'border-gray-200/70 bg-gray-50/80'}`}
+            className={`flex-shrink-0 w-[300px] flex flex-col rounded-2xl border transition-all duration-200 min-h-0 ${isDragOver ? 'border-primary-accent/50 bg-primary-accent/5 shadow-lg shadow-primary-accent/10' : 'border-gray-200/70 bg-gray-50/80'}`}
             onDragOver={onDragOver}
             onDrop={(e) => onDrop(e, stage.id)}
         >
-            {/* Column header */}
-            <div className="p-3 pb-2">
+            {/* Column header — same pattern as Leads LeadKanbanColumn */}
+            <div className="p-3 pb-2 shrink-0">
                 <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full ring-2 ring-white shadow-sm" style={{ backgroundColor: stage.color || '#6366f1' }} />
-                        <h3 className="font-black text-gray-800 text-xs uppercase tracking-wider">{['new','in progress','won','lost'].includes((stage.name||'').toLowerCase()) ? t('deals.stages.' + stage.name.toLowerCase().replace(' ', '_')) : stage.name}</h3>
-                        <span className="bg-white px-2 py-0.5 rounded-full text-[10px] font-black text-gray-500 border border-gray-200 shadow-sm">{deals.length}</span>
+                    <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-3 h-3 rounded-full ring-2 ring-white shadow-sm shrink-0" style={{ backgroundColor: color }} />
+                        <h3 className="font-black text-gray-800 text-xs uppercase tracking-wider truncate" title={stage.name}>
+                            {dealStageDisplayName(stage, t)}
+                        </h3>
+                        <span className="shrink-0 bg-white px-2 py-0.5 rounded-full text-[10px] font-black text-gray-500 border border-gray-200 shadow-sm">{deals.length}</span>
                     </div>
                 </div>
                 {deals.length > 0 && (
                     <div className="text-[11px] font-bold text-gray-400 pl-5">{fmtShort(totalValue)}</div>
                 )}
-                {/* Progress bar */}
                 <div className="mt-2 h-0.5 rounded-full bg-gray-200 overflow-hidden">
-                    <div className="h-full rounded-full transition-all duration-500" style={{ backgroundColor: stage.color || '#6366f1', width: `${Math.min(100, deals.length * 10)}%` }} />
+                    <div className="h-full rounded-full transition-all duration-500" style={{ backgroundColor: color, width: `${Math.min(100, deals.length * 10 || 4)}%` }} />
                 </div>
             </div>
 
-            {/* Cards */}
-            <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-2.5 min-h-[120px] max-h-[calc(100vh-280px)] custom-scrollbar">
+            <div className="flex-1 min-h-[120px] max-h-[calc(100vh-280px)] overflow-y-auto overflow-x-hidden px-3 pb-3 space-y-2.5 custom-scrollbar">
                 {deals.map(deal => (
                     <DealCard
                         key={deal.id}
@@ -261,10 +353,10 @@ const KanbanColumn = ({ stage, deals, onDragStart, onDragEnd, onDragOver, onDrop
                     />
                 ))}
                 {deals.length === 0 && (
-                    <div className={`h-28 border-2 border-dashed rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all ${isDragOver ? 'border-primary-accent/40 bg-primary-accent/5' : 'border-gray-200 opacity-40'}`}>
+                    <div className={`h-28 border-2 border-dashed rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all ${isDragOver && cardsDraggable ? 'border-primary-accent/40 bg-primary-accent/5 opacity-100' : 'border-gray-200 opacity-50'}`}>
                         <IoBriefcase size={20} className="text-gray-300" />
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                            {cardsDraggable ? t('deals.kanban.drop_here') : t('deals.kanban.no_stages_list')}
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-center px-2">
+                            {isDragOver && cardsDraggable ? t('deals.kanban.drop_here') : (cardsDraggable ? t('deals.kanban.empty_column') : t('deals.kanban.no_stages_list'))}
                         </span>
                     </div>
                 )}
@@ -277,7 +369,19 @@ const KanbanColumn = ({ stage, deals, onDragStart, onDragEnd, onDragOver, onDrop
 const Deals = () => {
     const { t } = useLanguage()
     const { user } = useAuth()
+    const { formatCurrency, settings } = useSettings()
+    const fmtShort = useCallback((n) => {
+        const code = String(settings?.default_currency || 'EUR').toUpperCase()
+        return new Intl.NumberFormat('de-DE', {
+            style: 'currency',
+            currency: code,
+            notation: 'compact',
+            maximumFractionDigits: 1
+        }).format(n || 0)
+    }, [settings?.default_currency])
     const navigate = useNavigate()
+    const [searchParams] = useSearchParams()
+    const viewParam = searchParams.get('view')
     const companyId = useMemo(() => {
         const id = user?.company_id || localStorage.getItem('companyId') || '1'
         return parseInt(id, 10) || 1
@@ -287,12 +391,14 @@ const Deals = () => {
     const [deals, setDeals] = useState([])
     const [pipelines, setPipelines] = useState([])
     const [stages, setStages] = useState([])
+    const [stagesLoading, setStagesLoading] = useState(true)
     const [employees, setEmployees] = useState([])
     const [loading, setLoading] = useState(true)
     const [submitting, setSubmitting] = useState(false)
+    const [companies, setCompanies] = useState([])
 
     // View & pipeline
-    const [viewMode, setViewMode] = useState('kanban')
+    const [viewMode, setViewMode] = useState(() => (viewParam === 'kanban' ? 'kanban' : 'list'))
     const [activePipelineId, setActivePipelineId] = useState('')
 
     // Drag
@@ -315,8 +421,8 @@ const Deals = () => {
     const [filterMaxValue, setFilterMaxValue] = useState('')
 
     // Forms
-    const [formData, setFormData] = useState({ ...EMPTY_FORM, company_id: companyId })
-    const [editData, setEditData] = useState({ ...EMPTY_FORM })
+    const [formData, setFormData] = useState({ ...EMPTY_FORM, company_id: companyId, currency: settings?.default_currency || 'EUR' })
+    const [editData, setEditData] = useState({ ...EMPTY_FORM, currency: settings?.default_currency || 'EUR' })
 
     // ── fetch ──────────────────────────────────────────────────────────────────
     const fetchDeals = useCallback(async () => {
@@ -337,20 +443,13 @@ const Deals = () => {
         }
     }, [companyId, filterAssignedTo, filterDateFrom, filterDateTo, filterMinValue, filterMaxValue])
 
-    const fetchPipelines = useCallback(async () => {
-        try {
-            const res = await dealPipelinesAPI.getAllPipelines({ company_id: companyId })
-            if (res.data.success && res.data.data.length > 0) {
-                setPipelines(res.data.data)
-                const def = res.data.data.find(p => p.is_default) || res.data.data[0]
-                setActivePipelineId(String(def.id))
-                setFormData(prev => ({ ...prev, pipeline_id: String(def.id) }))
-                fetchStages(def.id)
-            }
-        } catch (err) { console.error('fetchPipelines:', err) }
-    }, [companyId])
-
     const fetchStages = async (pipelineId) => {
+        if (pipelineId == null || pipelineId === '') {
+            setStages([])
+            setStagesLoading(false)
+            return
+        }
+        setStagesLoading(true)
         try {
             const res = await dealPipelinesAPI.getStages(pipelineId)
             if (res.data.success) {
@@ -359,16 +458,46 @@ const Deals = () => {
                 if (list.length > 0) {
                     const first = String(list[0].id)
                     if (isEditModalOpen) {
-                        setEditData(prev => ({ ...prev, stage_id: first, pipeline_id: String(pipelineId) }))
+                        setEditData((prev) => ({ ...prev, stage_id: first, pipeline_id: String(pipelineId) }))
                     } else {
-                        setFormData(prev => ({ ...prev, stage_id: first, pipeline_id: String(pipelineId) }))
+                        setFormData((prev) => ({ ...prev, stage_id: first, pipeline_id: String(pipelineId) }))
                     }
                 }
+            } else {
+                setStages([])
             }
-        } catch (err) { console.error('fetchStages:', err) }
+        } catch (err) {
+            console.error('fetchStages:', err)
+            setStages([])
+        } finally {
+            setStagesLoading(false)
+        }
     }
 
-
+    const fetchPipelines = async () => {
+        setStagesLoading(true)
+        try {
+            const res = await dealPipelinesAPI.getAllPipelines({ company_id: companyId })
+            if (res.data.success && res.data.data.length > 0) {
+                setPipelines(res.data.data)
+                const def = res.data.data.find((p) => p.is_default) || res.data.data[0]
+                setActivePipelineId(String(def.id))
+                setFormData((prev) => ({ ...prev, pipeline_id: String(def.id) }))
+                await fetchStages(def.id)
+            } else {
+                setPipelines([])
+                setActivePipelineId('')
+                setStages([])
+                setStagesLoading(false)
+            }
+        } catch (err) {
+            console.error('fetchPipelines:', err)
+            setPipelines([])
+            setActivePipelineId('')
+            setStages([])
+            setStagesLoading(false)
+        }
+    }
 
     const fetchEmployees = useCallback(async () => {
         try {
@@ -377,10 +506,26 @@ const Deals = () => {
         } catch (err) { console.error('fetchEmployees:', err) }
     }, [companyId])
 
+    const fetchCompanies = useCallback(async () => {
+        try {
+            const res = await companiesAPI.getAll({ company_id: companyId })
+            if (res.data.success) {
+                const list = res.data.data || res.data || []
+                setCompanies(Array.isArray(list) ? list : [])
+            }
+        } catch (err) { console.error('fetchCompanies:', err) }
+    }, [companyId])
+
+    useEffect(() => {
+        if (viewParam === 'list') setViewMode('list')
+        else setViewMode('kanban')
+    }, [viewParam])
+
     useEffect(() => {
         fetchDeals()
         fetchPipelines()
         fetchEmployees()
+        fetchCompanies()
     }, [companyId])
 
     useEffect(() => { fetchDeals() }, [filterAssignedTo, filterDateFrom, filterDateTo, filterMinValue, filterMaxValue])
@@ -469,12 +614,14 @@ const Deals = () => {
                 company_id: companyId,
                 pipeline_id: pipelineId,
                 stage_id: stageId,
+                valid_till: formData.valid_till || null,
             })
             if (res.data.success) {
                 setIsAddModalOpen(false)
                 setFormData({
                     ...EMPTY_FORM,
                     company_id: companyId,
+                    currency: settings?.default_currency || 'EUR',
                     pipeline_id: String(activePipelineId || pipelineId || ''),
                     stage_id: stages[0]?.id != null ? String(stages[0].id) : '',
                 })
@@ -491,7 +638,7 @@ const Deals = () => {
             client_id: deal.client_id || '',
             company_id: deal.company_id || companyId,
             total: deal.total || '',
-            currency: deal.currency || 'USD',
+            currency: deal.currency || settings?.default_currency || 'EUR',
             valid_till: deal.valid_till ? deal.valid_till.split('T')[0] : '',
             status: deal.status || 'Draft',
             description: deal.description || '',
@@ -507,7 +654,7 @@ const Deals = () => {
         e.preventDefault()
         try {
             setSubmitting(true)
-            const res = await dealsAPI.update(selectedDeal.id, editData)
+            const res = await dealsAPI.update(selectedDeal.id, { ...editData, valid_till: editData.valid_till || null })
             if (res.data.success) { setIsEditModalOpen(false); fetchDeals() }
         } catch (err) { console.error('Update deal error:', err); alert(t('messages.updateError')) }
         finally { setSubmitting(false) }
@@ -529,139 +676,195 @@ const Deals = () => {
         setFilterMinValue(''); setFilterMaxValue('')
     }
 
+    const handleExportCsv = () => {
+        const rows = viewMode === 'kanban' ? dealsInActivePipeline : filteredDeals
+        if (rows.length === 0) {
+            alert(t('leads.alerts.no_data_export'))
+            return
+        }
+        const headers = ['Deal ID', 'Title', 'Company', 'Client', 'Amount', 'Currency', 'Stage ID', 'Pipeline ID', 'Valid Till', 'Assigned']
+        const csvRows = rows.map((d) => [
+            d.id,
+            d.title,
+            d.company_name,
+            d.client_name,
+            d.total,
+            d.currency,
+            d.stage_id,
+            d.pipeline_id,
+            d.valid_till,
+            d.assigned_to_name || d.assigned_to || ''
+        ])
+        const csvContent = [
+            headers.join(','),
+            ...csvRows.map((row) => row.map((cell) => `"${(cell ?? '').toString().replace(/"/g, '""')}"`).join(','))
+        ].join('\n')
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.setAttribute('href', url)
+        link.setAttribute('download', `deals_export_${new Date().toISOString().split('T')[0]}.csv`)
+        link.style.visibility = 'hidden'
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+    }
+
+    const handlePrint = () => window.print()
+
     // DealFormFields is defined at top-level (above Deals component)
 
     // ── render ─────────────────────────────────────────────────────────────────
     return (
         <div className="flex flex-col h-[calc(100vh-4rem)] lg:h-[calc(100vh-5rem)] overflow-hidden bg-gray-50">
 
-            {/* ── Header ── */}
-            <div className="bg-white border-b border-gray-200 px-4 py-4 flex flex-col gap-3 shadow-sm z-20">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    {/* Title + tabs */}
-                    <div>
-                        <h1 className="text-xl font-black text-gray-900 flex items-center gap-2">
-                            <IoBriefcase className="text-primary-accent" size={22} /> <span className="notranslate">{t('Deals')}</span>
-                        </h1>
-                        <div className="flex items-center gap-1 mt-1.5">
-                            {[{ id: 'kanban', icon: IoGrid, label: 'Kanban' }, { id: 'list', icon: IoList, label: t('common.list') || 'Liste' }].map(v => (
-                                <button key={v.id} onClick={() => setViewMode(v.id)}
-                                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${viewMode === v.id ? 'bg-primary-accent/10 text-primary-accent' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'}`}>
-                                    <v.icon size={14} /> {v.label}
-                                </button>
-                            ))}
+            {/* ── Ultra-Compact Header ── */}
+            <div className="bg-white border-b border-gray-200 px-4 py-2 z-20 shadow-sm">
+                <div className="max-w-full mx-auto flex flex-col gap-2">
+                    {/* Row 1: Brand, Search, Primary Actions */}
+                    <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-primary-accent/10 flex items-center justify-center text-primary-accent shrink-0">
+                                <IoBriefcase size={18} />
+                            </div>
+                            <h1 className="text-xl font-black text-gray-900 tracking-tight shrink-0">{t('Deals')}</h1>
+                            
+                            <div className="hidden md:flex items-center gap-1 p-1 bg-gray-100 rounded-lg shadow-inner ml-2">
+                                {[
+                                    { id: 'kanban', icon: IoGrid, label: 'Kanban' },
+                                    { id: 'list', icon: IoList, label: t('common.list') || 'Liste' }
+                                ].map(v => (
+                                    <button
+                                        key={v.id}
+                                        type="button"
+                                        onClick={() => setViewMode(v.id)}
+                                        className={`flex items-center gap-1.5 px-2 py-1 text-[10px] font-black rounded-md transition-all ${viewMode === v.id ? 'bg-white text-primary-accent shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                    >
+                                        <v.icon size={12} /> {v.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Search - Flexible */}
+                        <div className="flex-1 max-w-md relative group">
+                            <input
+                                type="text"
+                                placeholder={t('deals.search_placeholder') || 'Search...'}
+                                value={searchQuery}
+                                onChange={e => setSearchQuery(e.target.value)}
+                                className="w-full pl-9 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent text-sm transition-all"
+                            />
+                            <IoSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setIsAddModalOpen(true)}
+                                className="flex items-center gap-1.5 px-4 py-1.5 bg-primary-accent text-white rounded-lg text-xs font-black shadow-md shadow-primary-accent/20 hover:bg-primary-accent-hover transition-all whitespace-nowrap"
+                            >
+                                <IoAdd size={16} /> {t('deals.add_deal')}
+                            </button>
                         </div>
                     </div>
 
-                    {/* Right controls */}
-                    <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 w-full lg:w-auto">
-                        {/* Pipeline selector */}
-                        {pipelines.length > 0 && (
-                            <div className="relative w-full sm:w-auto">
-                                <IoLayers size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                                <select
-                                    className="appearance-none bg-gray-50 border border-gray-200 rounded-xl w-full sm:w-auto py-2 pr-8 focus:outline-none cursor-pointer text-sm font-bold text-gray-700 w-full sm:w-auto transition-all"
-                                    style={{ paddingLeft: '2.25rem' }}
-                                    value={activePipelineId}
-                                    onChange={(e) => {
-                                        const v = e.target.value
-                                        setActivePipelineId(v)
-                                        fetchStages(v)
-                                        setFormData((p) => ({ ...p, pipeline_id: v }))
-                                    }}
-                                >
-                                    {pipelines.map((p) => (
-                                        <option key={p.id} value={p.id}>
-                                            {['sales pipeline'].includes((p.name || '').toLowerCase()) ? t('deals.pipelines.sales') : p.name}
-                                        </option>
-                                    ))}
-                                </select>
-                                <IoChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} />
-                            </div>
-                        )}
+                    {/* Row 2: Pipeline, Filters, and Compact Stats */}
+                    <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                            {/* Pipeline Selector */}
+                            {pipelines.length > 0 && (
+                                <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-lg px-2 py-1 hover:border-primary-accent transition-all">
+                                    <IoLayers size={14} className="text-gray-400" />
+                                    <select
+                                        className="bg-transparent text-[10px] font-bold text-gray-700 focus:outline-none cursor-pointer"
+                                        value={activePipelineId}
+                                        onChange={(e) => {
+                                            const v = e.target.value
+                                            setActivePipelineId(v)
+                                            fetchStages(v)
+                                            setFormData((p) => ({ ...p, pipeline_id: v }))
+                                        }}
+                                    >
+                                        {pipelines.map((p) => (
+                                            <option key={p.id} value={p.id}>
+                                                {['sales pipeline'].includes((p.name || '').toLowerCase()) ? t('deals.pipelines.sales') : p.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
 
-                        {/* Search */}
-                        <div className="relative w-full sm:w-auto flex-1 sm:flex-none">
-                            <input type="text" placeholder={t('deals.search_placeholder')} value={searchQuery}
-                                onChange={e => setSearchQuery(e.target.value)}
-                                className="w-full sm:w-52 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent text-sm transition-all"
-                                style={{ paddingLeft: '2.5rem' }}
-                            />
-                            <IoSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
-                        </div>
-
-                        {/* Filter btn */}
-                        <div className="flex items-center gap-2 w-full sm:w-auto">
-                            <button onClick={() => setIsFilterOpen(v => !v)}
-                                className={`flex-1 sm:flex-none relative flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-bold transition-all ${isFilterOpen || activeFiltersCount > 0 ? 'bg-primary-accent text-white border-primary-accent shadow-lg shadow-primary-accent/30' : 'bg-white border-gray-200 text-gray-600 hover:border-primary-accent hover:text-primary-accent'}`}>
-                                <IoFunnelOutline size={15} /> {t('common.filter')}
+                            {/* Filter Toggle */}
+                            <button
+                                onClick={() => setIsFilterOpen(v => !v)}
+                                className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[10px] font-black transition-all ${isFilterOpen || activeFiltersCount > 0 ? 'bg-primary-accent text-white border-primary-accent shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:border-primary-accent'}`}
+                            >
+                                <IoFunnelOutline size={14} /> {t('common.filter')}
                                 {activeFiltersCount > 0 && (
-                                    <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">{activeFiltersCount}</span>
+                                    <div className="w-1.5 h-1.5 bg-red-500 rounded-full"></div>
                                 )}
                             </button>
 
-                            {/* Add Deal */}
-                            <Button variant="primary" onClick={() => setIsAddModalOpen(true)}
-                                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 shadow-lg shadow-primary-accent/30 text-sm py-2 px-4 whitespace-nowrap">
-                                <IoAdd size={18} /> {t('deals.add_deal')}
-                            </Button>
+                            <div className="md:hidden flex items-center gap-1 p-0.5 bg-gray-100 rounded-lg">
+                                {[
+                                    { id: 'kanban', icon: IoGrid },
+                                    { id: 'list', icon: IoList }
+                                ].map(v => (
+                                    <button
+                                        key={v.id}
+                                        type="button"
+                                        onClick={() => setViewMode(v.id)}
+                                        className={`p-1 rounded-md transition-all ${viewMode === v.id ? 'bg-white text-primary-accent shadow-sm' : 'text-gray-500'}`}
+                                    >
+                                        <v.icon size={12} />
+                                    </button>
+                                ))}
+                            </div>
                         </div>
-                    </div>
-                </div>
 
-                {/* Filter Panel */}
-                {isFilterOpen && (
-                    <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 animate-in slide-in-from-top-2 duration-200">
-                        <div className="flex flex-wrap items-end gap-4">
-                            <div className="flex-1 min-w-[160px]">
-                                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">{t('common.assigned_to')}</label>
-                                <select value={filterAssignedTo} onChange={e => setFilterAssignedTo(e.target.value)}
-                                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent">
-                                    <option value="">{t('common.all_users')}</option>
-                                    {employees.map(e => <option key={e.id} value={e.user_id}>{e.name}</option>)}
-                                </select>
+                        {/* Ultra-compact Stats Bar */}
+                        <div className="flex items-center gap-4 text-[10px] font-bold text-gray-500">
+                            <div className="flex items-center gap-1.5">
+                                <span className="uppercase tracking-tighter opacity-70">{t('deals.items')}:</span>
+                                <span className="text-gray-900 font-black">{headerSummary.count}</span>
                             </div>
-                            <div className="flex-1 min-w-[140px]">
-                                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">{t('common.date_from')}</label>
-                                <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)}
-                                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent" />
-                            </div>
-                            <div className="flex-1 min-w-[140px]">
-                                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">{t('deals.date_to')}</label>
-                                <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)}
-                                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent" />
-                            </div>
-                            <div className="flex-1 min-w-[120px]">
-                                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">{t('deals.min_value')}</label>
-                                <input type="number" value={filterMinValue} onChange={e => setFilterMinValue(e.target.value)}
-                                    placeholder="0" className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent" />
-                            </div>
-                            <div className="flex-1 min-w-[120px]">
-                                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">{t('deals.max_value')}</label>
-                                <input type="number" value={filterMaxValue} onChange={e => setFilterMaxValue(e.target.value)}
-                                    placeholder="∞" className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-accent/20 focus:border-primary-accent" />
+                            <div className="w-px h-3 bg-gray-200"></div>
+                            <div className="flex items-center gap-1.5">
+                                <span className="uppercase tracking-tighter opacity-70">{t('deals.summary.total')}:</span>
+                                <span className="text-primary-accent font-black">{fmtShort(headerSummary.value)}</span>
                             </div>
                             {activeFiltersCount > 0 && (
-                                <button onClick={clearFilters}
-                                    className="flex items-center gap-1.5 px-3 py-2 text-sm font-bold text-red-500 hover:bg-red-50 rounded-xl border border-red-200 transition-all">
-                                    <IoClose size={14} /> {t('common.clear')}
-                                </button>
+                                <>
+                                    <div className="w-px h-3 bg-gray-200"></div>
+                                    <div className="flex items-center gap-1.5 text-amber-600">
+                                        <span className="uppercase tracking-tighter opacity-70">{t('deals.summary.active_filters')}:</span>
+                                        <span className="font-black">{activeFiltersCount}</span>
+                                    </div>
+                                </>
                             )}
                         </div>
                     </div>
-                )}
-
-                {/* Stats bar */}
-                <div className="flex items-center gap-4 text-xs text-gray-500">
-                    <span className="font-bold"><span className="text-gray-900">{headerSummary.count}</span> {t('deals.items')}</span>
-                    <span className="w-1 h-1 bg-gray-300 rounded-full" />
-                    <span className="font-bold">{t('deals.summary.total')}: <span className="text-primary-accent">{fmtShort(headerSummary.value)}</span></span>
-                    {activeFiltersCount > 0 && <><span className="w-1 h-1 bg-gray-300 rounded-full" /><span className="text-amber-600 font-bold">{activeFiltersCount} {t('deals.summary.active_filters')}</span></>}
                 </div>
             </div>
 
             {/* ── Content ── */}
-            <div className="flex-1 overflow-auto p-5">
+            <div className="flex-1 overflow-auto p-3 sm:p-5">
+                <div className="flex items-center gap-2 ml-auto mb-4 justify-end">
+                    <button
+                        type="button"
+                        onClick={handleExportCsv}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-600 hover:border-green-500 hover:text-green-600 transition-all shadow-sm"
+                    >
+                        <IoDownload size={14} className="text-green-600" /> {t('common.export')}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handlePrint}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-600 hover:border-blue-500 hover:text-blue-600 transition-all shadow-sm"
+                    >
+                        <IoReceipt size={14} className="text-blue-600" /> {t('common.print')}
+                    </button>
+                </div>
                 {loading ? (
                     <div className="flex items-center justify-center h-full">
                         <div className="flex flex-col items-center gap-3">
@@ -670,54 +873,18 @@ const Deals = () => {
                         </div>
                     </div>
                 ) : viewMode === 'kanban' ? (
-                    /* ── KANBAN ── */
-                    <div className="flex gap-4 h-full min-h-[320px] overflow-x-auto pb-4 custom-scrollbar scrollbar-hide">
-                        {stages.length === 0 && activePipelineId && dealsInActivePipeline.length > 0 ? (
-                            <div className="flex flex-col gap-2 w-full">
-                                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 max-w-2xl">
-                                    {t('deals.kanban.no_stages_running')}
-                                </p>
-                                <div className="flex gap-4">
-                                    <KanbanColumn
-                                        key="deals-fallback"
-                                        stage={{ id: '_fallback', name: t('deals.kanban.fallback_title'), color: '#6366f1' }}
-                                        deals={dealsInActivePipeline}
-                                        cardsDraggable={false}
-                                        onDragStart={handleDragStart}
-                                        onDragEnd={handleDragEnd}
-                                        onDragOver={(e) => e.preventDefault()}
-                                        onDrop={(e) => e.preventDefault()}
-                                        onEdit={handleEdit}
-                                        onDelete={handleDelete}
-                                        navigate={navigate}
-                                        isDragOver={false}
-                                        user={user}
-                                    />
-                                </div>
-                                <p className="text-xs text-gray-400 pl-1">
-                                    <button
-                                        type="button"
-                                        onClick={() => navigate('/app/admin/settings/pipelines')}
-                                        className="text-primary-accent font-medium hover:underline"
-                                    >
-                                        {t('deals.kanban.manage_pipelines_short')}
-                                    </button>
-                                </p>
+                    /* ── KANBAN (layout aligned with Leads page) ── */
+                    <div className="w-full pb-4" onDragOver={(e) => e.preventDefault()}>
+                        <div
+                            className="flex gap-4 h-full min-h-[320px] min-w-0 overflow-x-auto overflow-y-visible pb-4 -mx-3 sm:mx-0 px-3 sm:px-0 custom-scrollbar items-stretch"
+                            onDragOver={(e) => e.preventDefault()}
+                        >
+                        {stagesLoading ? (
+                            <div className="w-full min-h-[400px] flex flex-col items-center justify-center gap-3 rounded-2xl border border-gray-100 bg-white/60">
+                                <div className="h-8 w-8 rounded-full border-2 border-primary-accent border-t-transparent animate-spin" />
+                                <p className="text-sm font-medium text-gray-500">{t('common.loading')}</p>
                             </div>
-                        ) : stages.length === 0 ? (
-                            <div className="flex-1 flex flex-col items-center justify-center gap-2 text-gray-400 min-h-[280px]">
-                                <IoLayers size={40} className="text-gray-200" />
-                                <p className="font-bold text-sm text-center px-4">{t('deals.kanban.no_stages')}</p>
-                                <p className="text-xs text-gray-500 text-center max-w-md px-4">{t('deals.kanban.no_stages_hint')}</p>
-                                <button
-                                    type="button"
-                                    onClick={() => navigate('/app/admin/settings/pipelines')}
-                                    className="mt-1 text-sm text-primary-accent/90 hover:underline"
-                                >
-                                    {t('deals.kanban.manage_pipelines_short')}
-                                </button>
-                            </div>
-                        ) : (
+                        ) : stages.length > 0 ? (
                             stages.map((stage) => (
                                 <KanbanColumn
                                     key={stage.id}
@@ -732,9 +899,92 @@ const Deals = () => {
                                     navigate={navigate}
                                     isDragOver={dragOverStageId === stage.id}
                                     user={user}
+                                    fmtShort={fmtShort}
                                 />
                             ))
+                        ) : activePipelineId && dealsInActivePipeline.length > 0 ? (
+                            <div className="flex flex-col gap-2 w-full min-w-0">
+                                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 max-w-2xl">
+                                    {t('deals.kanban.no_stages_running')}
+                                </p>
+                                <div className="flex gap-4 min-w-0">
+                                    <KanbanColumn
+                                        key="deals-fallback-pipeline"
+                                        stage={{ id: '_fallback', name: t('deals.kanban.fallback_title'), color: '#6366f1' }}
+                                        deals={dealsInActivePipeline}
+                                        cardsDraggable={false}
+                                        onDragStart={handleDragStart}
+                                        onDragEnd={handleDragEnd}
+                                        onDragOver={(e) => e.preventDefault()}
+                                        onDrop={(e) => e.preventDefault()}
+                                        onEdit={handleEdit}
+                                        onDelete={handleDelete}
+                                        navigate={navigate}
+                                        isDragOver={false}
+                                        user={user}
+                                        fmtShort={fmtShort}
+                                    />
+                                </div>
+                                <p className="text-xs text-gray-400 pl-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => navigate('/app/admin/settings/pipelines')}
+                                        className="text-primary-accent font-medium hover:underline"
+                                    >
+                                        {t('deals.kanban.manage_pipelines_short')}
+                                    </button>
+                                </p>
+                            </div>
+                        ) : filteredDeals.length > 0 ? (
+                            <div className="flex flex-col gap-2 w-full min-w-0">
+                                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 max-w-2xl">
+                                    {pipelines.length === 0
+                                        ? t('deals.kanban.no_pipeline_fallback_hint')
+                                        : t('deals.kanban.no_stages_running')}
+                                </p>
+                                <div className="flex gap-4 min-w-0">
+                                    <KanbanColumn
+                                        key="deals-fallback-all"
+                                        stage={{ id: '_fallback_all', name: t('deals.kanban.fallback_title'), color: '#6366f1' }}
+                                        deals={filteredDeals}
+                                        cardsDraggable={false}
+                                        onDragStart={handleDragStart}
+                                        onDragEnd={handleDragEnd}
+                                        onDragOver={(e) => e.preventDefault()}
+                                        onDrop={(e) => e.preventDefault()}
+                                        onEdit={handleEdit}
+                                        onDelete={handleDelete}
+                                        navigate={navigate}
+                                        isDragOver={false}
+                                        user={user}
+                                        fmtShort={fmtShort}
+                                    />
+                                </div>
+                                <p className="text-xs text-gray-400 pl-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => navigate('/app/admin/settings/pipelines')}
+                                        className="text-primary-accent font-medium hover:underline"
+                                    >
+                                        {t('deals.kanban.manage_pipelines_short')}
+                                    </button>
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="flex-1 flex flex-col items-center justify-center gap-2 text-gray-400 min-h-[280px] w-full">
+                                <IoLayers size={40} className="text-gray-200" />
+                                <p className="font-bold text-sm text-center px-4">{t('deals.kanban.no_stages')}</p>
+                                <p className="text-xs text-gray-500 text-center max-w-md px-4">{t('deals.kanban.no_stages_hint')}</p>
+                                <button
+                                    type="button"
+                                    onClick={() => navigate('/app/admin/settings/pipelines')}
+                                    className="mt-1 text-sm text-primary-accent/90 hover:underline"
+                                >
+                                    {t('deals.kanban.manage_pipelines_short')}
+                                </button>
+                            </div>
                         )}
+                        </div>
                     </div>
                 ) : (
                     /* ── LIST ── */
@@ -783,7 +1033,7 @@ const Deals = () => {
                                                     </div>
                                                 ) : <span className="text-xs text-gray-400">—</span>}
                                             </td>
-                                            <td className="px-5 py-3.5 font-black text-gray-900 text-sm">{fmt(deal.total, deal.currency)}</td>
+                                            <td className="px-5 py-3.5 font-black text-gray-900 text-sm">{formatCurrency(deal.total, deal.currency)}</td>
                                             <td className="px-2 sm:px-4 py-2 sm:py-3">
                                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider"
                                                     style={{ backgroundColor: `${deal.stage_color || '#6366f1'}15`, color: deal.stage_color || '#6366f1' }}>
@@ -820,6 +1070,7 @@ const Deals = () => {
                         data={formData} setData={setFormData}
                         employees={employees}
                         pipelines={pipelines}
+                        companies={companies}
                         onPipelineChange={(pid) => fetchStages(pid)}
                     />
                     <CustomFieldsSection module="Deals" companyId={companyId}
@@ -841,6 +1092,7 @@ const Deals = () => {
                         data={editData} setData={setEditData}
                         employees={employees}
                         pipelines={pipelines}
+                        companies={companies}
                         onPipelineChange={(pid) => fetchStages(pid)}
                     />
                     <CustomFieldsSection module="Deals" companyId={companyId}

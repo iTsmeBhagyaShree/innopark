@@ -5,7 +5,6 @@
 
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { useAuth } from './AuthContext'
-import BaseUrl from '../api/baseUrl'
 import axiosInstance from '../api/axiosInstance'
 
 // Create context
@@ -18,62 +17,66 @@ const PermissionsContext = createContext(null)
 export const PermissionsProvider = ({ children }) => {
   const { user, isAuthenticated } = useAuth()
   const [modulePermissions, setModulePermissions] = useState({})
+  const [strictRbac, setStrictRbac] = useState(false)
   const [loading, setLoading] = useState(true)
 
   /**
    * Fetch user permissions from backend
    */
   const fetchPermissions = useCallback(async () => {
-    console.log('🔄 fetchPermissions called - isAuthenticated:', isAuthenticated, 'user:', user?.role, user?.email)
-
-    // Check if user exists (isAuthenticated might be undefined initially)
     if (!user) {
-      console.log('⏳ Waiting for user...')
+      setStrictRbac(false)
       setLoading(false)
       return
     }
 
     try {
       setLoading(true)
-      const companyId = user?.company_id ?? user?.companyId ?? localStorage.getItem('companyId') ?? localStorage.getItem('company_id')
-      console.log('🏢 Company ID:', companyId)
 
-      if (!companyId) {
-        console.log('❌ No company ID found')
+      const rbacRoleNum = parseInt(String(user.rbac_role_id ?? ''), 10)
+      const useStrictRbac =
+        user.role === 'EMPLOYEE' &&
+        Number.isFinite(rbacRoleNum) &&
+        rbacRoleNum > 0
+
+      if (useStrictRbac) {
+        const rbacPerm = user.rbac_permissions && typeof user.rbac_permissions === 'object'
+          ? user.rbac_permissions
+          : {}
+        setModulePermissions(rbacPerm)
+        setStrictRbac(true)
         setLoading(false)
         return
       }
 
-      // Use axiosInstance for consistency and better error handling
-      // It automatically adds Authorization headers and company_id
+      setStrictRbac(false)
+
+      const companyId = user?.company_id ?? user?.companyId ?? localStorage.getItem('companyId') ?? localStorage.getItem('company_id')
+
+      if (!companyId) {
+        setLoading(false)
+        return
+      }
+
       const response = await axiosInstance.get('/module-settings', {
         params: { company_id: companyId }
       })
 
       if (response.data && response.data.success) {
         const data = response.data.data
-        console.log('📦 API Response:', data)
-
-        // Get module permissions
         const perms = data.module_permissions || {}
-
-        // Store permissions
         setModulePermissions(perms)
-
-        // Debug log
-        console.log('✅ Loaded module permissions for', user.role, ':', perms)
       }
     } catch (axErr) {
       if (axErr.response?.status === 404) {
-        console.warn('⚠️ Module settings endpoint not found, using defaults')
         setModulePermissions({})
       } else {
-        console.error('❌ Error fetching permissions:', axErr)
+        console.error('Error fetching permissions:', axErr)
       }
     } finally {
       setLoading(false)
     }
-  }, [isAuthenticated, user])
+  }, [user])
 
   /**
    * Check if user has permission for a module
@@ -82,42 +85,33 @@ export const PermissionsProvider = ({ children }) => {
    * @returns {boolean}
    */
   const hasPermission = useCallback((moduleKey, permission = 'can_view') => {
-    // SUPERADMIN and ADMIN have all permissions
     if (user?.role === 'SUPERADMIN' || user?.role === 'ADMIN') {
       return true
     }
 
-    // If permissions not loaded yet, return true (don't block while loading)
     if (loading) {
       return true
     }
 
-    // Check module permissions
+    // Assigned RBAC role on hire: only modules listed in role_permissions are accessible
+    if (user?.role === 'EMPLOYEE' && strictRbac) {
+      const mod = modulePermissions[moduleKey]
+      if (!mod) return false
+      const perm = mod[permission]
+      if (perm === false || perm === 0) return false
+      if (perm === true || perm === 1) return true
+      return false
+    }
+
     if (modulePermissions[moduleKey]) {
-      // Check if permission is explicitly set
       const perm = modulePermissions[moduleKey][permission]
-
-      console.log(`🔐 Checking ${moduleKey}.${permission} = ${perm}`)
-
-      // If explicitly false or 0, deny access
-      if (perm === false || perm === 0) {
-        console.log(`❌ DENIED: ${moduleKey}.${permission}`)
-        return false
-      }
-      // If explicitly true or 1, allow access
-      if (perm === true || perm === 1) {
-        return true
-      }
-      // If undefined in permission object, default to true (full access)
-      // This means if module has permissions object but this specific permission is not set, allow it
+      if (perm === false || perm === 0) return false
+      if (perm === true || perm === 1) return true
       return true
     }
 
-    // If module permissions not set at all for this module, default to true (full access)
-    // This ensures backward compatibility - if no permissions set, allow access
-    console.log(`⚠️ No permissions found for ${moduleKey}, defaulting to true`)
     return true
-  }, [modulePermissions, user, loading])
+  }, [modulePermissions, user, loading, strictRbac])
 
   /**
    * Check if user can view a module
@@ -155,6 +149,7 @@ export const PermissionsProvider = ({ children }) => {
   // Context value
   const value = {
     modulePermissions,
+    strictRbac,
     loading,
     hasPermission,
     canView,
@@ -180,6 +175,7 @@ export const usePermissions = () => {
   if (!context) {
     return {
       modulePermissions: {},
+      strictRbac: false,
       loading: false,
       hasPermission: () => true,
       canView: () => true,

@@ -165,6 +165,30 @@ const checkPermission = (permissionType, module) => {
           });
         }
 
+        const rbacRoleId = req.user?.rbac_role_id;
+        if (userRole === 'EMPLOYEE' && rbacRoleId) {
+          const mAlt = moduleName.replace(/-/g, '_');
+          const [rpRows] = await pool.execute(
+            `SELECT can_view, can_add, can_edit, can_delete FROM role_permissions
+             WHERE role_id = ? AND (module = ? OR module = ?) LIMIT 1`,
+            [rbacRoleId, moduleName, mAlt]
+          );
+          if (rpRows.length === 0) {
+            return res.status(403).json({
+              success: false,
+              error: `Access denied for module '${moduleName}'`
+            });
+          }
+          const ok = rpRows[0][permissionType] === 1 || rpRows[0][permissionType] === true;
+          if (!ok) {
+            return res.status(403).json({
+              success: false,
+              error: `Access denied for ${moduleName} (${permissionType})`
+            });
+          }
+          return next();
+        }
+
         // Check module_permissions if exists
         if (modulePerms[moduleKey]) {
           const modulePermission = modulePerms[moduleKey];
@@ -183,7 +207,22 @@ const checkPermission = (permissionType, module) => {
           return next();
         }
       } else {
-        // No module_settings found - default: allow (backward compatibility)
+        const rbacRoleId = req.user?.rbac_role_id;
+        if (userRole === 'EMPLOYEE' && rbacRoleId) {
+          const mAlt = moduleName.replace(/-/g, '_');
+          const [rpRows] = await pool.execute(
+            `SELECT can_view, can_add, can_edit, can_delete FROM role_permissions
+             WHERE role_id = ? AND (module = ? OR module = ?) LIMIT 1`,
+            [rbacRoleId, moduleName, mAlt]
+          );
+          if (rpRows.length === 0 || !(rpRows[0][permissionType] === 1 || rpRows[0][permissionType] === true)) {
+            return res.status(403).json({
+              success: false,
+              error: `Access denied for module '${moduleName}'`
+            });
+          }
+          return next();
+        }
         return next();
       }
 
@@ -270,7 +309,7 @@ const requirePermission = (module = null) => {
       }
 
       // Get role_id from roles table
-      const companyId = req.companyId || req.query.company_id || req.body.company_id || 1;
+      const companyId = req.companyId || req.query.company_id || req.body.company_id || req.user?.company_id || 1;
 
       // System roles (CLIENT, EMPLOYEE) don't need role_id lookup
       const systemRoles = ['SUPERADMIN', 'ADMIN', 'EMPLOYEE'];
@@ -333,6 +372,30 @@ const requirePermission = (module = null) => {
           });
         }
 
+        const rbacRoleId = req.user?.rbac_role_id;
+        if (userRole === 'EMPLOYEE' && rbacRoleId) {
+          const mAlt = moduleName.replace(/-/g, '_');
+          const [rpRows] = await pool.execute(
+            `SELECT can_view, can_add, can_edit, can_delete FROM role_permissions
+             WHERE role_id = ? AND (module = ? OR module = ?) LIMIT 1`,
+            [rbacRoleId, moduleName, mAlt]
+          );
+          if (rpRows.length === 0) {
+            return res.status(403).json({
+              success: false,
+              error: `Access denied for module '${moduleName}'`
+            });
+          }
+          const ok = rpRows[0][permissionType] === 1 || rpRows[0][permissionType] === true;
+          if (!ok) {
+            return res.status(403).json({
+              success: false,
+              error: `Access denied for ${moduleName} (${permissionType})`
+            });
+          }
+          return next();
+        }
+
         // Check module_permissions if exists
         if (modulePerms[moduleKey]) {
           const modulePermission = modulePerms[moduleKey];
@@ -351,7 +414,22 @@ const requirePermission = (module = null) => {
           return next();
         }
       } else {
-        // No module_settings found - default: allow (backward compatibility)
+        const rbacRoleId = req.user?.rbac_role_id;
+        if (userRole === 'EMPLOYEE' && rbacRoleId) {
+          const mAlt = moduleName.replace(/-/g, '_');
+          const [rpRows] = await pool.execute(
+            `SELECT can_view, can_add, can_edit, can_delete FROM role_permissions
+             WHERE role_id = ? AND (module = ? OR module = ?) LIMIT 1`,
+            [rbacRoleId, moduleName, mAlt]
+          );
+          if (rpRows.length === 0 || !(rpRows[0][permissionType] === 1 || rpRows[0][permissionType] === true)) {
+            return res.status(403).json({
+              success: false,
+              error: `Access denied for module '${moduleName}'`
+            });
+          }
+          return next();
+        }
         return next();
       }
 

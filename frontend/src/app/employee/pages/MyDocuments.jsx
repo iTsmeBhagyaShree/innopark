@@ -7,8 +7,10 @@ import Input from '../../../components/ui/Input'
 import Button from '../../../components/ui/Button'
 import { IoDocumentText, IoFolder, IoTrash, IoDownload } from 'react-icons/io5'
 import { documentsAPI } from '../../../api'
+import { useLanguage } from '../../../context/LanguageContext.jsx'
 
 const MyDocuments = () => {
+  const { t } = useLanguage()
   const { user } = useAuth()
   const userId = user?.id || localStorage.getItem('userId')
   const companyId = user?.company_id || localStorage.getItem('companyId')
@@ -54,7 +56,7 @@ const MyDocuments = () => {
       }
     } catch (error) {
       console.error('Error fetching documents:', error)
-      alert(t('documents.error') || 'Failed to load documents. Please try again.')
+      alert(t('employee_documents.load_error'))
     } finally {
       setLoading(false)
     }

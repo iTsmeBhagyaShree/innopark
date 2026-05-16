@@ -64,8 +64,8 @@ const getAll = async (req, res) => {
         }
 
         const [clients] = await pool.execute(
-          `SELECT id, company_name as name, email, phone, website, address, city, state, zip, country, 
-                  contact_person as notes, created_at, updated_at, is_deleted, company_id
+          `SELECT id, company_name as name, industry, email, phone_number as phone, website, address, city, state, zip, country, 
+                  status, created_at, updated_at, is_deleted, company_id
            FROM clients 
            ${whereClause}
            ORDER BY created_at DESC`,
@@ -178,9 +178,33 @@ const getById = async (req, res) => {
     const companyId = req.companyId || req.query.company_id || null; // From JWT auth
 
     if (userRole !== 'SUPERADMIN') {
+      // Check if the requested ID is the user's own company ID.
+      // If it is, we return the tenant company record from the 'companies' table.
+      if (String(id) === String(companyId)) {
+        const [companies] = await pool.execute(
+          `SELECT * FROM companies WHERE id = ? AND is_deleted = 0`,
+          [id]
+        );
+
+        if (companies.length > 0) {
+          const company = companies[0];
+          if (!company.logo) {
+            company.logo = await settingsService.getSetting('company_logo', null);
+          }
+          // Get custom fields using service
+          company.custom_fields = await customFieldService.getCustomFieldsWithValues(company.id, 'Companies', company.id);
+
+          return res.json({
+            success: true,
+            data: company
+          });
+        }
+      }
+
+      // If it's not the user's own company, we search in the 'clients' table (Customer Organizations)
       const [clients] = await pool.execute(
-        `SELECT id, company_name as name, email, phone, website, address, city, state, zip, country, 
-                contact_person as notes, created_at, updated_at, is_deleted, company_id
+        `SELECT id, company_name as name, industry, email, phone_number as phone, website, address, city, state, zip, country, 
+                status, created_at, updated_at, is_deleted, company_id
          FROM clients 
          WHERE id = ? AND company_id = ? AND is_deleted = 0`,
         [id, companyId]
@@ -253,6 +277,9 @@ const create = async (req, res) => {
       industry,
       website,
       address,
+      city,
+      state,
+      country,
       notes,
       logo,
       currency = 'USD',
@@ -268,21 +295,43 @@ const create = async (req, res) => {
       });
     }
 
-    const [result] = await pool.execute(
-      `INSERT INTO companies (name, email, phone, industry, website, address, notes, logo, currency, timezone, lead_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [name, email ?? null, phone ?? null, industry ?? null, website ?? null, address ?? null, notes ?? null, logo ?? null, currency, timezone, lead_id ?? null]
-    );
+    const userRole = req.user?.role || 'ADMIN';
+    const companyIdFromToken = req.companyId || req.body.company_id || req.query.company_id;
 
-    const [newCompany] = await pool.execute(
-      `SELECT * FROM companies WHERE id = ?`,
-      [result.insertId]
-    );
+    let result;
+    if (userRole === 'SUPERADMIN') {
+      [result] = await pool.execute(
+        `INSERT INTO companies (name, email, phone, industry, website, address, notes, logo, currency, timezone, lead_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [name, email ?? null, phone ?? null, industry ?? null, website ?? null, address ?? null, notes ?? null, logo ?? null, currency, timezone, lead_id ?? null]
+      );
+    } else {
+      // Create Client (Customer Organization) for Admins
+      if (!companyIdFromToken) {
+        return res.status(400).json({ success: false, error: "company_id is required for non-superadmins" });
+      }
+
+      const ownerId = req.userId || req.body.user_id || 1;
+
+      [result] = await pool.execute(
+        `INSERT INTO clients (company_name, industry, email, phone_number, website, address, city, state, country, status, company_id, owner_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [name, industry ?? null, email ?? null, phone ?? null, website ?? null, address ?? null, city ?? null, state ?? null, country ?? 'United States', 'Active', companyIdFromToken, ownerId]
+      );
+    }
 
     const companyId = result.insertId;
-    // Save custom fields using service
-    // If this is a SuperAdmin creating a company, module is 'Companies'
-    await customFieldService.saveCustomFields(companyId, 'Companies', companyId, custom_fields);
+    const [newCompany] = await pool.execute(
+      userRole === 'SUPERADMIN' 
+        ? `SELECT * FROM companies WHERE id = ?`
+        : `SELECT id, company_name as name, industry, email, phone_number as phone, website, address, city, state, country, status FROM clients WHERE id = ?`,
+      [companyId]
+    );
+    const moduleId = (userRole === 'SUPERADMIN') ? 'Companies' : 'Clients';
+    const recordId = companyId;
+    const companyIdToUse = (userRole === 'SUPERADMIN') ? companyId : companyIdFromToken;
+    
+    await customFieldService.saveCustomFields(companyIdToUse, moduleId, recordId, custom_fields);
 
     res.status(201).json({
       success: true,
@@ -334,11 +383,16 @@ const update = async (req, res) => {
       });
     }
 
+    const userRole = req.user?.role || 'ADMIN';
+    const tableName = (userRole === 'SUPERADMIN') ? 'companies' : 'clients';
+    const nameColumn = (userRole === 'SUPERADMIN') ? 'name' : 'company_name';
+    const phoneColumn = (userRole === 'SUPERADMIN') ? 'phone' : 'phone_number';
+
     const updateFields = [];
     const updateValues = [];
 
     if (name !== undefined) {
-      updateFields.push('name = ?');
+      updateFields.push(`${nameColumn} = ?`);
       updateValues.push(name);
     }
     if (email !== undefined) {
@@ -346,7 +400,7 @@ const update = async (req, res) => {
       updateValues.push(email || null);
     }
     if (phone !== undefined) {
-      updateFields.push('phone = ?');
+      updateFields.push(`${phoneColumn} = ?`);
       updateValues.push(phone || null);
     }
     if (industry !== undefined) {
@@ -361,23 +415,23 @@ const update = async (req, res) => {
       updateFields.push('address = ?');
       updateValues.push(address || null);
     }
-    if (notes !== undefined) {
+    if (notes !== undefined && userRole === 'SUPERADMIN') {
       updateFields.push('notes = ?');
       updateValues.push(notes || null);
     }
-    if (logo !== undefined) {
+    if (logo !== undefined && userRole === 'SUPERADMIN') {
       updateFields.push('logo = ?');
       updateValues.push(logo);
     }
-    if (currency !== undefined) {
+    if (currency !== undefined && userRole === 'SUPERADMIN') {
       updateFields.push('currency = ?');
       updateValues.push(currency);
     }
-    if (timezone !== undefined) {
+    if (timezone !== undefined && userRole === 'SUPERADMIN') {
       updateFields.push('timezone = ?');
       updateValues.push(timezone);
     }
-    if (package_id !== undefined) {
+    if (package_id !== undefined && userRole === 'SUPERADMIN') {
       updateFields.push('package_id = ?');
       updateValues.push(package_id || null);
     }
@@ -389,22 +443,32 @@ const update = async (req, res) => {
       });
     }
 
+    const whereClause = (userRole === 'SUPERADMIN') 
+      ? 'WHERE id = ?' 
+      : 'WHERE id = ? AND company_id = ?';
+    
+    const whereValues = (userRole === 'SUPERADMIN') 
+      ? [id] 
+      : [id, req.companyId || req.body.company_id];
+
     await pool.execute(
-      `UPDATE companies 
+      `UPDATE ${tableName} 
        SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?`,
-      [...updateValues, id]
+       ${whereClause}`,
+      [...updateValues, ...whereValues]
     );
 
     // Save custom fields using service
     if (custom_fields) {
-      const module = (req.user?.role === 'SUPERADMIN') ? 'Companies' : 'Clients';
+      const module = (userRole === 'SUPERADMIN') ? 'Companies' : 'Clients';
       const effectiveCompanyId = (module === 'Companies') ? id : (req.companyId || req.body.company_id);
       await customFieldService.saveCustomFields(effectiveCompanyId, module, id, custom_fields);
     }
 
     const [updated] = await pool.execute(
-      `SELECT * FROM companies WHERE id = ?`,
+      (userRole === 'SUPERADMIN')
+        ? `SELECT * FROM companies WHERE id = ?`
+        : `SELECT id, company_name as name, industry, email, phone_number as phone, website, address, city, state, country, status FROM clients WHERE id = ?`,
       [id]
     );
 

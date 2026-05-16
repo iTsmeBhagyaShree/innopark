@@ -11,18 +11,15 @@ const getAll = async (req, res) => {
         let whereClause = 'WHERE a.is_deleted = 0';
         const params = [];
 
-        if (company_id) {
-            whereClause += ' AND a.company_id = ?';
-            params.push(company_id);
-        } else if (contact_id) {
-            whereClause += ' AND a.contact_id = ?';
-            params.push(contact_id);
-        } else if (deal_id) {
-            whereClause += ' AND a.deal_id = ?';
-            params.push(deal_id);
-        } else if (lead_id) {
-            whereClause += ' AND a.lead_id = ?';
-            params.push(lead_id);
+        if (company_id || contact_id || deal_id || lead_id) {
+            whereClause += ' AND (';
+            const subConditions = [];
+            if (company_id) { subConditions.push('a.company_id = ?'); params.push(company_id); }
+            if (contact_id) { subConditions.push('a.contact_id = ?'); params.push(contact_id); }
+            if (deal_id) { subConditions.push('a.deal_id = ?'); params.push(deal_id); }
+            if (lead_id) { subConditions.push('a.lead_id = ?'); params.push(lead_id); }
+            whereClause += subConditions.join(' OR ');
+            whereClause += ')';
         } else if (reference_type && reference_id) {
             whereClause += ' AND a.reference_type = ? AND a.reference_id = ?';
             params.push(reference_type, reference_id);
@@ -228,10 +225,17 @@ const createWithExtras = async (req, res) => {
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
-                type, title ?? null, description ?? null, reference_type, reference_id,
+                type, title && title !== '' ? title : null, description && description !== '' ? description : null, reference_type, reference_id,
                 lead_id, company_id, contact_id, deal_id,
-                created_by, assigned_to ?? null, pinned, follow_up_at ?? null,
-                deadline ?? null, meeting_date ?? null, meeting_time ?? null, participants ?? null, meeting_link ?? null
+                created_by, (() => {
+                    let val = assigned_to;
+                    if (Array.isArray(val)) val = val[0];
+                    else if (typeof val === 'string' && val.startsWith('[') && val.endsWith(']')) {
+                        try { const p = JSON.parse(val); if (Array.isArray(p)) val = p[0]; } catch(e) { val = val.replace(/[\[\]]/g, ''); }
+                    }
+                    return (val && val !== '') ? val : null;
+                })(), pinned, (follow_up_at && follow_up_at !== '') ? follow_up_at : null,
+                (deadline && deadline !== '') ? deadline : null, (meeting_date && meeting_date !== '') ? meeting_date : null, (meeting_time && meeting_time !== '') ? meeting_time : null, (participants && participants !== '') ? participants : null, (meeting_link && meeting_link !== '') ? meeting_link : null
             ]
         );
 
@@ -280,15 +284,22 @@ const update = async (req, res) => {
                 is_pinned = COALESCE(?, is_pinned)
             WHERE id = ? AND is_deleted = 0`,
             [
-                description ?? null,
-                title ?? null,
-                assigned_to ?? null,
-                deadline ?? null,
-                meeting_date ?? null,
-                meeting_time ?? null,
-                participants ?? null,
-                follow_up_at ?? null,
-                meeting_link ?? null,
+                description && description !== '' ? description : null,
+                title && title !== '' ? title : null,
+                (() => {
+                    let val = assigned_to;
+                    if (Array.isArray(val)) val = val[0];
+                    else if (typeof val === 'string' && val.startsWith('[') && val.endsWith(']')) {
+                        try { const p = JSON.parse(val); if (Array.isArray(p)) val = p[0]; } catch(e) { val = val.replace(/[\[\]]/g, ''); }
+                    }
+                    return (val && val !== '') ? val : null;
+                })(),
+                (deadline && deadline !== '') ? deadline : null,
+                (meeting_date && meeting_date !== '') ? meeting_date : null,
+                (meeting_time && meeting_time !== '') ? meeting_time : null,
+                participants && participants !== '' ? participants : null,
+                (follow_up_at && follow_up_at !== '') ? follow_up_at : null,
+                (meeting_link && meeting_link !== '') ? meeting_link : null,
                 is_pinned !== undefined ? (is_pinned ? 1 : 0) : null,
                 id
             ]
@@ -325,10 +336,39 @@ const togglePin = async (req, res) => {
     }
 };
 
+/**
+ * Delete (soft delete) activity: DELETE /api/v1/activities/:id
+ */
+const remove = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [result] = await pool.execute(
+            'UPDATE activities SET is_deleted = 1 WHERE id = ?',
+            [id]
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ 
+                success: false, 
+                error: req.t ? req.t('api_msg_b58b3e72') : "Activity not found" 
+            });
+        }
+
+        res.json({ success: true, message: "Activity deleted successfully" });
+    } catch (error) {
+        console.error('Delete activity error:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: req.t ? req.t('api_msg_70743b0d') : "Failed to delete activity" 
+        });
+    }
+};
+
 module.exports = {
     getAll,
     create: createWithExtras,
     createLegacy: create,
     update,
-    togglePin
+    togglePin,
+    remove
 };

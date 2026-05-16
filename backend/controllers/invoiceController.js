@@ -107,6 +107,12 @@ const calculateTotals = (items, discount, discountType) => {
   };
 };
 
+const parseMoney = (v, def = 0) => {
+  if (v === undefined || v === null || v === '') return def;
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : def;
+};
+
 /**
  * Get all invoices
  * GET /api/v1/invoices
@@ -187,7 +193,8 @@ const getAll = async (req, res) => {
     }
 
     // Do NOT put payments in the main SELECT: if that subquery/table fails, db.js returns [] and the whole list is empty.
-    // Paid amounts are loaded after (batch) so list rows still return.    let invoices = [];
+    // Paid amounts are loaded after (batch) so list rows still return.
+    let invoices = [];
     try {
       [invoices] = await pool.execute(
         `SELECT i.*,
@@ -214,6 +221,7 @@ const getAll = async (req, res) => {
           `SELECT * FROM invoices WHERE company_id = ? AND is_deleted = 0 ORDER BY id DESC LIMIT 500`,
           [filterCompanyId]
         );
+        invoices = simple;
       } catch (e1) {
         console.warn('⚠️ Level 1 fallback failed (likely is_deleted missing):', e1.message);
         // Level 2 Fallback: Simple query WITHOUT is_deleted
@@ -545,10 +553,37 @@ const create = async (req, res) => {
     // Use invoice_date as recurring_start_date if not provided and recurring is enabled
     const effectiveRecurringStartDate = recurring_start_date || (effectiveIsRecurring ? effectiveBillDate : null);
 
-    // Calculate totals - handle empty items array
-    const totals = items && items.length > 0
-      ? calculateTotals(items, discount, discount_type)
-      : { sub_total: 0, discount_amount: 0, tax_amount: 0, total: 0, unpaid: 0 };
+    const invItems = Array.isArray(items) ? items : [];
+
+    let totals;
+    if (invItems.length > 0) {
+      totals = calculateTotals(invItems, discount, discount_type);
+    } else {
+      const has = (k) => req.body[k] !== undefined && req.body[k] !== null && req.body[k] !== '';
+      const providedTotal = has('total') ? parseMoney(req.body.total) : null;
+      const providedSub = has('sub_total') ? parseMoney(req.body.sub_total) : null;
+      const taxAmount = has('tax_amount') ? parseMoney(req.body.tax_amount) : 0;
+      const isFixedDiscount =
+        discount_type === 'fixed' || discount_type === 'Fixed' || discount_type === 'amount';
+
+      let discountAmount;
+      if (has('discount_amount')) {
+        discountAmount = parseMoney(req.body.discount_amount);
+      } else if (!isFixedDiscount) {
+        const base = providedSub ?? providedTotal ?? parseMoney(req.body.amount);
+        discountAmount = (base * parseMoney(discount)) / 100;
+      } else {
+        discountAmount = parseMoney(discount);
+      }
+
+      const subTotal = providedSub ?? parseMoney(req.body.amount) ?? (providedTotal !== null ? providedTotal : 0);
+      const total = providedTotal !== null
+        ? providedTotal
+        : (subTotal - discountAmount + taxAmount);
+      const unpaid = has('unpaid') ? parseMoney(req.body.unpaid) : total;
+
+      totals = { sub_total: subTotal, discount_amount: discountAmount, tax_amount: taxAmount, total, unpaid };
+    }
 
     // Insert invoice - convert undefined to null for SQL
     // Check if labels, tax, second_tax, tds columns exist in database
@@ -649,8 +684,8 @@ const create = async (req, res) => {
     const invoiceId = result.insertId;
 
     // Insert items - calculate amount if not provided (only if items array exists and has items)
-    if (items && Array.isArray(items) && items.length > 0) {
-      const itemValues = items.map(item => {
+    if (invItems.length > 0) {
+      const itemValues = invItems.map(item => {
         const quantity = parseFloat(item.quantity || 1);
         const unitPrice = parseFloat(item.unit_price || 0);
         const taxRate = parseFloat(item.tax_rate || 0);

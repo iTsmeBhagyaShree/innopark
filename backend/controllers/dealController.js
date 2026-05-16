@@ -3,6 +3,23 @@
 // =====================================================
 
 const pool = require('../config/db');
+
+/** deals.assigned_to references users.id */
+const normalizeDealAssignee = (val) => {
+    if (val === undefined || val === null || val === '') return null;
+    let v = val;
+    if (Array.isArray(v)) v = v[0];
+    else if (typeof v === 'string' && v.startsWith('[') && v.endsWith(']')) {
+        try {
+            const p = JSON.parse(v);
+            if (Array.isArray(p)) v = p[0];
+        } catch (e) {
+            v = v.replace(/[\[\]]/g, '');
+        }
+    }
+    const n = parseInt(String(v).trim(), 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
+};
 const customFieldService = require('../services/customFieldService');
 
 /**
@@ -398,14 +415,20 @@ const create = async (req, res) => {
         sub_total, discount_amount, tax_amount, total, created_by, status, pipeline_id, stage_id, assigned_to
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
-                companyId, deal_number, deal_date ?? null, valid_till ?? null, currency || 'USD',
-                client_id ?? null, project_id ?? null, lead_id ?? null, title ?? null,
+                companyId, deal_number,
+                deal_date || new Date().toISOString().split('T')[0],
+                valid_till || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                currency || 'USD',
+                (client_id && client_id !== '') ? client_id : null,
+                (project_id && project_id !== '') ? project_id : null,
+                (lead_id && lead_id !== '') ? lead_id : null,
+                title ?? null,
                 calculate_tax || 'After Discount', description ?? null, note ?? null, terms || 'Thank you for your business.',
                 tax ?? null, second_tax ?? null, discount ?? 0, discount_type || '%',
                 totals.sub_total, totals.discount_amount, totals.tax_amount, totals.total,
                 createdBy, normalizeDealStatus(status),
-                pipeline_id ?? null, stage_id ?? null,
-                assigned_to ?? null
+                pipeline_id || null, stage_id || null,
+                normalizeDealAssignee(assigned_to)
             ]
         );
 
@@ -474,8 +497,25 @@ const update = async (req, res) => {
             const values = [];
             for (const [key, val] of Object.entries(fields)) {
                 if (val !== undefined && ALLOWED_DEAL_COLUMNS.has(key)) {
+                    let finalVal = val;
+                    if (key === 'assigned_to') {
+                        finalVal = normalizeDealAssignee(finalVal);
+                    }
+
+                    // Handle empty strings for ID/integer fields
+                    const idFields = ['client_id', 'project_id', 'lead_id', 'pipeline_id', 'stage_id', 'created_by', 'company_id', 'assigned_to'];
+                    if (idFields.includes(key) && finalVal === '') {
+                        finalVal = null;
+                    }
                     updates.push(`${key} = ?`);
-                    values.push(key === 'status' ? normalizeDealStatus(val) : val);
+                    // NOT NULL date columns: default to sensible values when cleared
+                    if (key === 'deal_date' && (!finalVal || finalVal === '')) {
+                        finalVal = new Date().toISOString().split('T')[0];
+                    }
+                    if (key === 'valid_till' && (!finalVal || finalVal === '')) {
+                        finalVal = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                    }
+                    values.push(key === 'status' ? normalizeDealStatus(finalVal) : finalVal);
                 }
             }
             if (updates.length > 0) {

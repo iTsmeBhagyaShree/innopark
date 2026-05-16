@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, useMemo } from 'react'
 import { reportsAPI, employeesAPI, projectsAPI, contactsAPI } from '../../../api'
 import { useLanguage } from '../../../context/LanguageContext'
+import { useSettings } from '../../../context/SettingsContext.jsx'
 import Button from '../../../components/ui/Button'
 import Card from '../../../components/ui/Card'
 import DataTable from '../../../components/ui/DataTable'
@@ -15,7 +16,8 @@ import {
 } from 'recharts'
 
 const Reports = () => {
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
+  const { formatCurrency } = useSettings()
   const companyId = localStorage.getItem('companyId') || '1'
   const currentYear = new Date().getFullYear()
 
@@ -57,6 +59,43 @@ const Reports = () => {
 
   const CHART_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16']
   const years = Array.from({ length: 10 }, (_, i) => currentYear - i)
+
+  const pipelineData = useMemo(() => [
+    { stage: t('reports.pipeline_stages.new'), value: 45000, deals: 12 },
+    { stage: t('reports.pipeline_stages.contacted'), value: 32000, deals: 8 },
+    { stage: t('reports.pipeline_stages.qualified'), value: 58001, deals: 15 },
+    { stage: t('reports.pipeline_stages.proposal'), value: 42000, deals: 6 },
+    { stage: t('reports.pipeline_stages.negotiation'), value: 28001, deals: 4 },
+    { stage: t('reports.pipeline_stages.won'), value: 85000, deals: 18 },
+    { stage: t('reports.pipeline_stages.lost'), value: 15000, deals: 5 },
+  ], [t])
+
+  const leadSourceData = useMemo(() => [
+    { name: t('reports.lead_sources.website'), value: 450, color: '#3B82F6' },
+    { name: t('reports.lead_sources.referral'), value: 320, color: '#10B981' },
+    { name: t('reports.lead_sources.social_media'), value: 280, color: '#F59E0B' },
+    { name: t('reports.lead_sources.email_campaign'), value: 134, color: '#8B5CF6' },
+    { name: t('reports.lead_sources.cold_call'), value: 95, color: '#EF4444' },
+    { name: t('reports.lead_sources.others'), value: 100, color: '#6B7280' },
+  ], [t])
+
+  const activityData = useMemo(() => [
+    { month: t('reports.months_short.jan'), calls: 45, emails: 120, meetings: 12 },
+    { month: t('reports.months_short.feb'), calls: 52, emails: 135, meetings: 15 },
+    { month: t('reports.months_short.mar'), calls: 48, emails: 110, meetings: 18 },
+    { month: t('reports.months_short.apr'), calls: 60, emails: 145, meetings: 20 },
+    { month: t('reports.months_short.may'), calls: 55, emails: 130, meetings: 16 },
+    { month: t('reports.months_short.jun'), calls: 65, emails: 160, meetings: 22 },
+  ], [t])
+
+  const monthlyDealTrendData = useMemo(() => [
+    { month: t('reports.months_short.jan'), won: 3, lost: 2, value: 12000 },
+    { month: t('reports.months_short.feb'), won: 5, lost: 1, value: 18001 },
+    { month: t('reports.months_short.mar'), won: 4, lost: 3, value: 15000 },
+    { month: t('reports.months_short.apr'), won: 6, lost: 2, value: 22000 },
+    { month: t('reports.months_short.may'), won: 5, lost: 2, value: 19000 },
+    { month: t('reports.months_short.jun'), won: 5, lost: 3, value: 17000 },
+  ], [t])
 
   useEffect(() => {
     fetchDropdownData()
@@ -159,8 +198,6 @@ const Reports = () => {
     }
   }
 
-  const formatCurrency = (value) => `$${parseFloat(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-
   // Filter data by search term
   const filterData = (data) => {
     if (!searchTerm) return data
@@ -188,35 +225,6 @@ const Reports = () => {
   ]
 
   // ============ CRM REPORT RENDER FUNCTIONS ============
-
-  // Mock data for CRM reports (will be replaced with API calls)
-  const pipelineData = [
-    { stage: 'Neu', value: 45000, deals: 12 },
-    { stage: 'Contacted', value: 32000, deals: 8 },
-    { stage: 'Qualified', value: 58001, deals: 15 },
-    { stage: 'Proposal', value: 42000, deals: 6 },
-    { stage: 'Negotiation', value: 28001, deals: 4 },
-    { stage: 'Gewonnen', value: 85000, deals: 18 },
-    { stage: 'Verloren', value: 15000, deals: 5 },
-  ]
-
-  const leadSourceData = [
-    { name: 'Website', value: 450, color: '#3B82F6' },
-    { name: 'Referral', value: 320, color: '#10B981' },
-    { name: 'Social Media', value: 280, color: '#F59E0B' },
-    { name: 'Email Campaign', value: 134, color: '#8B5CF6' },
-    { name: 'Cold Call', value: 95, color: '#EF4444' },
-    { name: 'Others', value: 100, color: '#6B7280' },
-  ]
-
-  const activityData = [
-    { month: 'Jan', calls: 45, emails: 120, meetings: 12 },
-    { month: 'Feb', calls: 52, emails: 135, meetings: 15 },
-    { month: 'Mar', calls: 48, emails: 110, meetings: 18 },
-    { month: 'Apr', calls: 60, emails: 145, meetings: 20 },
-    { month: 'May', calls: 55, emails: 130, meetings: 16 },
-    { month: 'Jun', calls: 65, emails: 160, meetings: 22 },
-  ]
 
   // Sales Pipeline Report
   const renderSalesPipeline = () => (
@@ -268,7 +276,7 @@ const Reports = () => {
             { key: 'deals', header: t('deals.items') },
             { key: 'value', header: t('deals.form.amount'), render: (row) => formatCurrency(row?.value) },
             {
-              key: 'percentage', header: '% der Pipeline', render: (row) => {
+              key: 'percentage', header: t('reports.columns.pipeline_percentage'), render: (row) => {
                 const total = pipelineData.reduce((sum, s) => sum + s.value, 0)
                 return `${((row?.value / total) * 100).toFixed(1)}%`
               }
@@ -343,10 +351,10 @@ const Reports = () => {
       <Card className="p-4">
         <DataTable
           columns={[
-            { key: 'name', header: t('offline_requests.type') },
+            { key: 'name', header: t('reports.columns.source') },
             { key: 'value', header: t('leads.items') },
             {
-              key: 'percentage', header: '% von Gesamt', render: (row) => {
+              key: 'percentage', header: t('reports.percent_of_total'), render: (row) => {
                 const total = leadSourceData.reduce((sum, s) => sum + s.value, 0)
                 return `${((row?.value / total) * 100).toFixed(1)}%`
               }
@@ -395,21 +403,14 @@ const Reports = () => {
         <h3 className="font-semibold mb-4">{t('reports.charts.monthly_deal_trend')}</h3>
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={[
-              { month: 'Jan', won: 3, lost: 2, value: 12000 },
-              { month: 'Feb', won: 5, lost: 1, value: 18001 },
-              { month: 'Mar', won: 4, lost: 3, value: 15000 },
-              { month: 'Apr', won: 6, lost: 2, value: 22000 },
-              { month: 'May', won: 5, lost: 2, value: 19000 },
-              { month: 'Jun', won: 5, lost: 3, value: 17000 },
-            ]}>
+            <LineChart data={monthlyDealTrendData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" />
               <YAxis />
               <Tooltip />
               <Legend />
-              <Line type="monotone" dataKey="won" name="Gewonnen" stroke="#10B981" strokeWidth={2} />
-              <Line type="monotone" dataKey="lost" name="Verloren" stroke="#EF4444" strokeWidth={2} />
+              <Line type="monotone" dataKey="won" name={t('reports.summary.won_deals')} stroke="#10B981" strokeWidth={2} />
+              <Line type="monotone" dataKey="lost" name={t('reports.summary.lost_deals')} stroke="#EF4444" strokeWidth={2} />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -451,9 +452,9 @@ const Reports = () => {
               <YAxis />
               <Tooltip />
               <Legend />
-              <Area type="monotone" dataKey="calls" name="Calls" stroke="#3B82F6" fill="#3B82F633" />
-              <Area type="monotone" dataKey="emails" name="Emails" stroke="#10B981" fill="#10B98133" />
-              <Area type="monotone" dataKey="meetings" name="Meetings" stroke="#8B5CF6" fill="#8B5CF633" />
+              <Area type="monotone" dataKey="calls" name={t('reports.summary.calls')} stroke="#3B82F6" fill="#3B82F633" />
+              <Area type="monotone" dataKey="emails" name={t('reports.summary.emails')} stroke="#10B981" fill="#10B98133" />
+              <Area type="monotone" dataKey="meetings" name={t('reports.summary.meetings')} stroke="#8B5CF6" fill="#8B5CF633" />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -649,8 +650,8 @@ const Reports = () => {
               <YAxis tickFormatter={(v) => `$${v}`} />
               <Tooltip formatter={(v) => formatCurrency(v)} />
               <Legend />
-              <Area type="monotone" dataKey="income" name="Income" stroke="#10B981" fill="#10B98133" />
-              <Area type="monotone" dataKey="expense" name="Expense" stroke="#EF4444" fill="#EF444433" />
+              <Area type="monotone" dataKey="income" name={t('reports.summary.total_income')} stroke="#10B981" fill="#10B98133" />
+              <Area type="monotone" dataKey="expense" name={t('reports.summary.total_expense')} stroke="#EF4444" fill="#EF444433" />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -778,6 +779,15 @@ const Reports = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{t('reports.title')}</h1>
           <p className="text-gray-500">{t('reports.subtitle')}</p>
+          <p className="hidden print:block text-sm font-medium text-gray-800 mt-2">
+            {tabs.find((tab) => tab.id === activeTab)?.label || activeTab}
+            {(dateRange.start || dateRange.end) && (
+              <span className="text-gray-600 font-normal">
+                {' — '}
+                {dateRange.start || '…'} → {dateRange.end || '…'}
+              </span>
+            )}
+          </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={fetchReportData} className="flex items-center gap-2">
@@ -813,15 +823,15 @@ const Reports = () => {
       <Card className="p-4">
         <div className="flex items-center gap-2 mb-4">
           <IoFilter size={20} className="text-blue-600" />
-          <span className="font-medium">{t('auto.auto_d7778d0c') || 'Filter'}</span>
+          <span className="font-medium">{t('common.filter')}</span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           {/* Year Filter */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t('') || ''}</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('reports.filters.year')}</label>
             <select
               value={selectedYear}
-              onChange={(e) => setSelectedYear(e.target.value)}
+              onChange={(e) => setSelectedYear(Number(e.target.value))}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               {years.map(y => <option key={y} value={y}>{y}</option>)}
@@ -830,18 +840,20 @@ const Reports = () => {
 
           {/* Date Range */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t('') || ''}</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('reports.filters.start_date')}</label>
             <input
               type="date"
+              lang={language}
               value={dateRange.start}
               onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t('') || ''}</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('reports.filters.end_date')}</label>
             <input
               type="date"
+              lang={language}
               value={dateRange.end}
               onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -851,13 +863,13 @@ const Reports = () => {
           {/* Client Filter */}
           {['invoices-summary', 'invoice-details', 'timesheets'].includes(activeTab) && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('') || ''}</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('reports.filters.client')}</label>
               <select
                 value={selectedClient}
                 onChange={(e) => setSelectedClient(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
-                <option value="">{t('') || ''}</option>
+                <option value="">{t('reports.filters.all')}</option>
                 {clients.map(c => <option key={c.id} value={c.id}>{c.company_name || c.name || `Client #${c.id}`}</option>)}
               </select>
             </div>
@@ -866,13 +878,13 @@ const Reports = () => {
           {/* Member Filter */}
           {activeTab === 'timesheets' && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('auto.auto_7c1878b1') || 'Mitglied'}</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('reports.filters.member')}</label>
               <select
                 value={selectedEmployee}
                 onChange={(e) => setSelectedEmployee(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
-                <option value="">{t('') || ''}</option>
+                <option value="">{t('reports.filters.all')}</option>
                 {employees.map(e => <option key={e.id} value={e.user_id || e.id}>{e.name || e.email || `Employee #${e.id}`}</option>)}
               </select>
             </div>
@@ -881,13 +893,13 @@ const Reports = () => {
           {/* Project Filter */}
           {['income-expense', 'timesheets'].includes(activeTab) && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('auto.auto_ac4f2b92') || 'Projekt'}</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('reports.filters.project')}</label>
               <select
                 value={selectedProject}
                 onChange={(e) => setSelectedProject(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
-                <option value="">{t('') || ''}</option>
+                <option value="">{t('reports.filters.all')}</option>
                 {projects.map(p => <option key={p.id} value={p.id}>{p.project_name || `Project #${p.id}`}</option>)}
               </select>
             </div>
@@ -895,7 +907,7 @@ const Reports = () => {
 
           {/* Search */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t('') || ''}</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('reports.filters.search')}</label>
             <div className="relative">
               <IoSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
               <input
@@ -903,7 +915,7 @@ const Reports = () => {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                placeholder={t('common.search') || 'Suchen...'}
+                placeholder={t('reports.search_placeholder')}
               />
             </div>
           </div>
@@ -912,7 +924,7 @@ const Reports = () => {
       {loading ? (
         <div className="flex items-center justify-center py-12">
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
-          <span className="ml-3 text-gray-500">{t('') || ''}</span>
+          <span className="ml-3 text-gray-500">{t('common.loading')}</span>
         </div>
       ) : (
         <>

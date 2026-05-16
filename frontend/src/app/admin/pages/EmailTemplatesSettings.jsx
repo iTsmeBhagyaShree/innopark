@@ -669,6 +669,8 @@ const EmailTemplatesSettings = () => {
                           // Stay on current page
                         } else if (child.id === 'notifications') {
                           navigate('/app/admin/settings/notifications')
+                        } else if (child.id === 'access-permission') {
+                          navigate('/app/admin/roles-permissions')
                         } else {
                           navigate('/app/admin/settings')
                         }
@@ -804,7 +806,7 @@ const EmailTemplatesSettings = () => {
                     value={formData.subject}
                     onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
                     className="w-full text-sm font-medium text-primary-text bg-transparent outline-none"
-                    placeholder="Email subject..."
+                    placeholder={t('email_templates_editor.subject_placeholder')}
                   />
                 </div>
 
@@ -820,7 +822,7 @@ const EmailTemplatesSettings = () => {
                   <button
                     onClick={() => execCommand('undo')}
                     className="p-2 hover:bg-gray-200 rounded transition-colors"
-                    title="Undo"
+                    title={t('email_templates_editor.undo')}
                   >
                     <IoArrowUndo size={16} />
                   </button>
@@ -829,7 +831,7 @@ const EmailTemplatesSettings = () => {
                   <button
                     onClick={() => execCommand('bold')}
                     className="p-2 hover:bg-gray-200 rounded transition-colors font-bold"
-                    title="Bold"
+                    title={t('email_templates_editor.bold')}
                   >
                     B
                   </button>
@@ -838,7 +840,7 @@ const EmailTemplatesSettings = () => {
                   <button
                     onClick={() => execCommand('italic')}
                     className="p-2 hover:bg-gray-200 rounded transition-colors italic"
-                    title="Italic"
+                    title={t('email_templates_editor.italic')}
                   >
                     I
                   </button>
@@ -847,7 +849,7 @@ const EmailTemplatesSettings = () => {
                   <button
                     onClick={() => execCommand('underline')}
                     className="p-2 hover:bg-gray-200 rounded transition-colors underline"
-                    title="Underline"
+                    title={t('email_templates_editor.underline')}
                   >
                     U
                   </button>
@@ -856,7 +858,7 @@ const EmailTemplatesSettings = () => {
                   <button
                     onClick={() => execCommand('strikeThrough')}
                     className="p-2 hover:bg-gray-200 rounded transition-colors line-through"
-                    title="Strikethrough"
+                    title={t('email_templates_editor.strikethrough')}
                   >
                     S
                   </button>
@@ -866,7 +868,7 @@ const EmailTemplatesSettings = () => {
                     <button
                       onClick={() => setShowColorPicker(!showColorPicker)}
                       className="p-2 hover:bg-gray-200 rounded transition-colors text-red-500 font-bold"
-                      title="Text Color"
+                      title={t('email_templates_editor.text_color')}
                     >
                       A
                     </button>
@@ -893,7 +895,7 @@ const EmailTemplatesSettings = () => {
                   <button
                     onClick={() => execCommand('insertUnorderedList')}
                     className="p-2 hover:bg-gray-200 rounded transition-colors"
-                    title="Bullet List"
+                    title={t('email_templates_editor.bullet_list')}
                   >
                     •≡
                   </button>
@@ -902,7 +904,7 @@ const EmailTemplatesSettings = () => {
                   <button
                     onClick={() => execCommand('insertOrderedList')}
                     className="p-2 hover:bg-gray-200 rounded transition-colors"
-                    title="Numbered List"
+                    title={t('email_templates_editor.numbered_list')}
                   >
                     1≡
                   </button>
@@ -913,7 +915,7 @@ const EmailTemplatesSettings = () => {
                   <button
                     onClick={() => execCommand('justifyLeft')}
                     className="p-2 hover:bg-gray-200 rounded transition-colors"
-                    title="Align Left"
+                    title={t('email_templates_editor.align_left')}
                   >
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                       <path d="M0 2h16v2H0V2zm0 4h10v2H0V6zm0 4h16v2H0v-2zm0 4h10v2H0v-2z" />
@@ -923,7 +925,7 @@ const EmailTemplatesSettings = () => {
                   <button
                     onClick={() => execCommand('justifyCenter')}
                     className="p-2 hover:bg-gray-200 rounded transition-colors"
-                    title="Align Center"
+                    title={t('email_templates_editor.align_center')}
                   >
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                       <path d="M0 2h16v2H0V2zm3 4h10v2H3V6zm-3 4h16v2H0v-2zm3 4h10v2H3v-2z" />
@@ -933,7 +935,7 @@ const EmailTemplatesSettings = () => {
                   <button
                     onClick={() => execCommand('justifyRight')}
                     className="p-2 hover:bg-gray-200 rounded transition-colors"
-                    title="Align Right"
+                    title={t('email_templates_editor.align_right')}
                   >
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                       <path d="M0 2h16v2H0V2zm6 4h10v2H6V6zm-6 4h16v2H0v-2zm6 4h10v2H6v-2z" />
@@ -946,7 +948,7 @@ const EmailTemplatesSettings = () => {
                   <button
                     onClick={insertTable}
                     className="p-2 hover:bg-gray-200 rounded transition-colors"
-                    title="Insert Table"
+                    title={t('email_templates_editor.insert_table')}
                   >
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                       <path d="M0 2h16v12H0V2zm1 1v3h4V3H1zm5 0v3h4V3H6zm5 0v3h4V3h-4zM1 7v3h4V7H1zm5 0v3h4V7H6zm5 0v3h4V7h-4zM1 11v2h4v-2H1zm5 0v2h4v-2H6zm5 0v2h4v-2h-4z" />
@@ -959,7 +961,7 @@ const EmailTemplatesSettings = () => {
                   <button
                     onClick={insertLink}
                     className="p-2 hover:bg-gray-200 rounded transition-colors"
-                    title="Insert Link"
+                    title={t('email_templates_editor.insert_link')}
                   >
                     <IoLink size={16} />
                   </button>
@@ -968,7 +970,7 @@ const EmailTemplatesSettings = () => {
                   <button
                     onClick={() => execCommand('insertHorizontalRule')}
                     className="p-2 hover:bg-gray-200 rounded transition-colors"
-                    title="Horizontal Line"
+                    title={t('email_templates_editor.horizontal_line')}
                   >
                     —
                   </button>
@@ -977,7 +979,7 @@ const EmailTemplatesSettings = () => {
                   <button
                     onClick={insertImage}
                     className="p-2 hover:bg-gray-200 rounded transition-colors"
-                    title="Insert Image"
+                    title={t('email_templates_editor.insert_image')}
                   >
                     <IoImage size={16} />
                   </button>
@@ -986,7 +988,7 @@ const EmailTemplatesSettings = () => {
                   <button
                     onClick={() => execCommand('removeFormat')}
                     className="p-2 hover:bg-gray-200 rounded transition-colors"
-                    title="Clear Formatting"
+                    title={t('email_templates_editor.clear_formatting')}
                   >
                     <IoClose size={16} />
                   </button>
@@ -998,7 +1000,7 @@ const EmailTemplatesSettings = () => {
                     <button
                       onClick={() => setShowColorPicker(!showColorPicker)}
                       className="p-2 hover:bg-gray-200 rounded transition-colors"
-                      title="Text Color"
+                      title={t('email_templates_editor.text_color')}
                     >
                       <IoColorPalette size={16} />
                     </button>
@@ -1033,7 +1035,7 @@ const EmailTemplatesSettings = () => {
                   <button
                     onClick={toggleSourceCode}
                     className={`p-2 hover:bg-gray-200 rounded transition-colors ${showSourceCode ? 'bg-gray-300' : ''}`}
-                    title="View Source Code"
+                    title={t('email_templates_editor.view_source')}
                   >
                     <IoCode size={16} />
                   </button>

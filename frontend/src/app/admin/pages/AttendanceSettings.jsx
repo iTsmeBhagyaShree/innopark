@@ -6,6 +6,7 @@
 
 import { useState } from 'react'
 import { useTheme } from '../../../context/ThemeContext'
+import { useLanguage } from '../../../context/LanguageContext.jsx'
 import AttendanceSettingsTab from './AttendanceSettings/AttendanceSettingsTab'
 import EmployeeShiftsTab from './AttendanceSettings/EmployeeShiftsTab'
 import ShiftRotationTab from './AttendanceSettings/ShiftRotationTab'
@@ -14,16 +15,17 @@ import AttendanceRegularisationTab from './AttendanceSettings/AttendanceRegulari
 
 const AttendanceSettings = () => {
   const { theme } = useTheme()
+  const { t } = useLanguage()
   const isDark = theme.mode === 'dark'
   
   const [activeTab, setActiveTab] = useState('attendance-settings')
 
   const tabs = [
-    { id: 'attendance-settings', label: 'Attendance Settings' },
-    { id: 'employee-shifts', label: 'Employee Shifts' },
-    { id: 'shift-rotation', label: 'Shift Rotation' },
-    { id: 'qr-code', label: 'QR Code' },
-    { id: 'attendance-regularisation', label: 'Attendance Regularisation' },
+    { id: 'attendance-settings', label: t('attendance_settings_shell.tab_attendance') },
+    { id: 'employee-shifts', label: t('attendance_settings_shell.tab_shifts') },
+    { id: 'shift-rotation', label: t('attendance_settings_shell.tab_rotation') },
+    { id: 'qr-code', label: t('attendance_settings_shell.tab_qr') },
+    { id: 'attendance-regularisation', label: t('attendance_settings_shell.tab_regularisation') },
   ]
 
   const renderTabContent = () => {
@@ -48,10 +50,10 @@ const AttendanceSettings = () => {
       {/* Header */}
       <div className="mb-4">
         <h1 className="text-xl sm:text-2xl font-bold mb-2" style={{ color: isDark ? '#E5E7EB' : '#1F2937' }}>
-          Attendance Settings
+          {t('attendance_settings_shell.title')}
         </h1>
         <p className="text-xs sm:text-sm" style={{ color: isDark ? '#9CA3AF' : '#6B7280' }}>
-          Configure attendance rules, shifts, and employee schedules
+          {t('attendance_settings_shell.subtitle')}
         </p>
       </div>
 
